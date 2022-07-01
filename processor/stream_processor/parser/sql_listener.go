@@ -1,11 +1,11 @@
-// Code generated from sql.g4 by ANTLR 4.10.1. DO NOT EDIT.
+// Code generated from Sql.g4 by ANTLR 4.10.1. DO NOT EDIT.
 
-package parser // sql
+package parser // Sql
 
 import "github.com/antlr/antlr4/runtime/Go/antlr"
 
-// sqlListener is a complete listener for a parse tree produced by sqlParser.
-type sqlListener interface {
+// SqlListener is a complete listener for a parse tree produced by SqlParser.
+type SqlListener interface {
 	antlr.ParseTreeListener
 
 	// EnterSqlQuery is called when entering the sqlQuery production.
@@ -22,6 +22,9 @@ type sqlListener interface {
 
 	// EnterWhereStatement is called when entering the whereStatement production.
 	EnterWhereStatement(c *WhereStatementContext)
+
+	// EnterTumblingWindow is called when entering the tumblingWindow production.
+	EnterTumblingWindow(c *TumblingWindowContext)
 
 	// EnterGroupBy is called when entering the groupBy production.
 	EnterGroupBy(c *GroupByContext)
@@ -52,6 +55,9 @@ type sqlListener interface {
 
 	// ExitWhereStatement is called when exiting the whereStatement production.
 	ExitWhereStatement(c *WhereStatementContext)
+
+	// ExitTumblingWindow is called when exiting the tumblingWindow production.
+	ExitTumblingWindow(c *TumblingWindowContext)
 
 	// ExitGroupBy is called when exiting the groupBy production.
 	ExitGroupBy(c *GroupByContext)

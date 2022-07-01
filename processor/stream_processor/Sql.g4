@@ -1,4 +1,4 @@
-grammar sql;
+grammar Sql;
 
 
 
@@ -23,8 +23,12 @@ column
 
 whereStatement
   : ( K_WHERE expr )?
-  | K_WINDOW_TUMBLING NUMERIC_LITERAL( K_WHERE expr )? (groupBy)
+  | (tumblingWindow) ( K_WHERE expr )? (groupBy)
   ;
+
+tumblingWindow
+ : K_WINDOW_TUMBLING NUMERIC_LITERAL( K_WHERE expr )?
+ ;
 
 groupBy
  : K_GROUP_BY column
