@@ -1,6 +1,6 @@
-// Code generated from sql.g4 by ANTLR 4.10.1. DO NOT EDIT.
+// Code generated from Sql.g4 by ANTLR 4.10.1. DO NOT EDIT.
 
-package parser // sql
+package parser // Sql
 
 import (
 	"fmt"
@@ -15,7 +15,7 @@ var _ = fmt.Printf
 var _ = strconv.Itoa
 var _ = sync.Once{}
 
-type sqlParser struct {
+type SqlParser struct {
 	*antlr.BaseParser
 }
 
@@ -47,47 +47,50 @@ func sqlParserInit() {
 	}
 	staticData.ruleNames = []string{
 		"sqlQuery", "selectQuery", "resultColumns", "column", "whereStatement",
-		"groupBy", "avg", "expr", "comparisonOperator", "literalValue",
+		"tumblingWindow", "groupBy", "avg", "expr", "comparisonOperator", "literalValue",
 	}
 	staticData.predictionContextCache = antlr.NewPredictionContextCache()
 	staticData.serializedATN = []int32{
-		4, 1, 33, 92, 2, 0, 7, 0, 2, 1, 7, 1, 2, 2, 7, 2, 2, 3, 7, 3, 2, 4, 7,
-		4, 2, 5, 7, 5, 2, 6, 7, 6, 2, 7, 7, 7, 2, 8, 7, 8, 2, 9, 7, 9, 1, 0, 1,
-		0, 1, 0, 1, 1, 1, 1, 1, 1, 3, 1, 27, 8, 1, 1, 1, 1, 1, 1, 2, 1, 2, 1, 2,
-		4, 2, 34, 8, 2, 11, 2, 12, 2, 35, 1, 2, 1, 2, 1, 2, 4, 2, 41, 8, 2, 11,
-		2, 12, 2, 42, 1, 2, 3, 2, 46, 8, 2, 1, 3, 1, 3, 1, 4, 1, 4, 3, 4, 52, 8,
-		4, 1, 4, 1, 4, 1, 4, 1, 4, 3, 4, 58, 8, 4, 1, 4, 3, 4, 61, 8, 4, 1, 5,
-		1, 5, 1, 5, 1, 6, 1, 6, 1, 6, 1, 6, 1, 6, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7,
-		1, 7, 1, 7, 3, 7, 78, 8, 7, 1, 7, 1, 7, 1, 7, 5, 7, 83, 8, 7, 10, 7, 12,
-		7, 86, 9, 7, 1, 8, 1, 8, 1, 9, 1, 9, 1, 9, 0, 1, 14, 10, 0, 2, 4, 6, 8,
-		10, 12, 14, 16, 18, 0, 5, 1, 0, 26, 29, 1, 0, 21, 22, 1, 0, 10, 11, 2,
-		0, 12, 19, 24, 25, 1, 0, 31, 32, 91, 0, 20, 1, 0, 0, 0, 2, 23, 1, 0, 0,
-		0, 4, 45, 1, 0, 0, 0, 6, 47, 1, 0, 0, 0, 8, 60, 1, 0, 0, 0, 10, 62, 1,
-		0, 0, 0, 12, 65, 1, 0, 0, 0, 14, 77, 1, 0, 0, 0, 16, 87, 1, 0, 0, 0, 18,
-		89, 1, 0, 0, 0, 20, 21, 3, 2, 1, 0, 21, 22, 5, 0, 0, 1, 22, 1, 1, 0, 0,
-		0, 23, 24, 5, 6, 0, 0, 24, 26, 3, 4, 2, 0, 25, 27, 3, 8, 4, 0, 26, 25,
-		1, 0, 0, 0, 26, 27, 1, 0, 0, 0, 27, 28, 1, 0, 0, 0, 28, 29, 5, 5, 0, 0,
-		29, 3, 1, 0, 0, 0, 30, 33, 3, 6, 3, 0, 31, 32, 5, 2, 0, 0, 32, 34, 3, 6,
-		3, 0, 33, 31, 1, 0, 0, 0, 34, 35, 1, 0, 0, 0, 35, 33, 1, 0, 0, 0, 35, 36,
-		1, 0, 0, 0, 36, 46, 1, 0, 0, 0, 37, 40, 3, 12, 6, 0, 38, 39, 5, 2, 0, 0,
-		39, 41, 3, 12, 6, 0, 40, 38, 1, 0, 0, 0, 41, 42, 1, 0, 0, 0, 42, 40, 1,
-		0, 0, 0, 42, 43, 1, 0, 0, 0, 43, 46, 1, 0, 0, 0, 44, 46, 5, 33, 0, 0, 45,
-		30, 1, 0, 0, 0, 45, 37, 1, 0, 0, 0, 45, 44, 1, 0, 0, 0, 46, 5, 1, 0, 0,
-		0, 47, 48, 5, 30, 0, 0, 48, 7, 1, 0, 0, 0, 49, 50, 5, 7, 0, 0, 50, 52,
-		3, 14, 7, 0, 51, 49, 1, 0, 0, 0, 51, 52, 1, 0, 0, 0, 52, 61, 1, 0, 0, 0,
-		53, 54, 5, 8, 0, 0, 54, 57, 5, 31, 0, 0, 55, 56, 5, 7, 0, 0, 56, 58, 3,
-		14, 7, 0, 57, 55, 1, 0, 0, 0, 57, 58, 1, 0, 0, 0, 58, 59, 1, 0, 0, 0, 59,
-		61, 3, 10, 5, 0, 60, 51, 1, 0, 0, 0, 60, 53, 1, 0, 0, 0, 61, 9, 1, 0, 0,
-		0, 62, 63, 5, 9, 0, 0, 63, 64, 3, 6, 3, 0, 64, 11, 1, 0, 0, 0, 65, 66,
-		7, 0, 0, 0, 66, 67, 5, 3, 0, 0, 67, 68, 3, 6, 3, 0, 68, 69, 5, 4, 0, 0,
-		69, 13, 1, 0, 0, 0, 70, 71, 6, 7, -1, 0, 71, 72, 5, 30, 0, 0, 72, 73, 3,
-		16, 8, 0, 73, 74, 3, 18, 9, 0, 74, 78, 1, 0, 0, 0, 75, 76, 5, 30, 0, 0,
-		76, 78, 7, 1, 0, 0, 77, 70, 1, 0, 0, 0, 77, 75, 1, 0, 0, 0, 78, 84, 1,
-		0, 0, 0, 79, 80, 10, 2, 0, 0, 80, 81, 7, 2, 0, 0, 81, 83, 3, 14, 7, 3,
-		82, 79, 1, 0, 0, 0, 83, 86, 1, 0, 0, 0, 84, 82, 1, 0, 0, 0, 84, 85, 1,
-		0, 0, 0, 85, 15, 1, 0, 0, 0, 86, 84, 1, 0, 0, 0, 87, 88, 7, 3, 0, 0, 88,
-		17, 1, 0, 0, 0, 89, 90, 7, 4, 0, 0, 90, 19, 1, 0, 0, 0, 9, 26, 35, 42,
-		45, 51, 57, 60, 77, 84,
+		4, 1, 33, 100, 2, 0, 7, 0, 2, 1, 7, 1, 2, 2, 7, 2, 2, 3, 7, 3, 2, 4, 7,
+		4, 2, 5, 7, 5, 2, 6, 7, 6, 2, 7, 7, 7, 2, 8, 7, 8, 2, 9, 7, 9, 2, 10, 7,
+		10, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 3, 1, 29, 8, 1, 1, 1, 1, 1, 1,
+		2, 1, 2, 1, 2, 4, 2, 36, 8, 2, 11, 2, 12, 2, 37, 1, 2, 1, 2, 1, 2, 4, 2,
+		43, 8, 2, 11, 2, 12, 2, 44, 1, 2, 3, 2, 48, 8, 2, 1, 3, 1, 3, 1, 4, 1,
+		4, 3, 4, 54, 8, 4, 1, 4, 1, 4, 1, 4, 3, 4, 59, 8, 4, 1, 4, 1, 4, 3, 4,
+		63, 8, 4, 1, 5, 1, 5, 1, 5, 1, 5, 3, 5, 69, 8, 5, 1, 6, 1, 6, 1, 6, 1,
+		7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 8, 1, 8, 1, 8, 1, 8, 1, 8, 1, 8, 1, 8, 3,
+		8, 86, 8, 8, 1, 8, 1, 8, 1, 8, 5, 8, 91, 8, 8, 10, 8, 12, 8, 94, 9, 8,
+		1, 9, 1, 9, 1, 10, 1, 10, 1, 10, 0, 1, 16, 11, 0, 2, 4, 6, 8, 10, 12, 14,
+		16, 18, 20, 0, 5, 1, 0, 26, 29, 1, 0, 21, 22, 1, 0, 10, 11, 2, 0, 12, 19,
+		24, 25, 1, 0, 31, 32, 99, 0, 22, 1, 0, 0, 0, 2, 25, 1, 0, 0, 0, 4, 47,
+		1, 0, 0, 0, 6, 49, 1, 0, 0, 0, 8, 62, 1, 0, 0, 0, 10, 64, 1, 0, 0, 0, 12,
+		70, 1, 0, 0, 0, 14, 73, 1, 0, 0, 0, 16, 85, 1, 0, 0, 0, 18, 95, 1, 0, 0,
+		0, 20, 97, 1, 0, 0, 0, 22, 23, 3, 2, 1, 0, 23, 24, 5, 0, 0, 1, 24, 1, 1,
+		0, 0, 0, 25, 26, 5, 6, 0, 0, 26, 28, 3, 4, 2, 0, 27, 29, 3, 8, 4, 0, 28,
+		27, 1, 0, 0, 0, 28, 29, 1, 0, 0, 0, 29, 30, 1, 0, 0, 0, 30, 31, 5, 5, 0,
+		0, 31, 3, 1, 0, 0, 0, 32, 35, 3, 6, 3, 0, 33, 34, 5, 2, 0, 0, 34, 36, 3,
+		6, 3, 0, 35, 33, 1, 0, 0, 0, 36, 37, 1, 0, 0, 0, 37, 35, 1, 0, 0, 0, 37,
+		38, 1, 0, 0, 0, 38, 48, 1, 0, 0, 0, 39, 42, 3, 14, 7, 0, 40, 41, 5, 2,
+		0, 0, 41, 43, 3, 14, 7, 0, 42, 40, 1, 0, 0, 0, 43, 44, 1, 0, 0, 0, 44,
+		42, 1, 0, 0, 0, 44, 45, 1, 0, 0, 0, 45, 48, 1, 0, 0, 0, 46, 48, 5, 33,
+		0, 0, 47, 32, 1, 0, 0, 0, 47, 39, 1, 0, 0, 0, 47, 46, 1, 0, 0, 0, 48, 5,
+		1, 0, 0, 0, 49, 50, 5, 30, 0, 0, 50, 7, 1, 0, 0, 0, 51, 52, 5, 7, 0, 0,
+		52, 54, 3, 16, 8, 0, 53, 51, 1, 0, 0, 0, 53, 54, 1, 0, 0, 0, 54, 63, 1,
+		0, 0, 0, 55, 58, 3, 10, 5, 0, 56, 57, 5, 7, 0, 0, 57, 59, 3, 16, 8, 0,
+		58, 56, 1, 0, 0, 0, 58, 59, 1, 0, 0, 0, 59, 60, 1, 0, 0, 0, 60, 61, 3,
+		12, 6, 0, 61, 63, 1, 0, 0, 0, 62, 53, 1, 0, 0, 0, 62, 55, 1, 0, 0, 0, 63,
+		9, 1, 0, 0, 0, 64, 65, 5, 8, 0, 0, 65, 68, 5, 31, 0, 0, 66, 67, 5, 7, 0,
+		0, 67, 69, 3, 16, 8, 0, 68, 66, 1, 0, 0, 0, 68, 69, 1, 0, 0, 0, 69, 11,
+		1, 0, 0, 0, 70, 71, 5, 9, 0, 0, 71, 72, 3, 6, 3, 0, 72, 13, 1, 0, 0, 0,
+		73, 74, 7, 0, 0, 0, 74, 75, 5, 3, 0, 0, 75, 76, 3, 6, 3, 0, 76, 77, 5,
+		4, 0, 0, 77, 15, 1, 0, 0, 0, 78, 79, 6, 8, -1, 0, 79, 80, 5, 30, 0, 0,
+		80, 81, 3, 18, 9, 0, 81, 82, 3, 20, 10, 0, 82, 86, 1, 0, 0, 0, 83, 84,
+		5, 30, 0, 0, 84, 86, 7, 1, 0, 0, 85, 78, 1, 0, 0, 0, 85, 83, 1, 0, 0, 0,
+		86, 92, 1, 0, 0, 0, 87, 88, 10, 2, 0, 0, 88, 89, 7, 2, 0, 0, 89, 91, 3,
+		16, 8, 3, 90, 87, 1, 0, 0, 0, 91, 94, 1, 0, 0, 0, 92, 90, 1, 0, 0, 0, 92,
+		93, 1, 0, 0, 0, 93, 17, 1, 0, 0, 0, 94, 92, 1, 0, 0, 0, 95, 96, 7, 3, 0,
+		0, 96, 19, 1, 0, 0, 0, 97, 98, 7, 4, 0, 0, 98, 21, 1, 0, 0, 0, 10, 28,
+		37, 44, 47, 53, 58, 62, 68, 85, 92,
 	}
 	deserializer := antlr.NewATNDeserializer(nil)
 	staticData.atn = deserializer.Deserialize(staticData.serializedATN)
@@ -99,80 +102,81 @@ func sqlParserInit() {
 	}
 }
 
-// sqlParserInit initializes any static state used to implement sqlParser. By default the
+// SqlParserInit initializes any static state used to implement SqlParser. By default the
 // static state used to implement the parser is lazily initialized during the first call to
-// NewsqlParser(). You can call this function if you wish to initialize the static state ahead
+// NewSqlParser(). You can call this function if you wish to initialize the static state ahead
 // of time.
 func SqlParserInit() {
 	staticData := &sqlParserStaticData
 	staticData.once.Do(sqlParserInit)
 }
 
-// NewsqlParser produces a new parser instance for the optional input antlr.TokenStream.
-func NewsqlParser(input antlr.TokenStream) *sqlParser {
+// NewSqlParser produces a new parser instance for the optional input antlr.TokenStream.
+func NewSqlParser(input antlr.TokenStream) *SqlParser {
 	SqlParserInit()
-	this := new(sqlParser)
+	this := new(SqlParser)
 	this.BaseParser = antlr.NewBaseParser(input)
 	staticData := &sqlParserStaticData
 	this.Interpreter = antlr.NewParserATNSimulator(this, staticData.atn, staticData.decisionToDFA, staticData.predictionContextCache)
 	this.RuleNames = staticData.ruleNames
 	this.LiteralNames = staticData.literalNames
 	this.SymbolicNames = staticData.symbolicNames
-	this.GrammarFileName = "sql.g4"
+	this.GrammarFileName = "Sql.g4"
 
 	return this
 }
 
-// sqlParser tokens.
+// SqlParser tokens.
 const (
-	sqlParserEOF               = antlr.TokenEOF
-	sqlParserSPACE             = 1
-	sqlParserCOMMA             = 2
-	sqlParserL_BRACKET         = 3
-	sqlParserR_BRACKET         = 4
-	sqlParserEOQ               = 5
-	sqlParserK_SELECT          = 6
-	sqlParserK_WHERE           = 7
-	sqlParserK_WINDOW_TUMBLING = 8
-	sqlParserK_GROUP_BY        = 9
-	sqlParserK_AND             = 10
-	sqlParserK_OR              = 11
-	sqlParserK_IS              = 12
-	sqlParserK_LIKE            = 13
-	sqlParserK_EQUAL           = 14
-	sqlParserK_GREATER         = 15
-	sqlParserK_LESS            = 16
-	sqlParserK_LESS_EQUAL      = 17
-	sqlParserK_GREATER_EQUAL   = 18
-	sqlParserK_NOT_EQUAL       = 19
-	sqlParserK_NULL            = 20
-	sqlParserK_IS_NULL         = 21
-	sqlParserK_IS_NOT_NULL     = 22
-	sqlParserK_NOT             = 23
-	sqlParserK_NOT_IN          = 24
-	sqlParserK_IN              = 25
-	sqlParserK_COUNT           = 26
-	sqlParserK_MIN             = 27
-	sqlParserK_MAX             = 28
-	sqlParserK_AVG             = 29
-	sqlParserIDENTIFIER        = 30
-	sqlParserNUMERIC_LITERAL   = 31
-	sqlParserSTRING_LITERAL    = 32
-	sqlParserSTAR              = 33
+	SqlParserEOF               = antlr.TokenEOF
+	SqlParserSPACE             = 1
+	SqlParserCOMMA             = 2
+	SqlParserL_BRACKET         = 3
+	SqlParserR_BRACKET         = 4
+	SqlParserEOQ               = 5
+	SqlParserK_SELECT          = 6
+	SqlParserK_WHERE           = 7
+	SqlParserK_WINDOW_TUMBLING = 8
+	SqlParserK_GROUP_BY        = 9
+	SqlParserK_AND             = 10
+	SqlParserK_OR              = 11
+	SqlParserK_IS              = 12
+	SqlParserK_LIKE            = 13
+	SqlParserK_EQUAL           = 14
+	SqlParserK_GREATER         = 15
+	SqlParserK_LESS            = 16
+	SqlParserK_LESS_EQUAL      = 17
+	SqlParserK_GREATER_EQUAL   = 18
+	SqlParserK_NOT_EQUAL       = 19
+	SqlParserK_NULL            = 20
+	SqlParserK_IS_NULL         = 21
+	SqlParserK_IS_NOT_NULL     = 22
+	SqlParserK_NOT             = 23
+	SqlParserK_NOT_IN          = 24
+	SqlParserK_IN              = 25
+	SqlParserK_COUNT           = 26
+	SqlParserK_MIN             = 27
+	SqlParserK_MAX             = 28
+	SqlParserK_AVG             = 29
+	SqlParserIDENTIFIER        = 30
+	SqlParserNUMERIC_LITERAL   = 31
+	SqlParserSTRING_LITERAL    = 32
+	SqlParserSTAR              = 33
 )
 
-// sqlParser rules.
+// SqlParser rules.
 const (
-	sqlParserRULE_sqlQuery           = 0
-	sqlParserRULE_selectQuery        = 1
-	sqlParserRULE_resultColumns      = 2
-	sqlParserRULE_column             = 3
-	sqlParserRULE_whereStatement     = 4
-	sqlParserRULE_groupBy            = 5
-	sqlParserRULE_avg                = 6
-	sqlParserRULE_expr               = 7
-	sqlParserRULE_comparisonOperator = 8
-	sqlParserRULE_literalValue       = 9
+	SqlParserRULE_sqlQuery           = 0
+	SqlParserRULE_selectQuery        = 1
+	SqlParserRULE_resultColumns      = 2
+	SqlParserRULE_column             = 3
+	SqlParserRULE_whereStatement     = 4
+	SqlParserRULE_tumblingWindow     = 5
+	SqlParserRULE_groupBy            = 6
+	SqlParserRULE_avg                = 7
+	SqlParserRULE_expr               = 8
+	SqlParserRULE_comparisonOperator = 9
+	SqlParserRULE_literalValue       = 10
 )
 
 // ISqlQueryContext is an interface to support dynamic dispatch.
@@ -194,7 +198,7 @@ type SqlQueryContext struct {
 func NewEmptySqlQueryContext() *SqlQueryContext {
 	var p = new(SqlQueryContext)
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(nil, -1)
-	p.RuleIndex = sqlParserRULE_sqlQuery
+	p.RuleIndex = SqlParserRULE_sqlQuery
 	return p
 }
 
@@ -206,7 +210,7 @@ func NewSqlQueryContext(parser antlr.Parser, parent antlr.ParserRuleContext, inv
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(parent, invokingState)
 
 	p.parser = parser
-	p.RuleIndex = sqlParserRULE_sqlQuery
+	p.RuleIndex = SqlParserRULE_sqlQuery
 
 	return p
 }
@@ -230,7 +234,7 @@ func (s *SqlQueryContext) SelectQuery() ISelectQueryContext {
 }
 
 func (s *SqlQueryContext) EOF() antlr.TerminalNode {
-	return s.GetToken(sqlParserEOF, 0)
+	return s.GetToken(SqlParserEOF, 0)
 }
 
 func (s *SqlQueryContext) GetRuleContext() antlr.RuleContext {
@@ -242,23 +246,23 @@ func (s *SqlQueryContext) ToStringTree(ruleNames []string, recog antlr.Recognize
 }
 
 func (s *SqlQueryContext) EnterRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.EnterSqlQuery(s)
 	}
 }
 
 func (s *SqlQueryContext) ExitRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.ExitSqlQuery(s)
 	}
 }
 
-func (p *sqlParser) SqlQuery() (localctx ISqlQueryContext) {
+func (p *SqlParser) SqlQuery() (localctx ISqlQueryContext) {
 	this := p
 	_ = this
 
 	localctx = NewSqlQueryContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 0, sqlParserRULE_sqlQuery)
+	p.EnterRule(localctx, 0, SqlParserRULE_sqlQuery)
 
 	defer func() {
 		p.ExitRule()
@@ -278,12 +282,12 @@ func (p *sqlParser) SqlQuery() (localctx ISqlQueryContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(20)
+		p.SetState(22)
 		p.SelectQuery()
 	}
 	{
-		p.SetState(21)
-		p.Match(sqlParserEOF)
+		p.SetState(23)
+		p.Match(SqlParserEOF)
 	}
 
 	return localctx
@@ -308,7 +312,7 @@ type SelectQueryContext struct {
 func NewEmptySelectQueryContext() *SelectQueryContext {
 	var p = new(SelectQueryContext)
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(nil, -1)
-	p.RuleIndex = sqlParserRULE_selectQuery
+	p.RuleIndex = SqlParserRULE_selectQuery
 	return p
 }
 
@@ -320,7 +324,7 @@ func NewSelectQueryContext(parser antlr.Parser, parent antlr.ParserRuleContext, 
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(parent, invokingState)
 
 	p.parser = parser
-	p.RuleIndex = sqlParserRULE_selectQuery
+	p.RuleIndex = SqlParserRULE_selectQuery
 
 	return p
 }
@@ -328,11 +332,11 @@ func NewSelectQueryContext(parser antlr.Parser, parent antlr.ParserRuleContext, 
 func (s *SelectQueryContext) GetParser() antlr.Parser { return s.parser }
 
 func (s *SelectQueryContext) K_SELECT() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_SELECT, 0)
+	return s.GetToken(SqlParserK_SELECT, 0)
 }
 
 func (s *SelectQueryContext) EOQ() antlr.TerminalNode {
-	return s.GetToken(sqlParserEOQ, 0)
+	return s.GetToken(SqlParserEOQ, 0)
 }
 
 func (s *SelectQueryContext) ResultColumns() IResultColumnsContext {
@@ -376,23 +380,23 @@ func (s *SelectQueryContext) ToStringTree(ruleNames []string, recog antlr.Recogn
 }
 
 func (s *SelectQueryContext) EnterRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.EnterSelectQuery(s)
 	}
 }
 
 func (s *SelectQueryContext) ExitRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.ExitSelectQuery(s)
 	}
 }
 
-func (p *sqlParser) SelectQuery() (localctx ISelectQueryContext) {
+func (p *SqlParser) SelectQuery() (localctx ISelectQueryContext) {
 	this := p
 	_ = this
 
 	localctx = NewSelectQueryContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 2, sqlParserRULE_selectQuery)
+	p.EnterRule(localctx, 2, SqlParserRULE_selectQuery)
 
 	defer func() {
 		p.ExitRule()
@@ -412,28 +416,28 @@ func (p *sqlParser) SelectQuery() (localctx ISelectQueryContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(23)
-		p.Match(sqlParserK_SELECT)
+		p.SetState(25)
+		p.Match(SqlParserK_SELECT)
 	}
 
 	{
-		p.SetState(24)
+		p.SetState(26)
 		p.ResultColumns()
 	}
 
-	p.SetState(26)
+	p.SetState(28)
 	p.GetErrorHandler().Sync(p)
 
 	if p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 0, p.GetParserRuleContext()) == 1 {
 		{
-			p.SetState(25)
+			p.SetState(27)
 			p.WhereStatement()
 		}
 
 	}
 	{
-		p.SetState(28)
-		p.Match(sqlParserEOQ)
+		p.SetState(30)
+		p.Match(SqlParserEOQ)
 	}
 
 	return localctx
@@ -458,7 +462,7 @@ type ResultColumnsContext struct {
 func NewEmptyResultColumnsContext() *ResultColumnsContext {
 	var p = new(ResultColumnsContext)
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(nil, -1)
-	p.RuleIndex = sqlParserRULE_resultColumns
+	p.RuleIndex = SqlParserRULE_resultColumns
 	return p
 }
 
@@ -470,7 +474,7 @@ func NewResultColumnsContext(parser antlr.Parser, parent antlr.ParserRuleContext
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(parent, invokingState)
 
 	p.parser = parser
-	p.RuleIndex = sqlParserRULE_resultColumns
+	p.RuleIndex = SqlParserRULE_resultColumns
 
 	return p
 }
@@ -519,11 +523,11 @@ func (s *ResultColumnsContext) Column(i int) IColumnContext {
 }
 
 func (s *ResultColumnsContext) AllCOMMA() []antlr.TerminalNode {
-	return s.GetTokens(sqlParserCOMMA)
+	return s.GetTokens(SqlParserCOMMA)
 }
 
 func (s *ResultColumnsContext) COMMA(i int) antlr.TerminalNode {
-	return s.GetToken(sqlParserCOMMA, i)
+	return s.GetToken(SqlParserCOMMA, i)
 }
 
 func (s *ResultColumnsContext) AllAvg() []IAvgContext {
@@ -568,7 +572,7 @@ func (s *ResultColumnsContext) Avg(i int) IAvgContext {
 }
 
 func (s *ResultColumnsContext) STAR() antlr.TerminalNode {
-	return s.GetToken(sqlParserSTAR, 0)
+	return s.GetToken(SqlParserSTAR, 0)
 }
 
 func (s *ResultColumnsContext) GetRuleContext() antlr.RuleContext {
@@ -580,23 +584,23 @@ func (s *ResultColumnsContext) ToStringTree(ruleNames []string, recog antlr.Reco
 }
 
 func (s *ResultColumnsContext) EnterRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.EnterResultColumns(s)
 	}
 }
 
 func (s *ResultColumnsContext) ExitRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.ExitResultColumns(s)
 	}
 }
 
-func (p *sqlParser) ResultColumns() (localctx IResultColumnsContext) {
+func (p *SqlParser) ResultColumns() (localctx IResultColumnsContext) {
 	this := p
 	_ = this
 
 	localctx = NewResultColumnsContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 4, sqlParserRULE_resultColumns)
+	p.EnterRule(localctx, 4, SqlParserRULE_resultColumns)
 	var _la int
 
 	defer func() {
@@ -615,65 +619,65 @@ func (p *sqlParser) ResultColumns() (localctx IResultColumnsContext) {
 		}
 	}()
 
-	p.SetState(45)
+	p.SetState(47)
 	p.GetErrorHandler().Sync(p)
 
 	switch p.GetTokenStream().LA(1) {
-	case sqlParserIDENTIFIER:
+	case SqlParserIDENTIFIER:
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(30)
+			p.SetState(32)
 			p.Column()
 		}
-		p.SetState(33)
+		p.SetState(35)
 		p.GetErrorHandler().Sync(p)
 		_la = p.GetTokenStream().LA(1)
 
-		for ok := true; ok; ok = _la == sqlParserCOMMA {
+		for ok := true; ok; ok = _la == SqlParserCOMMA {
 			{
-				p.SetState(31)
-				p.Match(sqlParserCOMMA)
+				p.SetState(33)
+				p.Match(SqlParserCOMMA)
 			}
 			{
-				p.SetState(32)
+				p.SetState(34)
 				p.Column()
 			}
 
-			p.SetState(35)
+			p.SetState(37)
 			p.GetErrorHandler().Sync(p)
 			_la = p.GetTokenStream().LA(1)
 		}
 
-	case sqlParserK_COUNT, sqlParserK_MIN, sqlParserK_MAX, sqlParserK_AVG:
+	case SqlParserK_COUNT, SqlParserK_MIN, SqlParserK_MAX, SqlParserK_AVG:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(37)
+			p.SetState(39)
 			p.Avg()
 		}
-		p.SetState(40)
+		p.SetState(42)
 		p.GetErrorHandler().Sync(p)
 		_la = p.GetTokenStream().LA(1)
 
-		for ok := true; ok; ok = _la == sqlParserCOMMA {
+		for ok := true; ok; ok = _la == SqlParserCOMMA {
 			{
-				p.SetState(38)
-				p.Match(sqlParserCOMMA)
+				p.SetState(40)
+				p.Match(SqlParserCOMMA)
 			}
 			{
-				p.SetState(39)
+				p.SetState(41)
 				p.Avg()
 			}
 
-			p.SetState(42)
+			p.SetState(44)
 			p.GetErrorHandler().Sync(p)
 			_la = p.GetTokenStream().LA(1)
 		}
 
-	case sqlParserSTAR:
+	case SqlParserSTAR:
 		p.EnterOuterAlt(localctx, 3)
 		{
-			p.SetState(44)
-			p.Match(sqlParserSTAR)
+			p.SetState(46)
+			p.Match(SqlParserSTAR)
 		}
 
 	default:
@@ -702,7 +706,7 @@ type ColumnContext struct {
 func NewEmptyColumnContext() *ColumnContext {
 	var p = new(ColumnContext)
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(nil, -1)
-	p.RuleIndex = sqlParserRULE_column
+	p.RuleIndex = SqlParserRULE_column
 	return p
 }
 
@@ -714,7 +718,7 @@ func NewColumnContext(parser antlr.Parser, parent antlr.ParserRuleContext, invok
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(parent, invokingState)
 
 	p.parser = parser
-	p.RuleIndex = sqlParserRULE_column
+	p.RuleIndex = SqlParserRULE_column
 
 	return p
 }
@@ -722,7 +726,7 @@ func NewColumnContext(parser antlr.Parser, parent antlr.ParserRuleContext, invok
 func (s *ColumnContext) GetParser() antlr.Parser { return s.parser }
 
 func (s *ColumnContext) IDENTIFIER() antlr.TerminalNode {
-	return s.GetToken(sqlParserIDENTIFIER, 0)
+	return s.GetToken(SqlParserIDENTIFIER, 0)
 }
 
 func (s *ColumnContext) GetRuleContext() antlr.RuleContext {
@@ -734,23 +738,23 @@ func (s *ColumnContext) ToStringTree(ruleNames []string, recog antlr.Recognizer)
 }
 
 func (s *ColumnContext) EnterRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.EnterColumn(s)
 	}
 }
 
 func (s *ColumnContext) ExitRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.ExitColumn(s)
 	}
 }
 
-func (p *sqlParser) Column() (localctx IColumnContext) {
+func (p *SqlParser) Column() (localctx IColumnContext) {
 	this := p
 	_ = this
 
 	localctx = NewColumnContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 6, sqlParserRULE_column)
+	p.EnterRule(localctx, 6, SqlParserRULE_column)
 
 	defer func() {
 		p.ExitRule()
@@ -770,8 +774,8 @@ func (p *sqlParser) Column() (localctx IColumnContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(47)
-		p.Match(sqlParserIDENTIFIER)
+		p.SetState(49)
+		p.Match(SqlParserIDENTIFIER)
 	}
 
 	return localctx
@@ -796,7 +800,7 @@ type WhereStatementContext struct {
 func NewEmptyWhereStatementContext() *WhereStatementContext {
 	var p = new(WhereStatementContext)
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(nil, -1)
-	p.RuleIndex = sqlParserRULE_whereStatement
+	p.RuleIndex = SqlParserRULE_whereStatement
 	return p
 }
 
@@ -808,7 +812,7 @@ func NewWhereStatementContext(parser antlr.Parser, parent antlr.ParserRuleContex
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(parent, invokingState)
 
 	p.parser = parser
-	p.RuleIndex = sqlParserRULE_whereStatement
+	p.RuleIndex = SqlParserRULE_whereStatement
 
 	return p
 }
@@ -816,7 +820,7 @@ func NewWhereStatementContext(parser antlr.Parser, parent antlr.ParserRuleContex
 func (s *WhereStatementContext) GetParser() antlr.Parser { return s.parser }
 
 func (s *WhereStatementContext) K_WHERE() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_WHERE, 0)
+	return s.GetToken(SqlParserK_WHERE, 0)
 }
 
 func (s *WhereStatementContext) Expr() IExprContext {
@@ -835,12 +839,20 @@ func (s *WhereStatementContext) Expr() IExprContext {
 	return t.(IExprContext)
 }
 
-func (s *WhereStatementContext) K_WINDOW_TUMBLING() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_WINDOW_TUMBLING, 0)
-}
+func (s *WhereStatementContext) TumblingWindow() ITumblingWindowContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(ITumblingWindowContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
 
-func (s *WhereStatementContext) NUMERIC_LITERAL() antlr.TerminalNode {
-	return s.GetToken(sqlParserNUMERIC_LITERAL, 0)
+	if t == nil {
+		return nil
+	}
+
+	return t.(ITumblingWindowContext)
 }
 
 func (s *WhereStatementContext) GroupBy() IGroupByContext {
@@ -868,23 +880,23 @@ func (s *WhereStatementContext) ToStringTree(ruleNames []string, recog antlr.Rec
 }
 
 func (s *WhereStatementContext) EnterRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.EnterWhereStatement(s)
 	}
 }
 
 func (s *WhereStatementContext) ExitRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.ExitWhereStatement(s)
 	}
 }
 
-func (p *sqlParser) WhereStatement() (localctx IWhereStatementContext) {
+func (p *SqlParser) WhereStatement() (localctx IWhereStatementContext) {
 	this := p
 	_ = this
 
 	localctx = NewWhereStatementContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 8, sqlParserRULE_whereStatement)
+	p.EnterRule(localctx, 8, SqlParserRULE_whereStatement)
 	var _la int
 
 	defer func() {
@@ -903,61 +915,194 @@ func (p *sqlParser) WhereStatement() (localctx IWhereStatementContext) {
 		}
 	}()
 
-	p.SetState(60)
+	p.SetState(62)
 	p.GetErrorHandler().Sync(p)
 
 	switch p.GetTokenStream().LA(1) {
-	case sqlParserEOQ, sqlParserK_WHERE:
+	case SqlParserEOQ, SqlParserK_WHERE:
 		p.EnterOuterAlt(localctx, 1)
-		p.SetState(51)
+		p.SetState(53)
 		p.GetErrorHandler().Sync(p)
 		_la = p.GetTokenStream().LA(1)
 
-		if _la == sqlParserK_WHERE {
+		if _la == SqlParserK_WHERE {
 			{
-				p.SetState(49)
-				p.Match(sqlParserK_WHERE)
+				p.SetState(51)
+				p.Match(SqlParserK_WHERE)
 			}
 			{
-				p.SetState(50)
+				p.SetState(52)
 				p.expr(0)
 			}
 
 		}
 
-	case sqlParserK_WINDOW_TUMBLING:
+	case SqlParserK_WINDOW_TUMBLING:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(53)
-			p.Match(sqlParserK_WINDOW_TUMBLING)
+			p.SetState(55)
+			p.TumblingWindow()
 		}
-		{
-			p.SetState(54)
-			p.Match(sqlParserNUMERIC_LITERAL)
-		}
-		p.SetState(57)
+
+		p.SetState(58)
 		p.GetErrorHandler().Sync(p)
 		_la = p.GetTokenStream().LA(1)
 
-		if _la == sqlParserK_WHERE {
-			{
-				p.SetState(55)
-				p.Match(sqlParserK_WHERE)
-			}
+		if _la == SqlParserK_WHERE {
 			{
 				p.SetState(56)
+				p.Match(SqlParserK_WHERE)
+			}
+			{
+				p.SetState(57)
 				p.expr(0)
 			}
 
 		}
 
 		{
-			p.SetState(59)
+			p.SetState(60)
 			p.GroupBy()
 		}
 
 	default:
 		panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
+	}
+
+	return localctx
+}
+
+// ITumblingWindowContext is an interface to support dynamic dispatch.
+type ITumblingWindowContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// IsTumblingWindowContext differentiates from other interfaces.
+	IsTumblingWindowContext()
+}
+
+type TumblingWindowContext struct {
+	*antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyTumblingWindowContext() *TumblingWindowContext {
+	var p = new(TumblingWindowContext)
+	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(nil, -1)
+	p.RuleIndex = SqlParserRULE_tumblingWindow
+	return p
+}
+
+func (*TumblingWindowContext) IsTumblingWindowContext() {}
+
+func NewTumblingWindowContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *TumblingWindowContext {
+	var p = new(TumblingWindowContext)
+
+	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = SqlParserRULE_tumblingWindow
+
+	return p
+}
+
+func (s *TumblingWindowContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *TumblingWindowContext) K_WINDOW_TUMBLING() antlr.TerminalNode {
+	return s.GetToken(SqlParserK_WINDOW_TUMBLING, 0)
+}
+
+func (s *TumblingWindowContext) NUMERIC_LITERAL() antlr.TerminalNode {
+	return s.GetToken(SqlParserNUMERIC_LITERAL, 0)
+}
+
+func (s *TumblingWindowContext) K_WHERE() antlr.TerminalNode {
+	return s.GetToken(SqlParserK_WHERE, 0)
+}
+
+func (s *TumblingWindowContext) Expr() IExprContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IExprContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IExprContext)
+}
+
+func (s *TumblingWindowContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *TumblingWindowContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *TumblingWindowContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SqlListener); ok {
+		listenerT.EnterTumblingWindow(s)
+	}
+}
+
+func (s *TumblingWindowContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(SqlListener); ok {
+		listenerT.ExitTumblingWindow(s)
+	}
+}
+
+func (p *SqlParser) TumblingWindow() (localctx ITumblingWindowContext) {
+	this := p
+	_ = this
+
+	localctx = NewTumblingWindowContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 10, SqlParserRULE_tumblingWindow)
+
+	defer func() {
+		p.ExitRule()
+	}()
+
+	defer func() {
+		if err := recover(); err != nil {
+			if v, ok := err.(antlr.RecognitionException); ok {
+				localctx.SetException(v)
+				p.GetErrorHandler().ReportError(p, v)
+				p.GetErrorHandler().Recover(p, v)
+			} else {
+				panic(err)
+			}
+		}
+	}()
+
+	p.EnterOuterAlt(localctx, 1)
+	{
+		p.SetState(64)
+		p.Match(SqlParserK_WINDOW_TUMBLING)
+	}
+	{
+		p.SetState(65)
+		p.Match(SqlParserNUMERIC_LITERAL)
+	}
+	p.SetState(68)
+	p.GetErrorHandler().Sync(p)
+
+	if p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 7, p.GetParserRuleContext()) == 1 {
+		{
+			p.SetState(66)
+			p.Match(SqlParserK_WHERE)
+		}
+		{
+			p.SetState(67)
+			p.expr(0)
+		}
+
 	}
 
 	return localctx
@@ -982,7 +1127,7 @@ type GroupByContext struct {
 func NewEmptyGroupByContext() *GroupByContext {
 	var p = new(GroupByContext)
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(nil, -1)
-	p.RuleIndex = sqlParserRULE_groupBy
+	p.RuleIndex = SqlParserRULE_groupBy
 	return p
 }
 
@@ -994,7 +1139,7 @@ func NewGroupByContext(parser antlr.Parser, parent antlr.ParserRuleContext, invo
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(parent, invokingState)
 
 	p.parser = parser
-	p.RuleIndex = sqlParserRULE_groupBy
+	p.RuleIndex = SqlParserRULE_groupBy
 
 	return p
 }
@@ -1002,7 +1147,7 @@ func NewGroupByContext(parser antlr.Parser, parent antlr.ParserRuleContext, invo
 func (s *GroupByContext) GetParser() antlr.Parser { return s.parser }
 
 func (s *GroupByContext) K_GROUP_BY() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_GROUP_BY, 0)
+	return s.GetToken(SqlParserK_GROUP_BY, 0)
 }
 
 func (s *GroupByContext) Column() IColumnContext {
@@ -1030,23 +1175,23 @@ func (s *GroupByContext) ToStringTree(ruleNames []string, recog antlr.Recognizer
 }
 
 func (s *GroupByContext) EnterRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.EnterGroupBy(s)
 	}
 }
 
 func (s *GroupByContext) ExitRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.ExitGroupBy(s)
 	}
 }
 
-func (p *sqlParser) GroupBy() (localctx IGroupByContext) {
+func (p *SqlParser) GroupBy() (localctx IGroupByContext) {
 	this := p
 	_ = this
 
 	localctx = NewGroupByContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 10, sqlParserRULE_groupBy)
+	p.EnterRule(localctx, 12, SqlParserRULE_groupBy)
 
 	defer func() {
 		p.ExitRule()
@@ -1066,11 +1211,11 @@ func (p *sqlParser) GroupBy() (localctx IGroupByContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(62)
-		p.Match(sqlParserK_GROUP_BY)
+		p.SetState(70)
+		p.Match(SqlParserK_GROUP_BY)
 	}
 	{
-		p.SetState(63)
+		p.SetState(71)
 		p.Column()
 	}
 
@@ -1096,7 +1241,7 @@ type AvgContext struct {
 func NewEmptyAvgContext() *AvgContext {
 	var p = new(AvgContext)
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(nil, -1)
-	p.RuleIndex = sqlParserRULE_avg
+	p.RuleIndex = SqlParserRULE_avg
 	return p
 }
 
@@ -1108,7 +1253,7 @@ func NewAvgContext(parser antlr.Parser, parent antlr.ParserRuleContext, invoking
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(parent, invokingState)
 
 	p.parser = parser
-	p.RuleIndex = sqlParserRULE_avg
+	p.RuleIndex = SqlParserRULE_avg
 
 	return p
 }
@@ -1116,7 +1261,7 @@ func NewAvgContext(parser antlr.Parser, parent antlr.ParserRuleContext, invoking
 func (s *AvgContext) GetParser() antlr.Parser { return s.parser }
 
 func (s *AvgContext) L_BRACKET() antlr.TerminalNode {
-	return s.GetToken(sqlParserL_BRACKET, 0)
+	return s.GetToken(SqlParserL_BRACKET, 0)
 }
 
 func (s *AvgContext) Column() IColumnContext {
@@ -1136,23 +1281,23 @@ func (s *AvgContext) Column() IColumnContext {
 }
 
 func (s *AvgContext) R_BRACKET() antlr.TerminalNode {
-	return s.GetToken(sqlParserR_BRACKET, 0)
+	return s.GetToken(SqlParserR_BRACKET, 0)
 }
 
 func (s *AvgContext) K_MIN() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_MIN, 0)
+	return s.GetToken(SqlParserK_MIN, 0)
 }
 
 func (s *AvgContext) K_MAX() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_MAX, 0)
+	return s.GetToken(SqlParserK_MAX, 0)
 }
 
 func (s *AvgContext) K_COUNT() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_COUNT, 0)
+	return s.GetToken(SqlParserK_COUNT, 0)
 }
 
 func (s *AvgContext) K_AVG() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_AVG, 0)
+	return s.GetToken(SqlParserK_AVG, 0)
 }
 
 func (s *AvgContext) GetRuleContext() antlr.RuleContext {
@@ -1164,23 +1309,23 @@ func (s *AvgContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) st
 }
 
 func (s *AvgContext) EnterRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.EnterAvg(s)
 	}
 }
 
 func (s *AvgContext) ExitRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.ExitAvg(s)
 	}
 }
 
-func (p *sqlParser) Avg() (localctx IAvgContext) {
+func (p *SqlParser) Avg() (localctx IAvgContext) {
 	this := p
 	_ = this
 
 	localctx = NewAvgContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 12, sqlParserRULE_avg)
+	p.EnterRule(localctx, 14, SqlParserRULE_avg)
 	var _la int
 
 	defer func() {
@@ -1201,10 +1346,10 @@ func (p *sqlParser) Avg() (localctx IAvgContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(65)
+		p.SetState(73)
 		_la = p.GetTokenStream().LA(1)
 
-		if !(((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<sqlParserK_COUNT)|(1<<sqlParserK_MIN)|(1<<sqlParserK_MAX)|(1<<sqlParserK_AVG))) != 0) {
+		if !(((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<SqlParserK_COUNT)|(1<<SqlParserK_MIN)|(1<<SqlParserK_MAX)|(1<<SqlParserK_AVG))) != 0) {
 			p.GetErrorHandler().RecoverInline(p)
 		} else {
 			p.GetErrorHandler().ReportMatch(p)
@@ -1212,16 +1357,16 @@ func (p *sqlParser) Avg() (localctx IAvgContext) {
 		}
 	}
 	{
-		p.SetState(66)
-		p.Match(sqlParserL_BRACKET)
+		p.SetState(74)
+		p.Match(SqlParserL_BRACKET)
 	}
 	{
-		p.SetState(67)
+		p.SetState(75)
 		p.Column()
 	}
 	{
-		p.SetState(68)
-		p.Match(sqlParserR_BRACKET)
+		p.SetState(76)
+		p.Match(SqlParserR_BRACKET)
 	}
 
 	return localctx
@@ -1246,7 +1391,7 @@ type ExprContext struct {
 func NewEmptyExprContext() *ExprContext {
 	var p = new(ExprContext)
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(nil, -1)
-	p.RuleIndex = sqlParserRULE_expr
+	p.RuleIndex = SqlParserRULE_expr
 	return p
 }
 
@@ -1258,7 +1403,7 @@ func NewExprContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokin
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(parent, invokingState)
 
 	p.parser = parser
-	p.RuleIndex = sqlParserRULE_expr
+	p.RuleIndex = SqlParserRULE_expr
 
 	return p
 }
@@ -1266,7 +1411,7 @@ func NewExprContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokin
 func (s *ExprContext) GetParser() antlr.Parser { return s.parser }
 
 func (s *ExprContext) IDENTIFIER() antlr.TerminalNode {
-	return s.GetToken(sqlParserIDENTIFIER, 0)
+	return s.GetToken(SqlParserIDENTIFIER, 0)
 }
 
 func (s *ExprContext) ComparisonOperator() IComparisonOperatorContext {
@@ -1302,11 +1447,11 @@ func (s *ExprContext) LiteralValue() ILiteralValueContext {
 }
 
 func (s *ExprContext) K_IS_NULL() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_IS_NULL, 0)
+	return s.GetToken(SqlParserK_IS_NULL, 0)
 }
 
 func (s *ExprContext) K_IS_NOT_NULL() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_IS_NOT_NULL, 0)
+	return s.GetToken(SqlParserK_IS_NOT_NULL, 0)
 }
 
 func (s *ExprContext) AllExpr() []IExprContext {
@@ -1351,11 +1496,11 @@ func (s *ExprContext) Expr(i int) IExprContext {
 }
 
 func (s *ExprContext) K_AND() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_AND, 0)
+	return s.GetToken(SqlParserK_AND, 0)
 }
 
 func (s *ExprContext) K_OR() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_OR, 0)
+	return s.GetToken(SqlParserK_OR, 0)
 }
 
 func (s *ExprContext) GetRuleContext() antlr.RuleContext {
@@ -1367,22 +1512,22 @@ func (s *ExprContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) s
 }
 
 func (s *ExprContext) EnterRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.EnterExpr(s)
 	}
 }
 
 func (s *ExprContext) ExitRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.ExitExpr(s)
 	}
 }
 
-func (p *sqlParser) Expr() (localctx IExprContext) {
+func (p *SqlParser) Expr() (localctx IExprContext) {
 	return p.expr(0)
 }
 
-func (p *sqlParser) expr(_p int) (localctx IExprContext) {
+func (p *SqlParser) expr(_p int) (localctx IExprContext) {
 	this := p
 	_ = this
 
@@ -1391,8 +1536,8 @@ func (p *sqlParser) expr(_p int) (localctx IExprContext) {
 	localctx = NewExprContext(p, p.GetParserRuleContext(), _parentState)
 	var _prevctx IExprContext = localctx
 	var _ antlr.ParserRuleContext = _prevctx // TODO: To prevent unused variable warning.
-	_startState := 14
-	p.EnterRecursionRule(localctx, 14, sqlParserRULE_expr, _p)
+	_startState := 16
+	p.EnterRecursionRule(localctx, 16, SqlParserRULE_expr, _p)
 	var _la int
 
 	defer func() {
@@ -1414,33 +1559,33 @@ func (p *sqlParser) expr(_p int) (localctx IExprContext) {
 	var _alt int
 
 	p.EnterOuterAlt(localctx, 1)
-	p.SetState(77)
+	p.SetState(85)
 	p.GetErrorHandler().Sync(p)
-	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 7, p.GetParserRuleContext()) {
+	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 8, p.GetParserRuleContext()) {
 	case 1:
 		{
-			p.SetState(71)
-			p.Match(sqlParserIDENTIFIER)
+			p.SetState(79)
+			p.Match(SqlParserIDENTIFIER)
 		}
 		{
-			p.SetState(72)
+			p.SetState(80)
 			p.ComparisonOperator()
 		}
 		{
-			p.SetState(73)
+			p.SetState(81)
 			p.LiteralValue()
 		}
 
 	case 2:
 		{
-			p.SetState(75)
-			p.Match(sqlParserIDENTIFIER)
+			p.SetState(83)
+			p.Match(SqlParserIDENTIFIER)
 		}
 		{
-			p.SetState(76)
+			p.SetState(84)
 			_la = p.GetTokenStream().LA(1)
 
-			if !(_la == sqlParserK_IS_NULL || _la == sqlParserK_IS_NOT_NULL) {
+			if !(_la == SqlParserK_IS_NULL || _la == SqlParserK_IS_NOT_NULL) {
 				p.GetErrorHandler().RecoverInline(p)
 			} else {
 				p.GetErrorHandler().ReportMatch(p)
@@ -1450,9 +1595,9 @@ func (p *sqlParser) expr(_p int) (localctx IExprContext) {
 
 	}
 	p.GetParserRuleContext().SetStop(p.GetTokenStream().LT(-1))
-	p.SetState(84)
+	p.SetState(92)
 	p.GetErrorHandler().Sync(p)
-	_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 8, p.GetParserRuleContext())
+	_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 9, p.GetParserRuleContext())
 
 	for _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
 		if _alt == 1 {
@@ -1461,17 +1606,17 @@ func (p *sqlParser) expr(_p int) (localctx IExprContext) {
 			}
 			_prevctx = localctx
 			localctx = NewExprContext(p, _parentctx, _parentState)
-			p.PushNewRecursionContext(localctx, _startState, sqlParserRULE_expr)
-			p.SetState(79)
+			p.PushNewRecursionContext(localctx, _startState, SqlParserRULE_expr)
+			p.SetState(87)
 
 			if !(p.Precpred(p.GetParserRuleContext(), 2)) {
 				panic(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 2)", ""))
 			}
 			{
-				p.SetState(80)
+				p.SetState(88)
 				_la = p.GetTokenStream().LA(1)
 
-				if !(_la == sqlParserK_AND || _la == sqlParserK_OR) {
+				if !(_la == SqlParserK_AND || _la == SqlParserK_OR) {
 					p.GetErrorHandler().RecoverInline(p)
 				} else {
 					p.GetErrorHandler().ReportMatch(p)
@@ -1479,14 +1624,14 @@ func (p *sqlParser) expr(_p int) (localctx IExprContext) {
 				}
 			}
 			{
-				p.SetState(81)
+				p.SetState(89)
 				p.expr(3)
 			}
 
 		}
-		p.SetState(86)
+		p.SetState(94)
 		p.GetErrorHandler().Sync(p)
-		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 8, p.GetParserRuleContext())
+		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 9, p.GetParserRuleContext())
 	}
 
 	return localctx
@@ -1511,7 +1656,7 @@ type ComparisonOperatorContext struct {
 func NewEmptyComparisonOperatorContext() *ComparisonOperatorContext {
 	var p = new(ComparisonOperatorContext)
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(nil, -1)
-	p.RuleIndex = sqlParserRULE_comparisonOperator
+	p.RuleIndex = SqlParserRULE_comparisonOperator
 	return p
 }
 
@@ -1523,7 +1668,7 @@ func NewComparisonOperatorContext(parser antlr.Parser, parent antlr.ParserRuleCo
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(parent, invokingState)
 
 	p.parser = parser
-	p.RuleIndex = sqlParserRULE_comparisonOperator
+	p.RuleIndex = SqlParserRULE_comparisonOperator
 
 	return p
 }
@@ -1531,43 +1676,43 @@ func NewComparisonOperatorContext(parser antlr.Parser, parent antlr.ParserRuleCo
 func (s *ComparisonOperatorContext) GetParser() antlr.Parser { return s.parser }
 
 func (s *ComparisonOperatorContext) K_EQUAL() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_EQUAL, 0)
+	return s.GetToken(SqlParserK_EQUAL, 0)
 }
 
 func (s *ComparisonOperatorContext) K_GREATER() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_GREATER, 0)
+	return s.GetToken(SqlParserK_GREATER, 0)
 }
 
 func (s *ComparisonOperatorContext) K_LESS() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_LESS, 0)
+	return s.GetToken(SqlParserK_LESS, 0)
 }
 
 func (s *ComparisonOperatorContext) K_LESS_EQUAL() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_LESS_EQUAL, 0)
+	return s.GetToken(SqlParserK_LESS_EQUAL, 0)
 }
 
 func (s *ComparisonOperatorContext) K_GREATER_EQUAL() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_GREATER_EQUAL, 0)
+	return s.GetToken(SqlParserK_GREATER_EQUAL, 0)
 }
 
 func (s *ComparisonOperatorContext) K_NOT_EQUAL() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_NOT_EQUAL, 0)
+	return s.GetToken(SqlParserK_NOT_EQUAL, 0)
 }
 
 func (s *ComparisonOperatorContext) K_LIKE() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_LIKE, 0)
+	return s.GetToken(SqlParserK_LIKE, 0)
 }
 
 func (s *ComparisonOperatorContext) K_IN() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_IN, 0)
+	return s.GetToken(SqlParserK_IN, 0)
 }
 
 func (s *ComparisonOperatorContext) K_IS() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_IS, 0)
+	return s.GetToken(SqlParserK_IS, 0)
 }
 
 func (s *ComparisonOperatorContext) K_NOT_IN() antlr.TerminalNode {
-	return s.GetToken(sqlParserK_NOT_IN, 0)
+	return s.GetToken(SqlParserK_NOT_IN, 0)
 }
 
 func (s *ComparisonOperatorContext) GetRuleContext() antlr.RuleContext {
@@ -1579,23 +1724,23 @@ func (s *ComparisonOperatorContext) ToStringTree(ruleNames []string, recog antlr
 }
 
 func (s *ComparisonOperatorContext) EnterRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.EnterComparisonOperator(s)
 	}
 }
 
 func (s *ComparisonOperatorContext) ExitRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.ExitComparisonOperator(s)
 	}
 }
 
-func (p *sqlParser) ComparisonOperator() (localctx IComparisonOperatorContext) {
+func (p *SqlParser) ComparisonOperator() (localctx IComparisonOperatorContext) {
 	this := p
 	_ = this
 
 	localctx = NewComparisonOperatorContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 16, sqlParserRULE_comparisonOperator)
+	p.EnterRule(localctx, 18, SqlParserRULE_comparisonOperator)
 	var _la int
 
 	defer func() {
@@ -1616,10 +1761,10 @@ func (p *sqlParser) ComparisonOperator() (localctx IComparisonOperatorContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(87)
+		p.SetState(95)
 		_la = p.GetTokenStream().LA(1)
 
-		if !(((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<sqlParserK_IS)|(1<<sqlParserK_LIKE)|(1<<sqlParserK_EQUAL)|(1<<sqlParserK_GREATER)|(1<<sqlParserK_LESS)|(1<<sqlParserK_LESS_EQUAL)|(1<<sqlParserK_GREATER_EQUAL)|(1<<sqlParserK_NOT_EQUAL)|(1<<sqlParserK_NOT_IN)|(1<<sqlParserK_IN))) != 0) {
+		if !(((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<SqlParserK_IS)|(1<<SqlParserK_LIKE)|(1<<SqlParserK_EQUAL)|(1<<SqlParserK_GREATER)|(1<<SqlParserK_LESS)|(1<<SqlParserK_LESS_EQUAL)|(1<<SqlParserK_GREATER_EQUAL)|(1<<SqlParserK_NOT_EQUAL)|(1<<SqlParserK_NOT_IN)|(1<<SqlParserK_IN))) != 0) {
 			p.GetErrorHandler().RecoverInline(p)
 		} else {
 			p.GetErrorHandler().ReportMatch(p)
@@ -1649,7 +1794,7 @@ type LiteralValueContext struct {
 func NewEmptyLiteralValueContext() *LiteralValueContext {
 	var p = new(LiteralValueContext)
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(nil, -1)
-	p.RuleIndex = sqlParserRULE_literalValue
+	p.RuleIndex = SqlParserRULE_literalValue
 	return p
 }
 
@@ -1661,7 +1806,7 @@ func NewLiteralValueContext(parser antlr.Parser, parent antlr.ParserRuleContext,
 	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(parent, invokingState)
 
 	p.parser = parser
-	p.RuleIndex = sqlParserRULE_literalValue
+	p.RuleIndex = SqlParserRULE_literalValue
 
 	return p
 }
@@ -1669,11 +1814,11 @@ func NewLiteralValueContext(parser antlr.Parser, parent antlr.ParserRuleContext,
 func (s *LiteralValueContext) GetParser() antlr.Parser { return s.parser }
 
 func (s *LiteralValueContext) NUMERIC_LITERAL() antlr.TerminalNode {
-	return s.GetToken(sqlParserNUMERIC_LITERAL, 0)
+	return s.GetToken(SqlParserNUMERIC_LITERAL, 0)
 }
 
 func (s *LiteralValueContext) STRING_LITERAL() antlr.TerminalNode {
-	return s.GetToken(sqlParserSTRING_LITERAL, 0)
+	return s.GetToken(SqlParserSTRING_LITERAL, 0)
 }
 
 func (s *LiteralValueContext) GetRuleContext() antlr.RuleContext {
@@ -1685,23 +1830,23 @@ func (s *LiteralValueContext) ToStringTree(ruleNames []string, recog antlr.Recog
 }
 
 func (s *LiteralValueContext) EnterRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.EnterLiteralValue(s)
 	}
 }
 
 func (s *LiteralValueContext) ExitRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(sqlListener); ok {
+	if listenerT, ok := listener.(SqlListener); ok {
 		listenerT.ExitLiteralValue(s)
 	}
 }
 
-func (p *sqlParser) LiteralValue() (localctx ILiteralValueContext) {
+func (p *SqlParser) LiteralValue() (localctx ILiteralValueContext) {
 	this := p
 	_ = this
 
 	localctx = NewLiteralValueContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 18, sqlParserRULE_literalValue)
+	p.EnterRule(localctx, 20, SqlParserRULE_literalValue)
 	var _la int
 
 	defer func() {
@@ -1722,10 +1867,10 @@ func (p *sqlParser) LiteralValue() (localctx ILiteralValueContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(89)
+		p.SetState(97)
 		_la = p.GetTokenStream().LA(1)
 
-		if !(_la == sqlParserNUMERIC_LITERAL || _la == sqlParserSTRING_LITERAL) {
+		if !(_la == SqlParserNUMERIC_LITERAL || _la == SqlParserSTRING_LITERAL) {
 			p.GetErrorHandler().RecoverInline(p)
 		} else {
 			p.GetErrorHandler().ReportMatch(p)
@@ -1736,9 +1881,9 @@ func (p *sqlParser) LiteralValue() (localctx ILiteralValueContext) {
 	return localctx
 }
 
-func (p *sqlParser) Sempred(localctx antlr.RuleContext, ruleIndex, predIndex int) bool {
+func (p *SqlParser) Sempred(localctx antlr.RuleContext, ruleIndex, predIndex int) bool {
 	switch ruleIndex {
-	case 7:
+	case 8:
 		var t *ExprContext = nil
 		if localctx != nil {
 			t = localctx.(*ExprContext)
@@ -1750,7 +1895,7 @@ func (p *sqlParser) Sempred(localctx antlr.RuleContext, ruleIndex, predIndex int
 	}
 }
 
-func (p *sqlParser) Expr_Sempred(localctx antlr.RuleContext, predIndex int) bool {
+func (p *SqlParser) Expr_Sempred(localctx antlr.RuleContext, predIndex int) bool {
 	this := p
 	_ = this
 

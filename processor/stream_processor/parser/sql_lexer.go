@@ -1,4 +1,4 @@
-// Code generated from sql.g4 by ANTLR 4.10.1. DO NOT EDIT.
+// Code generated from Sql.g4 by ANTLR 4.10.1. DO NOT EDIT.
 
 package parser
 
@@ -15,7 +15,7 @@ var _ = fmt.Printf
 var _ = sync.Once{}
 var _ = unicode.IsLetter
 
-type sqlLexer struct {
+type SqlLexer struct {
 	*antlr.BaseLexer
 	channelNames []string
 	modeNames    []string
@@ -256,19 +256,19 @@ func sqllexerLexerInit() {
 	}
 }
 
-// sqlLexerInit initializes any static state used to implement sqlLexer. By default the
+// SqlLexerInit initializes any static state used to implement SqlLexer. By default the
 // static state used to implement the lexer is lazily initialized during the first call to
-// NewsqlLexer(). You can call this function if you wish to initialize the static state ahead
+// NewSqlLexer(). You can call this function if you wish to initialize the static state ahead
 // of time.
 func SqlLexerInit() {
 	staticData := &sqllexerLexerStaticData
 	staticData.once.Do(sqllexerLexerInit)
 }
 
-// NewsqlLexer produces a new lexer instance for the optional input antlr.CharStream.
-func NewsqlLexer(input antlr.CharStream) *sqlLexer {
+// NewSqlLexer produces a new lexer instance for the optional input antlr.CharStream.
+func NewSqlLexer(input antlr.CharStream) *SqlLexer {
 	SqlLexerInit()
-	l := new(sqlLexer)
+	l := new(SqlLexer)
 	l.BaseLexer = antlr.NewBaseLexer(input)
 	staticData := &sqllexerLexerStaticData
 	l.Interpreter = antlr.NewLexerATNSimulator(l, staticData.atn, staticData.decisionToDFA, staticData.predictionContextCache)
@@ -277,45 +277,45 @@ func NewsqlLexer(input antlr.CharStream) *sqlLexer {
 	l.RuleNames = staticData.ruleNames
 	l.LiteralNames = staticData.literalNames
 	l.SymbolicNames = staticData.symbolicNames
-	l.GrammarFileName = "sql.g4"
+	l.GrammarFileName = "Sql.g4"
 	// TODO: l.EOF = antlr.TokenEOF
 
 	return l
 }
 
-// sqlLexer tokens.
+// SqlLexer tokens.
 const (
-	sqlLexerSPACE             = 1
-	sqlLexerCOMMA             = 2
-	sqlLexerL_BRACKET         = 3
-	sqlLexerR_BRACKET         = 4
-	sqlLexerEOQ               = 5
-	sqlLexerK_SELECT          = 6
-	sqlLexerK_WHERE           = 7
-	sqlLexerK_WINDOW_TUMBLING = 8
-	sqlLexerK_GROUP_BY        = 9
-	sqlLexerK_AND             = 10
-	sqlLexerK_OR              = 11
-	sqlLexerK_IS              = 12
-	sqlLexerK_LIKE            = 13
-	sqlLexerK_EQUAL           = 14
-	sqlLexerK_GREATER         = 15
-	sqlLexerK_LESS            = 16
-	sqlLexerK_LESS_EQUAL      = 17
-	sqlLexerK_GREATER_EQUAL   = 18
-	sqlLexerK_NOT_EQUAL       = 19
-	sqlLexerK_NULL            = 20
-	sqlLexerK_IS_NULL         = 21
-	sqlLexerK_IS_NOT_NULL     = 22
-	sqlLexerK_NOT             = 23
-	sqlLexerK_NOT_IN          = 24
-	sqlLexerK_IN              = 25
-	sqlLexerK_COUNT           = 26
-	sqlLexerK_MIN             = 27
-	sqlLexerK_MAX             = 28
-	sqlLexerK_AVG             = 29
-	sqlLexerIDENTIFIER        = 30
-	sqlLexerNUMERIC_LITERAL   = 31
-	sqlLexerSTRING_LITERAL    = 32
-	sqlLexerSTAR              = 33
+	SqlLexerSPACE             = 1
+	SqlLexerCOMMA             = 2
+	SqlLexerL_BRACKET         = 3
+	SqlLexerR_BRACKET         = 4
+	SqlLexerEOQ               = 5
+	SqlLexerK_SELECT          = 6
+	SqlLexerK_WHERE           = 7
+	SqlLexerK_WINDOW_TUMBLING = 8
+	SqlLexerK_GROUP_BY        = 9
+	SqlLexerK_AND             = 10
+	SqlLexerK_OR              = 11
+	SqlLexerK_IS              = 12
+	SqlLexerK_LIKE            = 13
+	SqlLexerK_EQUAL           = 14
+	SqlLexerK_GREATER         = 15
+	SqlLexerK_LESS            = 16
+	SqlLexerK_LESS_EQUAL      = 17
+	SqlLexerK_GREATER_EQUAL   = 18
+	SqlLexerK_NOT_EQUAL       = 19
+	SqlLexerK_NULL            = 20
+	SqlLexerK_IS_NULL         = 21
+	SqlLexerK_IS_NOT_NULL     = 22
+	SqlLexerK_NOT             = 23
+	SqlLexerK_NOT_IN          = 24
+	SqlLexerK_IN              = 25
+	SqlLexerK_COUNT           = 26
+	SqlLexerK_MIN             = 27
+	SqlLexerK_MAX             = 28
+	SqlLexerK_AVG             = 29
+	SqlLexerIDENTIFIER        = 30
+	SqlLexerNUMERIC_LITERAL   = 31
+	SqlLexerSTRING_LITERAL    = 32
+	SqlLexerSTAR              = 33
 )

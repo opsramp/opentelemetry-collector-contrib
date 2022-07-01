@@ -536,7 +536,7 @@ require (
 )
 
 require (
-	github.com/antlr/antlr4/runtime/Go/antlr v0.0.0-20220527190237-ee62e23da966
+	github.com/antlr/antlr4/runtime/Go/antlr v0.0.0-20220626175859-9abda183db8e
 	github.com/go-kit/kit v0.12.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/shirou/gopsutil v3.21.10+incompatible // indirect

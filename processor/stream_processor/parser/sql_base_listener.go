@@ -1,82 +1,88 @@
-// Code generated from sql.g4 by ANTLR 4.10.1. DO NOT EDIT.
+// Code generated from Sql.g4 by ANTLR 4.10.1. DO NOT EDIT.
 
-package parser // sql
+package parser // Sql
 
 import "github.com/antlr/antlr4/runtime/Go/antlr"
 
-// BasesqlListener is a complete listener for a parse tree produced by sqlParser.
-type BasesqlListener struct{}
+// BaseSqlListener is a complete listener for a parse tree produced by SqlParser.
+type BaseSqlListener struct{}
 
-var _ sqlListener = &BasesqlListener{}
+var _ SqlListener = &BaseSqlListener{}
 
 // VisitTerminal is called when a terminal node is visited.
-func (s *BasesqlListener) VisitTerminal(node antlr.TerminalNode) {}
+func (s *BaseSqlListener) VisitTerminal(node antlr.TerminalNode) {}
 
 // VisitErrorNode is called when an error node is visited.
-func (s *BasesqlListener) VisitErrorNode(node antlr.ErrorNode) {}
+func (s *BaseSqlListener) VisitErrorNode(node antlr.ErrorNode) {}
 
 // EnterEveryRule is called when any rule is entered.
-func (s *BasesqlListener) EnterEveryRule(ctx antlr.ParserRuleContext) {}
+func (s *BaseSqlListener) EnterEveryRule(ctx antlr.ParserRuleContext) {}
 
 // ExitEveryRule is called when any rule is exited.
-func (s *BasesqlListener) ExitEveryRule(ctx antlr.ParserRuleContext) {}
+func (s *BaseSqlListener) ExitEveryRule(ctx antlr.ParserRuleContext) {}
 
 // EnterSqlQuery is called when production sqlQuery is entered.
-func (s *BasesqlListener) EnterSqlQuery(ctx *SqlQueryContext) {}
+func (s *BaseSqlListener) EnterSqlQuery(ctx *SqlQueryContext) {}
 
 // ExitSqlQuery is called when production sqlQuery is exited.
-func (s *BasesqlListener) ExitSqlQuery(ctx *SqlQueryContext) {}
+func (s *BaseSqlListener) ExitSqlQuery(ctx *SqlQueryContext) {}
 
 // EnterSelectQuery is called when production selectQuery is entered.
-func (s *BasesqlListener) EnterSelectQuery(ctx *SelectQueryContext) {}
+func (s *BaseSqlListener) EnterSelectQuery(ctx *SelectQueryContext) {}
 
 // ExitSelectQuery is called when production selectQuery is exited.
-func (s *BasesqlListener) ExitSelectQuery(ctx *SelectQueryContext) {}
+func (s *BaseSqlListener) ExitSelectQuery(ctx *SelectQueryContext) {}
 
 // EnterResultColumns is called when production resultColumns is entered.
-func (s *BasesqlListener) EnterResultColumns(ctx *ResultColumnsContext) {}
+func (s *BaseSqlListener) EnterResultColumns(ctx *ResultColumnsContext) {}
 
 // ExitResultColumns is called when production resultColumns is exited.
-func (s *BasesqlListener) ExitResultColumns(ctx *ResultColumnsContext) {}
+func (s *BaseSqlListener) ExitResultColumns(ctx *ResultColumnsContext) {}
 
 // EnterColumn is called when production column is entered.
-func (s *BasesqlListener) EnterColumn(ctx *ColumnContext) {}
+func (s *BaseSqlListener) EnterColumn(ctx *ColumnContext) {}
 
 // ExitColumn is called when production column is exited.
-func (s *BasesqlListener) ExitColumn(ctx *ColumnContext) {}
+func (s *BaseSqlListener) ExitColumn(ctx *ColumnContext) {}
 
 // EnterWhereStatement is called when production whereStatement is entered.
-func (s *BasesqlListener) EnterWhereStatement(ctx *WhereStatementContext) {}
+func (s *BaseSqlListener) EnterWhereStatement(ctx *WhereStatementContext) {}
 
 // ExitWhereStatement is called when production whereStatement is exited.
-func (s *BasesqlListener) ExitWhereStatement(ctx *WhereStatementContext) {}
+func (s *BaseSqlListener) ExitWhereStatement(ctx *WhereStatementContext) {}
+
+// EnterTumblingWindow is called when production tumblingWindow is entered.
+func (s *BaseSqlListener) EnterTumblingWindow(ctx *TumblingWindowContext) {}
+
+// ExitTumblingWindow is called when production tumblingWindow is exited.
+func (s *BaseSqlListener) ExitTumblingWindow(ctx *TumblingWindowContext) {}
 
 // EnterGroupBy is called when production groupBy is entered.
-func (s *BasesqlListener) EnterGroupBy(ctx *GroupByContext) {}
+func (s *BaseSqlListener) EnterGroupBy(ctx *GroupByContext) {}
 
 // ExitGroupBy is called when production groupBy is exited.
-func (s *BasesqlListener) ExitGroupBy(ctx *GroupByContext) {}
+func (s *BaseSqlListener) ExitGroupBy(ctx *GroupByContext) {}
 
 // EnterAvg is called when production avg is entered.
-func (s *BasesqlListener) EnterAvg(ctx *AvgContext) {}
+func (s *BaseSqlListener) EnterAvg(ctx *AvgContext) {}
 
 // ExitAvg is called when production avg is exited.
-func (s *BasesqlListener) ExitAvg(ctx *AvgContext) {}
+func (s *BaseSqlListener) ExitAvg(ctx *AvgContext) {}
 
 // EnterExpr is called when production expr is entered.
-func (s *BasesqlListener) EnterExpr(ctx *ExprContext) {}
+func (s *BaseSqlListener) EnterExpr(ctx *ExprContext) {}
 
 // ExitExpr is called when production expr is exited.
-func (s *BasesqlListener) ExitExpr(ctx *ExprContext) {}
+func (s *BaseSqlListener) ExitExpr(ctx *ExprContext) {}
 
 // EnterComparisonOperator is called when production comparisonOperator is entered.
-func (s *BasesqlListener) EnterComparisonOperator(ctx *ComparisonOperatorContext) {}
+func (s *BaseSqlListener) EnterComparisonOperator(ctx *ComparisonOperatorContext) {}
 
 // ExitComparisonOperator is called when production comparisonOperator is exited.
-func (s *BasesqlListener) ExitComparisonOperator(ctx *ComparisonOperatorContext) {}
+func (s *BaseSqlListener) ExitComparisonOperator(ctx *ComparisonOperatorContext) {}
 
 // EnterLiteralValue is called when production literalValue is entered.
-func (s *BasesqlListener) EnterLiteralValue(ctx *LiteralValueContext) {}
+func (s *BaseSqlListener) EnterLiteralValue(ctx *LiteralValueContext) {}
 
 // ExitLiteralValue is called when production literalValue is exited.
-func (s *BasesqlListener) ExitLiteralValue(ctx *LiteralValueContext) {}
+func (s *BaseSqlListener) ExitLiteralValue(ctx *LiteralValueContext) {}
