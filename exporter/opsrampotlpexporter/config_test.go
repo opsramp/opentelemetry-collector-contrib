@@ -43,13 +43,12 @@ func TestLoadConfig(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 
-	e0 := cfg.Exporters[config.NewComponentID(typeStr)]
-	assert.Equal(t, e0, factory.CreateDefaultConfig())
+	e := cfg.Exporters[config.NewComponentID(typeStr)]
 
-	e1 := cfg.Exporters[config.NewComponentIDWithName(typeStr, "2")]
-	assert.Equal(t, e1,
+	//e1 := cfg.Exporters[config.NewComponentIDWithName(typeStr, "2")]
+	assert.Equal(t, e,
 		&Config{
-			ExporterSettings: config.NewExporterSettings(config.NewComponentIDWithName(typeStr, "2")),
+			ExporterSettings: config.NewExporterSettings(config.NewComponentIDWithName(typeStr, "")),
 			TimeoutSettings: exporterhelper.TimeoutSettings{
 				Timeout: 10 * time.Second,
 			},
@@ -63,6 +62,12 @@ func TestLoadConfig(t *testing.T) {
 				Enabled:      true,
 				NumConsumers: 2,
 				QueueSize:    10,
+			},
+			Security: SecuritySettings{
+				ClientId:        "id",
+				ClientSecret:    "secret",
+				OAuthServiceURL: "url",
+				GrantType:       "all",
 			},
 			GRPCClientSettings: configgrpc.GRPCClientSettings{
 				Headers: map[string]string{

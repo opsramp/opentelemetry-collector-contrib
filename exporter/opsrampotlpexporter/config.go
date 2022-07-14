@@ -15,6 +15,7 @@
 package opsrampotlpexporter // import "go.opentelemetry.io/collector/exporter/otlpexporter"
 
 import (
+	"errors"
 	"fmt"
 
 	"go.opentelemetry.io/collector/config"
@@ -27,6 +28,33 @@ type MaskingSettings struct {
 	Placeholder string `mapstructure:"placeholder"`
 }
 
+type SecuritySettings struct {
+	OAuthServiceURL string `mapstructure:"oauth_service_url"`
+	ClientId        string `mapstructure:"client_id"`
+	ClientSecret    string `mapstructure:"client_secret"`
+	GrantType       string `mapstructure:"grant_type"`
+}
+
+func (s *SecuritySettings) Validate() error {
+	if len(s.OAuthServiceURL) == 0 {
+		return errors.New("oauth service url missed")
+	}
+
+	if len(s.ClientId) == 0 {
+		return errors.New("client_id missed")
+	}
+
+	if len(s.ClientSecret) == 0 {
+		return errors.New("client_secret missed")
+	}
+
+	if len(s.GrantType) == 0 {
+		return errors.New("grant_type missed")
+	}
+
+	return nil
+}
+
 // Config defines configuration for OpenCensus exporter.
 type Config struct {
 	config.ExporterSettings        `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct
@@ -34,6 +62,7 @@ type Config struct {
 	exporterhelper.QueueSettings   `mapstructure:"sending_queue"`
 	exporterhelper.RetrySettings   `mapstructure:"retry_on_failure"`
 
+	Security                      SecuritySettings         `mapstructure:"security"`
 	configgrpc.GRPCClientSettings `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct.
 	Masking                       []MaskingSettings        `mapstructure:"masking"`
 }
@@ -44,6 +73,10 @@ var _ config.Exporter = (*Config)(nil)
 func (cfg *Config) Validate() error {
 	if err := cfg.QueueSettings.Validate(); err != nil {
 		return fmt.Errorf("queue settings has invalid configuration: %w", err)
+	}
+
+	if err := cfg.Security.Validate(); err != nil {
+		return fmt.Errorf("security settings has invalid configuration: %w", err)
 	}
 
 	return nil

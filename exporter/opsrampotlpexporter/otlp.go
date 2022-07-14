@@ -15,13 +15,19 @@
 package opsrampotlpexporter // import "go.opentelemetry.io/collector/exporter/otlpexporter"
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"go.opentelemetry.io/collector/config"
+	"io/ioutil"
+	"net/http"
+	"net/url"
 	"regexp"
 	"runtime"
 	"time"
+
+	"go.opentelemetry.io/collector/config"
 
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
@@ -55,13 +61,20 @@ type exporter struct {
 	settings component.TelemetrySettings
 
 	// Default user-agent header.
-	userAgent string
+	userAgent   string
+	accessToken string
 }
 
 // Crete new exporter and start it. The exporter will begin connecting but
 // this function may return before the connection is established.
 func newExporter(cfg config.Exporter, set component.ExporterCreateSettings) (*exporter, error) {
 	oCfg := cfg.(*Config)
+
+	accessToken, err := getAuthToken(oCfg.Security)
+	if err != nil {
+		return nil, fmt.Errorf("access token isn't available: %w", err)
+	}
+	md := metadata.New(map[string]string{"bearer": accessToken})
 
 	if oCfg.Endpoint == "" {
 		return nil, errors.New("OTLP exporter config requires an Endpoint")
@@ -70,7 +83,46 @@ func newExporter(cfg config.Exporter, set component.ExporterCreateSettings) (*ex
 	userAgent := fmt.Sprintf("%s/%s (%s/%s)",
 		set.BuildInfo.Description, set.BuildInfo.Version, runtime.GOOS, runtime.GOARCH)
 
-	return &exporter{config: oCfg, settings: set.TelemetrySettings, userAgent: userAgent}, nil
+	return &exporter{config: oCfg, settings: set.TelemetrySettings, userAgent: userAgent, accessToken: accessToken, metadata: md}, nil
+}
+
+func getAuthToken(cfg SecuritySettings) (token string, err error) {
+
+	type credentials struct {
+		accessToken string `json:"access_token"`
+		tokenType   string `json:"token_type"`
+		ExpiresIn   string `json:"expired_in"`
+		Scope       string `json:"scope"`
+	}
+	client := &http.Client{}
+	data := url.Values{}
+	data.Set("client_id", cfg.ClientId)
+	data.Set("client_secret", cfg.ClientSecret)
+	data.Set("grant_type", cfg.GrantType)
+
+	request, err := http.NewRequest("POST", cfg.OAuthServiceURL, bytes.NewBufferString(data.Encode()))
+	if err != nil {
+		return "", err
+	}
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := client.Do(request)
+
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	jsonResp, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var authToken credentials
+	if err := json.Unmarshal(jsonResp, &authToken); err != nil {
+		return "", err
+	}
+	return authToken.accessToken, nil
+
 }
 
 // start actually creates the gRPC connection. The client construction is deferred till this point as this
@@ -90,6 +142,7 @@ func (e *exporter) start(ctx context.Context, host component.Host) (err error) {
 	e.metricExporter = pmetricotlp.NewClient(e.clientConn)
 	e.logExporter = plogotlp.NewClient(e.clientConn)
 	e.metadata = metadata.New(e.config.GRPCClientSettings.Headers)
+	e.metadata.Set("bearer", e.accessToken)
 	e.callOptions = []grpc.CallOption{
 		grpc.WaitForReady(e.config.GRPCClientSettings.WaitForReady),
 	}
@@ -119,8 +172,26 @@ func (e *exporter) pushLogs(ctx context.Context, ld plog.Logs) error {
 	}
 
 	req := plogotlp.NewRequestFromLogs(ld)
+
 	_, err := e.logExporter.Export(e.enhanceContext(ctx), req, e.callOptions...)
-	return processError(err)
+
+	// trying to get new access token in case of expiration
+	if err != nil {
+		st := status.Convert(err)
+		if st.Code() == codes.Unauthenticated {
+			accessToken, err := getAuthToken(e.config.Security)
+			if err != nil {
+				return err
+			}
+			e.metadata.Set("bearer", accessToken)
+			_, err = e.logExporter.Export(e.enhanceContext(ctx), req, e.callOptions...)
+			if err != nil {
+				return err
+			}
+		}
+		return processError(err)
+	}
+	return nil
 }
 
 func (e *exporter) enhanceContext(ctx context.Context) context.Context {
