@@ -86,19 +86,24 @@ func newExporter(cfg config.Exporter, set component.ExporterCreateSettings) (*ex
 	return &exporter{config: oCfg, settings: set.TelemetrySettings, userAgent: userAgent, accessToken: accessToken, metadata: md}, nil
 }
 
-func getAuthToken(cfg SecuritySettings) (token string, err error) {
+type Creds struct {
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+	GrantType    string `json:"grant_type"`
+}
 
-	type credentials struct {
-		accessToken string `json:"access_token"`
-		tokenType   string `json:"token_type"`
-		ExpiresIn   string `json:"expired_in"`
-		Scope       string `json:"scope"`
-	}
+type Person struct {
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}
+
+func getAuthToken(cfg SecuritySettings) (string, error) {
+
 	client := &http.Client{}
 	data := url.Values{}
 	data.Set("client_id", cfg.ClientId)
 	data.Set("client_secret", cfg.ClientSecret)
-	data.Set("grant_type", cfg.GrantType)
+	data.Set("grant_type", grantType)
 
 	request, err := http.NewRequest("POST", cfg.OAuthServiceURL, bytes.NewBufferString(data.Encode()))
 	if err != nil {
@@ -117,11 +122,11 @@ func getAuthToken(cfg SecuritySettings) (token string, err error) {
 		return "", err
 	}
 
-	var authToken credentials
-	if err := json.Unmarshal(jsonResp, &authToken); err != nil {
+	var credentials Credentials
+	if err := json.Unmarshal(jsonResp, &credentials); err != nil {
 		return "", err
 	}
-	return authToken.accessToken, nil
+	return credentials.AccessToken, nil
 
 }
 
@@ -179,11 +184,9 @@ func (e *exporter) pushLogs(ctx context.Context, ld plog.Logs) error {
 	if err != nil {
 		st := status.Convert(err)
 		if st.Code() == codes.Unauthenticated {
-			accessToken, err := getAuthToken(e.config.Security)
-			if err != nil {
-				return err
+			if err := e.updateExpiredToken(); err != nil {
+				return fmt.Errorf("couldn't retreive new token instead of expired: %w", err)
 			}
-			e.metadata.Set("bearer", accessToken)
 			_, err = e.logExporter.Export(e.enhanceContext(ctx), req, e.callOptions...)
 			if err != nil {
 				return err
@@ -191,6 +194,15 @@ func (e *exporter) pushLogs(ctx context.Context, ld plog.Logs) error {
 		}
 		return processError(err)
 	}
+	return nil
+}
+
+func (e *exporter) updateExpiredToken() error {
+	accessToken, err := getAuthToken(e.config.Security)
+	if err != nil {
+		return err
+	}
+	e.metadata.Set("bearer", accessToken)
 	return nil
 }
 

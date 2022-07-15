@@ -23,6 +23,8 @@ import (
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 )
 
+const grantType = "client_credentials"
+
 type MaskingSettings struct {
 	Regexp      string `mapstructure:"regexp"`
 	Placeholder string `mapstructure:"placeholder"`
@@ -32,7 +34,13 @@ type SecuritySettings struct {
 	OAuthServiceURL string `mapstructure:"oauth_service_url"`
 	ClientId        string `mapstructure:"client_id"`
 	ClientSecret    string `mapstructure:"client_secret"`
-	GrantType       string `mapstructure:"grant_type"`
+}
+
+type Credentials struct {
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+	ExpiresIn   string `json:"expired_in"`
+	Scope       string `json:"scope"`
 }
 
 func (s *SecuritySettings) Validate() error {
@@ -46,10 +54,6 @@ func (s *SecuritySettings) Validate() error {
 
 	if len(s.ClientSecret) == 0 {
 		return errors.New("client_secret missed")
-	}
-
-	if len(s.GrantType) == 0 {
-		return errors.New("grant_type missed")
 	}
 
 	return nil

@@ -67,7 +67,6 @@ func TestLoadConfig(t *testing.T) {
 				ClientId:        "id",
 				ClientSecret:    "secret",
 				OAuthServiceURL: "url",
-				GrantType:       "all",
 			},
 			GRPCClientSettings: configgrpc.GRPCClientSettings{
 				Headers: map[string]string{

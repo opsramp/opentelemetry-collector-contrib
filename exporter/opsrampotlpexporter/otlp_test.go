@@ -219,6 +219,11 @@ func TestSendTraces(t *testing.T) {
 			"header": "header-value",
 		},
 	}
+	cfg.Security = SecuritySettings{
+		OAuthServiceURL: "https://asura.opsramp.net/auth/oauth/token?agent=true",
+		ClientId:        "mamRxRJB796HYtWYxqeDzeEXCKSswnsr",
+		ClientSecret:    "Da2achZqvHF7tKDaSP3FCkHE2PKcY6twRxwZEnEYQHc5GADgHy5VZDBxdeKhNbrw",
+	}
 	set := componenttest.NewNopExporterCreateSettings()
 	set.BuildInfo.Description = "Collector"
 	set.BuildInfo.Version = "1.2.3test"
@@ -310,6 +315,11 @@ func TestSendTracesWhenEndpointHasHttpScheme(t *testing.T) {
 			// Start an OTLP exporter and point to the receiver.
 			factory := NewFactory()
 			cfg := factory.CreateDefaultConfig().(*Config)
+			cfg.Security = SecuritySettings{
+				OAuthServiceURL: "https://asura.opsramp.net/auth/oauth/token?agent=true",
+				ClientId:        "mamRxRJB796HYtWYxqeDzeEXCKSswnsr",
+				ClientSecret:    "Da2achZqvHF7tKDaSP3FCkHE2PKcY6twRxwZEnEYQHc5GADgHy5VZDBxdeKhNbrw",
+			}
 			cfg.GRPCClientSettings = test.gRPCClientSettings
 			cfg.GRPCClientSettings.Endpoint = test.scheme + ln.Addr().String()
 			if test.useTLS {
@@ -364,6 +374,11 @@ func TestSendMetrics(t *testing.T) {
 		Headers: map[string]string{
 			"header": "header-value",
 		},
+	}
+	cfg.Security = SecuritySettings{
+		OAuthServiceURL: "https://asura.opsramp.net/auth/oauth/token?agent=true",
+		ClientId:        "mamRxRJB796HYtWYxqeDzeEXCKSswnsr",
+		ClientSecret:    "Da2achZqvHF7tKDaSP3FCkHE2PKcY6twRxwZEnEYQHc5GADgHy5VZDBxdeKhNbrw",
 	}
 	set := componenttest.NewNopExporterCreateSettings()
 	set.BuildInfo.Description = "Collector"
@@ -438,6 +453,12 @@ func TestSendTraceDataServerDownAndUp(t *testing.T) {
 		// Do not rely on external retry logic here, if that is intended set InitialInterval to 100ms.
 		WaitForReady: true,
 	}
+	cfg.Security = SecuritySettings{
+		OAuthServiceURL: "https://asura.opsramp.net/auth/oauth/token?agent=true",
+		ClientId:        "mamRxRJB796HYtWYxqeDzeEXCKSswnsr",
+		ClientSecret:    "Da2achZqvHF7tKDaSP3FCkHE2PKcY6twRxwZEnEYQHc5GADgHy5VZDBxdeKhNbrw",
+	}
+
 	set := componenttest.NewNopExporterCreateSettings()
 	exp, err := factory.CreateTracesExporter(context.Background(), set, cfg)
 	require.NoError(t, err)
@@ -495,6 +516,11 @@ func TestSendTraceDataServerStartWhileRequest(t *testing.T) {
 			Insecure: true,
 		},
 	}
+	cfg.Security = SecuritySettings{
+		OAuthServiceURL: "https://asura.opsramp.net/auth/oauth/token?agent=true",
+		ClientId:        "mamRxRJB796HYtWYxqeDzeEXCKSswnsr",
+		ClientSecret:    "Da2achZqvHF7tKDaSP3FCkHE2PKcY6twRxwZEnEYQHc5GADgHy5VZDBxdeKhNbrw",
+	}
 	set := componenttest.NewNopExporterCreateSettings()
 	exp, err := factory.CreateTracesExporter(context.Background(), set, cfg)
 	require.NoError(t, err)
@@ -545,6 +571,11 @@ func TestSendTracesOnResourceExhaustion(t *testing.T) {
 		TLSSetting: configtls.TLSClientSetting{
 			Insecure: true,
 		},
+	}
+	cfg.Security = SecuritySettings{
+		OAuthServiceURL: "https://asura.opsramp.net/auth/oauth/token?agent=true",
+		ClientId:        "mamRxRJB796HYtWYxqeDzeEXCKSswnsr",
+		ClientSecret:    "Da2achZqvHF7tKDaSP3FCkHE2PKcY6twRxwZEnEYQHc5GADgHy5VZDBxdeKhNbrw",
 	}
 	set := componenttest.NewNopExporterCreateSettings()
 	exp, err := factory.CreateTracesExporter(context.Background(), set, cfg)
@@ -623,6 +654,11 @@ func TestSendLogData(t *testing.T) {
 			Insecure: true,
 		},
 	}
+	cfg.Security = SecuritySettings{
+		OAuthServiceURL: "https://asura.opsramp.net/auth/oauth/token?agent=true",
+		ClientId:        "mamRxRJB796HYtWYxqeDzeEXCKSswnsr",
+		ClientSecret:    "Da2achZqvHF7tKDaSP3FCkHE2PKcY6twRxwZEnEYQHc5GADgHy5VZDBxdeKhNbrw",
+	}
 	set := componenttest.NewNopExporterCreateSettings()
 	set.BuildInfo.Description = "Collector"
 	set.BuildInfo.Version = "1.2.3test"
@@ -678,5 +714,16 @@ func TestRegexp(t *testing.T) {
 	reStr := regexp.MustCompile(`\d+`)
 	repStr := "${1}HIDDEN$2"
 	output := reStr.ReplaceAllString(strExp, repStr)
-	fmt.Println(output)
+	assert.Equal(t, output, "my HIDDEN id is HIDDEN")
+}
+
+func TestGetAuthToken(t *testing.T) {
+	cfg := SecuritySettings{
+		OAuthServiceURL: "https://asura.opsramp.net/auth/oauth/token?agent=true",
+		ClientId:        "mamRxRJB796HYtWYxqeDzeEXCKSswnsr",
+		ClientSecret:    "Da2achZqvHF7tKDaSP3FCkHE2PKcY6twRxwZEnEYQHc5GADgHy5VZDBxdeKhNbrw",
+	}
+	token, err := getAuthToken(cfg)
+	assert.Nil(t, err)
+	fmt.Println(token)
 }

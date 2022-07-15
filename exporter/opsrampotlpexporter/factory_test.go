@@ -50,6 +50,11 @@ func TestCreateMetricsExporter(t *testing.T) {
 	factory := NewFactory()
 	cfg := factory.CreateDefaultConfig().(*Config)
 	cfg.GRPCClientSettings.Endpoint = testutil.GetAvailableLocalAddress(t)
+	cfg.Security = SecuritySettings{
+		OAuthServiceURL: "https://asura.opsramp.net/auth/oauth/token?agent=true",
+		ClientId:        "mamRxRJB796HYtWYxqeDzeEXCKSswnsr",
+		ClientSecret:    "Da2achZqvHF7tKDaSP3FCkHE2PKcY6twRxwZEnEYQHc5GADgHy5VZDBxdeKhNbrw",
+	}
 
 	set := componenttest.NewNopExporterCreateSettings()
 	oexp, err := factory.CreateMetricsExporter(context.Background(), set, cfg)
