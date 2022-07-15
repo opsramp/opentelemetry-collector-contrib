@@ -74,7 +74,6 @@ func newExporter(cfg config.Exporter, set component.ExporterCreateSettings) (*ex
 	if err != nil {
 		return nil, fmt.Errorf("access token isn't available: %w", err)
 	}
-	md := metadata.New(map[string]string{"bearer": accessToken})
 
 	if oCfg.Endpoint == "" {
 		return nil, errors.New("OTLP exporter config requires an Endpoint")
@@ -83,7 +82,7 @@ func newExporter(cfg config.Exporter, set component.ExporterCreateSettings) (*ex
 	userAgent := fmt.Sprintf("%s/%s (%s/%s)",
 		set.BuildInfo.Description, set.BuildInfo.Version, runtime.GOOS, runtime.GOARCH)
 
-	return &exporter{config: oCfg, settings: set.TelemetrySettings, userAgent: userAgent, accessToken: accessToken, metadata: md}, nil
+	return &exporter{config: oCfg, settings: set.TelemetrySettings, userAgent: userAgent, accessToken: accessToken}, nil
 }
 
 type Creds struct {
@@ -147,7 +146,7 @@ func (e *exporter) start(ctx context.Context, host component.Host) (err error) {
 	e.metricExporter = pmetricotlp.NewClient(e.clientConn)
 	e.logExporter = plogotlp.NewClient(e.clientConn)
 	e.metadata = metadata.New(e.config.GRPCClientSettings.Headers)
-	e.metadata.Set("bearer", e.accessToken)
+	e.metadata.Set("Authorization", fmt.Sprintf("Bearer %s", e.accessToken))
 	e.callOptions = []grpc.CallOption{
 		grpc.WaitForReady(e.config.GRPCClientSettings.WaitForReady),
 	}
@@ -187,6 +186,7 @@ func (e *exporter) pushLogs(ctx context.Context, ld plog.Logs) error {
 			if err := e.updateExpiredToken(); err != nil {
 				return fmt.Errorf("couldn't retreive new token instead of expired: %w", err)
 			}
+
 			_, err = e.logExporter.Export(e.enhanceContext(ctx), req, e.callOptions...)
 			if err != nil {
 				return err
