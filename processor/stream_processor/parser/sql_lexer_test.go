@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"context"
 	"fmt"
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -24,6 +23,7 @@ func TestSelectExpr(t *testing.T) {
 
 }
 
+/*
 func TestParser(t *testing.T) {
 	is := antlr.NewInputStream("SELEct field1, field2 WHERE field3 > 3 and field4 IS 'test';")
 
@@ -41,6 +41,7 @@ func TestParser(t *testing.T) {
 	antlr.ParseTreeWalkerDefault.Walk(&listener, p.SelectQuery())
 
 }
+*/
 
 func createSampleLog() plog.LogRecord {
 	record := plog.NewLogRecord()

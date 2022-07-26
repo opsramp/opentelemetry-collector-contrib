@@ -11,9 +11,9 @@ selectQuery
 
 
 resultColumns
- : column (COMMA column)+
- | avg (COMMA avg)+
- | STAR
+ : column (COMMA column)+ # selectColumns
+ | avg (COMMA avg)+       # selectAVG
+ | STAR                   # selectStar
  ;
 
 
@@ -22,8 +22,8 @@ column
   ;
 
 whereStatement
-  : ( K_WHERE expr )?
-  | (tumblingWindow) ( K_WHERE expr )? (groupBy)
+  : ( K_WHERE expr )?                            # whereStmt
+  | (tumblingWindow) ( K_WHERE expr )? (groupBy) # tumblingStmt
   ;
 
 tumblingWindow
@@ -41,6 +41,8 @@ avg
 SPACE
  : [ \u000B\t\r\n] -> channel(HIDDEN)
  ;
+
+WS : [ \t]+ -> skip ;
 
 COMMA : ',' ;
 L_BRACKET : '(' ;
