@@ -1,6 +1,7 @@
 grammar Sql;
 
 
+//java -jar antlr-4.10.1-complete.jar  -Dlanguage=Go -o parser Sql.g4 -no-listener -visitor
 
 sqlQuery
   : selectQuery EOF;
@@ -11,7 +12,7 @@ selectQuery
 
 
 resultColumns
- : column (COMMA column)+ # selectColumns
+ : column (COMMA column)* # selectColumns
  | avg (COMMA avg)+       # selectAVG
  | STAR                   # selectStar
  ;

@@ -2,6 +2,7 @@ package parser
 
 import (
 	"github.com/antlr/antlr4/runtime/Go/antlr"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 )
 
@@ -47,9 +48,24 @@ func (v *SqlStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interfa
 	for _, column := range ctx.AllColumn() {
 		v.logRecords.RemoveIf(func(record plog.LogRecord) bool {
 			_, ok := record.Attributes().Get(column.GetText())
+
 			if ok {
+				// Remove attributes which are not listed in result columns statement
+				removed := make([]string, 0, record.Attributes().Len())
+				record.Attributes().Range(func(k string, value pcommon.Value) bool {
+					if !KeyExists(k, ctx.AllColumn()) {
+						removed = append(removed, k)
+					}
+					return true
+				})
+
+				for _, removedKey := range removed {
+					record.Attributes().Remove(removedKey)
+				}
+
 				return false
 			}
+
 			return true
 		})
 
