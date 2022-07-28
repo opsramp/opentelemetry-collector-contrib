@@ -31,6 +31,30 @@ tumblingWindow
  : K_WINDOW_TUMBLING NUMERIC_LITERAL( K_WHERE expr )?
  ;
 
+
+expr
+ : IDENTIFIER comparisonOperator literalValue       #simpleCondition
+ | compoundExpr ( K_AND | K_OR ) compoundExpr       #compoundRecursiveCondition
+ | IDENTIFIER (K_IS_NULL | K_IS_NOT_NULL)           #nullCondition
+ | expr (K_AND| K_OR) expr                          #simpleRecursiveCondition
+ ;
+
+compoundExpr
+ : L_BRACKET expr R_BRACKET
+ ;
+
+comparisonOperator
+  : K_EQUAL | K_GREATER | K_LESS | K_LESS_EQUAL | K_GREATER_EQUAL |  K_NOT_EQUAL  | K_LIKE | K_IN | K_IS | K_NOT_IN
+  ;
+
+
+literalValue
+ : NUMERIC_LITERAL
+ | STRING_LITERAL
+ | BOOLEAN_LITERAL
+ ;
+
+
 groupBy
  : K_GROUP_BY column
  ;
@@ -71,7 +95,8 @@ K_IS_NOT_NULL : (K_IS SPACE K_NOT SPACE K_NULL);
 K_NOT : N O T;
 K_NOT_IN : (K_NOT SPACE I N);
 K_IN : I N;
-
+K_TRUE : T R U E;
+K_FALSE : F A L S E;
 K_COUNT : C O U N T;
 K_MIN : M I N;
 K_MAX : M A X;
@@ -84,24 +109,10 @@ IDENTIFIER
   | [a-zA-Z_] [a-zA-Z_0-9]*
   ;
 
-expr
- : IDENTIFIER comparisonOperator literalValue
- | expr ( K_AND | K_OR ) expr
- | IDENTIFIER (K_IS_NULL | K_IS_NOT_NULL)
+
+BOOLEAN_LITERAL
+ : (K_TRUE | K_FALSE)
  ;
-
-
-
-comparisonOperator
-  : K_EQUAL | K_GREATER | K_LESS | K_LESS_EQUAL | K_GREATER_EQUAL |  K_NOT_EQUAL  | K_LIKE | K_IN | K_IS | K_NOT_IN
-  ;
-
-
-literalValue
- : NUMERIC_LITERAL
- | STRING_LITERAL
- ;
-
 
 NUMERIC_LITERAL
  : DIGIT+ ( '.' DIGIT* )? ( E [-+]? DIGIT+ )?

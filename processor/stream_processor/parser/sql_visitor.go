@@ -35,18 +35,30 @@ type SqlVisitor interface {
 	// Visit a parse tree produced by SqlParser#tumblingWindow.
 	VisitTumblingWindow(ctx *TumblingWindowContext) interface{}
 
-	// Visit a parse tree produced by SqlParser#groupBy.
-	VisitGroupBy(ctx *GroupByContext) interface{}
+	// Visit a parse tree produced by SqlParser#simpleCondition.
+	VisitSimpleCondition(ctx *SimpleConditionContext) interface{}
 
-	// Visit a parse tree produced by SqlParser#avg.
-	VisitAvg(ctx *AvgContext) interface{}
+	// Visit a parse tree produced by SqlParser#nullCondition.
+	VisitNullCondition(ctx *NullConditionContext) interface{}
 
-	// Visit a parse tree produced by SqlParser#expr.
-	VisitExpr(ctx *ExprContext) interface{}
+	// Visit a parse tree produced by SqlParser#compoundRecursiveCondition.
+	VisitCompoundRecursiveCondition(ctx *CompoundRecursiveConditionContext) interface{}
+
+	// Visit a parse tree produced by SqlParser#simpleRecursiveCondition.
+	VisitSimpleRecursiveCondition(ctx *SimpleRecursiveConditionContext) interface{}
+
+	// Visit a parse tree produced by SqlParser#compoundExpr.
+	VisitCompoundExpr(ctx *CompoundExprContext) interface{}
 
 	// Visit a parse tree produced by SqlParser#comparisonOperator.
 	VisitComparisonOperator(ctx *ComparisonOperatorContext) interface{}
 
 	// Visit a parse tree produced by SqlParser#literalValue.
 	VisitLiteralValue(ctx *LiteralValueContext) interface{}
+
+	// Visit a parse tree produced by SqlParser#groupBy.
+	VisitGroupBy(ctx *GroupByContext) interface{}
+
+	// Visit a parse tree produced by SqlParser#avg.
+	VisitAvg(ctx *AvgContext) interface{}
 }

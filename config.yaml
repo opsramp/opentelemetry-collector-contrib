@@ -1,0 +1,33 @@
+receivers:
+  filelog:
+    include: [ ./test/test2.log ]
+   # include:
+   #   - C:\Users\Anton\AppData\Local\Docker\*.txt
+    start_at: beginning
+    resource:
+      Test: TestValue
+
+
+processors:
+  batchmemorylimit:
+    batch_mem_limit: 500
+
+exporters:
+  opsrampotlp:
+    endpoint: https://asura.opsramp.net:443
+   # endpoint: localhost:8086
+    compression: none
+    tls:
+      insecure: true
+    security:
+      oauth_service_url: "https://asura.opsramp.net/auth/oauth/token?agent=true"
+      client_id: "6ek9Pb57rehBg5Md8BcmG5eHS4sdYpsn"
+      client_secret: "tUKTynGZgutUWj9QyFXNN36JyTfZ3uEJFjPRUEzuJ8Dx9jzccWpzbAkv8vzw5zny"
+
+
+service:
+  pipelines:
+    logs:
+      receivers: [filelog]
+      processors: [batchmemorylimit]
+      exporters: [opsrampotlp]
