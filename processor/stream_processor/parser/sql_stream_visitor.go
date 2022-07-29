@@ -5,6 +5,7 @@ import (
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
+	"go.uber.org/zap"
 	"strconv"
 	"strings"
 )
@@ -14,11 +15,12 @@ var _ SqlVisitor = (*SqlStreamVisitor)(nil)
 
 type SqlStreamVisitor struct {
 	antlr.ParseTreeVisitor
+	*zap.Logger
 	logRecords    plog.LogRecordSlice
 	currentRecord plog.LogRecord
 }
 
-func NewSqlStreamVisitor(logs plog.LogRecordSlice) *SqlStreamVisitor {
+func NewSqlStreamVisitor(logs plog.LogRecordSlice, logger *zap.Logger) *SqlStreamVisitor {
 	return &SqlStreamVisitor{
 		ParseTreeVisitor: &SqlStreamVisitor{},
 		logRecords:       logs,
@@ -35,7 +37,7 @@ func (v *SqlStreamVisitor) Visit(tree antlr.ParseTree) interface{} {
 	case *antlr.ErrorNodeImpl:
 		return nil
 	case *SqlQueryContext:
-		t.Accept(v)
+		return t.Accept(v)
 	}
 
 	return nil
@@ -46,8 +48,14 @@ func (v *SqlStreamVisitor) VisitSqlQuery(ctx *SqlQueryContext) interface{} {
 }
 
 func (v *SqlStreamVisitor) VisitSelectQuery(ctx *SelectQueryContext) interface{} {
-	ctx.ResultColumns().Accept(v)
-	return ctx.WhereStatement().Accept(v)
+	switch res := ctx.WhereStatement().Accept(v).(type) {
+	case error:
+		return res
+	case nil:
+
+	}
+	return ctx.ResultColumns().Accept(v)
+
 }
 
 func (v *SqlStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interface{} {
@@ -81,6 +89,7 @@ func (v *SqlStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interfa
 }
 
 func (v *SqlStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
+	var err error
 	//if WHERE statement missed
 	if ctx.Expr() == nil {
 		return nil
@@ -88,12 +97,19 @@ func (v *SqlStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
 
 	v.logRecords.RemoveIf(func(record plog.LogRecord) bool {
 		v.currentRecord = record
-		res := ctx.Expr().Accept(v).(bool)
-		return !res
+		switch res := ctx.Expr().Accept(v).(type) {
+		case error:
+			err = res
+			return false
 
+		case bool:
+			return !res
+
+		}
+		return false
 	})
 
-	return nil
+	return err
 }
 
 func (v *SqlStreamVisitor) VisitSelectAVG(ctx *SelectAVGContext) interface{} {
@@ -117,7 +133,6 @@ func (v *SqlStreamVisitor) VisitTumblingWindow(ctx *TumblingWindowContext) inter
 }
 
 func (v *SqlStreamVisitor) VisitSimpleCondition(ctx *SimpleConditionContext) interface{} {
-	//println(ctx.IDENTIFIER().GetText(), ctx.ComparisonOperator().GetText(), ctx.LiteralValue().GetText(), ctx.GetText())
 
 	fieldNameValue, ok := v.currentRecord.Attributes().Get(ctx.IDENTIFIER().GetText())
 	if !ok {
@@ -134,11 +149,11 @@ func (v *SqlStreamVisitor) VisitSimpleCondition(ctx *SimpleConditionContext) int
 		if err != nil {
 			return fmt.Errorf("can't convert comparison value %q to numeric; %w", ctx.LiteralValue().GetText(), err)
 		}
-		return compare(ctx, fieldValue, comparisonValue)
+		return compareNumeric(ctx, fieldValue, comparisonValue)
 	case SqlParserSTRING_LITERAL:
 		// we need to remove quotes
 		value := strings.TrimSuffix(strings.TrimPrefix(ctx.LiteralValue().GetText(), `'`), `'`)
-		return compare(ctx, fieldNameValue.AsString(), value)
+		return compareString(ctx, fieldNameValue.AsString(), value)
 	case SqlParserK_TRUE, SqlParserK_FALSE:
 		fieldValue, err := strconv.ParseBool(fieldNameValue.AsString())
 		if err != nil {
@@ -162,16 +177,59 @@ func (v *SqlStreamVisitor) VisitNullCondition(ctx *NullConditionContext) interfa
 }
 
 func (v *SqlStreamVisitor) VisitSimpleRecursiveCondition(ctx *SimpleRecursiveConditionContext) interface{} {
-	var res bool
-	for _, expr := range ctx.AllExpr() {
-		res = expr.Accept(v).(bool)
+
+	left := ctx.Expr(0).Accept(v)
+	switch left := ctx.Expr(0).Accept(v).(type) {
+	case error:
+		return left
+	case bool:
 	}
-	return res
+
+	right := ctx.Expr(1).Accept(v)
+	switch right.(type) {
+	case error:
+		return right
+	case bool:
+	}
+
+	if ctx.K_OR() != nil {
+		if left == true || right == true {
+			return true
+		}
+		return false
+	}
+	if left == true && right == true {
+		return true
+	}
+	return false
 }
 
 func (v *SqlStreamVisitor) VisitCompoundRecursiveCondition(ctx *CompoundRecursiveConditionContext) interface{} {
-	ctx.Accept(v)
-	return nil
+
+	left := ctx.CompoundExpr(0).Accept(v)
+	switch left := ctx.CompoundExpr(0).Accept(v).(type) {
+	case error:
+		return left
+	case bool:
+	}
+
+	right := ctx.CompoundExpr(1).Accept(v)
+	switch right.(type) {
+	case error:
+		return right
+	case bool:
+	}
+
+	if ctx.K_OR() != nil {
+		if left == true || right == true {
+			return true
+		}
+		return false
+	}
+	if left == true && right == true {
+		return true
+	}
+	return false
 }
 
 func (v *SqlStreamVisitor) VisitComparisonOperator(ctx *ComparisonOperatorContext) interface{} {
@@ -179,7 +237,7 @@ func (v *SqlStreamVisitor) VisitComparisonOperator(ctx *ComparisonOperatorContex
 }
 
 func (v *SqlStreamVisitor) VisitCompoundExpr(ctx *CompoundExprContext) interface{} {
-	return v.VisitChildren(ctx)
+	return ctx.Expr().Accept(v)
 }
 
 func (v *SqlStreamVisitor) VisitLiteralValue(ctx *LiteralValueContext) interface{} {

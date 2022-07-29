@@ -35,7 +35,7 @@ tumblingWindow
 expr
  : IDENTIFIER comparisonOperator literalValue       #simpleCondition
  | compoundExpr ( K_AND | K_OR ) compoundExpr       #compoundRecursiveCondition
- | IDENTIFIER (K_IS_NULL | K_IS_NOT_NULL)           #nullCondition
+ // IDENTIFIER (K_IS_NULL | K_IS_NOT_NULL)           #nullCondition
  | expr (K_AND| K_OR) expr                          #simpleRecursiveCondition
  ;
 

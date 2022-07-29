@@ -1,7 +1,9 @@
 package parser
 
 import (
+	"errors"
 	"fmt"
+	"go.uber.org/zap"
 	"strconv"
 	"testing"
 
@@ -49,7 +51,7 @@ func TestResultColumnsSelectColumns(t *testing.T) {
 			parser := NewSqlParser(stream)
 
 			logs := generateTestLogs()
-			visitor := NewSqlStreamVisitor(logs)
+			visitor := NewSqlStreamVisitor(logs, zap.NewNop())
 			visitor.Visit(parser.SqlQuery())
 
 			logs, _ = visitor.GetResult()
@@ -95,7 +97,7 @@ func TestResultColumnsSelectColumnsAttributes(t *testing.T) {
 			parser := NewSqlParser(stream)
 
 			logs := generateTestLogs()
-			visitor := NewSqlStreamVisitor(logs)
+			visitor := NewSqlStreamVisitor(logs, zap.NewNop())
 			visitor.Visit(parser.SqlQuery())
 
 			logs, _ = visitor.GetResult()
@@ -110,6 +112,46 @@ func TestResultColumnsSelectColumnsAttributes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWhereCondition(t *testing.T) {
+	tests := []struct {
+		name         string
+		query        string
+		expectedAttr []string
+		expected     error
+	}{
+
+		{
+			name:     "where fields exists ",
+			query:    `SELECT name, IsAlive WHERE name = 'test' and IsAlive = 'true';`,
+			expected: nil,
+		},
+
+		{
+			name:     "where fields missed ",
+			query:    `SELECT name, IsAlive WHERE name = 'test' and non_exists = 'true';`,
+			expected: errors.New(`field "non_exists" missed in log record`),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			is := antlr.NewInputStream(tt.query)
+
+			lexer := NewSqlLexer(is)
+			stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
+
+			parser := NewSqlParser(stream)
+
+			logs := generateTestLogs()
+			visitor := NewSqlStreamVisitor(logs, zap.NewNop())
+			res := visitor.Visit(parser.SqlQuery())
+
+			assert.Equal(t, tt.expected, res)
+
+		})
+	}
+
 }
 
 func TestSimpleCondition(t *testing.T) {
@@ -190,7 +232,7 @@ func TestSimpleCondition(t *testing.T) {
 			parser := NewSqlParser(stream)
 
 			logs := generateTestLogs()
-			visitor := NewSqlStreamVisitor(logs)
+			visitor := NewSqlStreamVisitor(logs, zap.NewNop())
 			visitor.Visit(parser.SqlQuery())
 
 			logs, _ = visitor.GetResult()
@@ -205,35 +247,53 @@ func TestRecursiveCondition(t *testing.T) {
 	tests := []struct {
 		name          string
 		query         string
-		expectedAttr  []string
 		expectedCount int
 	}{
-
 		{
-			name:          "two where condition ",
-			query:         `SELECT name, IsAlive WHERE name = 'test' and IsAlive = 'true';`,
-			expectedAttr:  []string{"name, IsAlive"},
+			name:          "where and condition ",
+			query:         `SELECT name, IsAlive WHERE name != 'test' and IsAlive = 'true';`,
+			expectedCount: 50,
+		},
+		{
+			name:          "where or 1 ",
+			query:         `SELECT name, IsAlive WHERE name != 'test' or IsAlive = 'true';`,
 			expectedCount: 100,
 		},
 		{
-			name:          "two  where condition ",
-			query:         `SELECT name WHERE name IS NULL and IsAlive = 'true';`,
-			expectedAttr:  []string{"name"},
-			expectedCount: 100,
+			name:          "test or 2",
+			query:         `SELECT name WHERE name = 'Test name 10' or IsAlive = 'false';`,
+			expectedCount: 51,
 		},
 		{
-			name:          "compound condition ",
-			query:         `SELECT name WHERE (price > 3 ) OR (name = 'test');`,
-			expectedAttr:  []string{"name"},
-			expectedCount: 100,
+			name:          "test and 1",
+			query:         `SELECT name WHERE name = 'Test name 10' and IsAlive = 'false';`,
+			expectedCount: 0,
 		},
-		/*
-			{
-				name:          "compound condition 2 ",
-				query:         `SELECT name WHERE (name IS NULL and IsAlive = 'true') OR (name = 'test' AND IsAlive = 'false');`,
-				expectedAttr:  []string{"name"},
-				expectedCount: 100,
-			},*/
+		{
+			name:          "test and 2",
+			query:         `SELECT name WHERE name = 'Test name 10' and IsAlive = 'true';`,
+			expectedCount: 1,
+		},
+		{
+			name:          "test and 3",
+			query:         `SELECT name WHERE name = 'Test name 10' and price = 10;`,
+			expectedCount: 1,
+		},
+		{
+			name:          "test and 4",
+			query:         `SELECT name WHERE name = 'Test name 10' and price = 9;`,
+			expectedCount: 0,
+		},
+		{
+			name:          "like 1",
+			query:         `SELECT name WHERE name like 'Test name 1' and IsAlive = 'false';`,
+			expectedCount: 6,
+		},
+		{
+			name:          "like 2",
+			query:         `SELECT name WHERE name like 'Test name' and price > 70';`,
+			expectedCount: 29,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -245,7 +305,75 @@ func TestRecursiveCondition(t *testing.T) {
 			parser := NewSqlParser(stream)
 
 			logs := generateTestLogs()
-			visitor := NewSqlStreamVisitor(logs)
+			visitor := NewSqlStreamVisitor(logs, zap.NewNop())
+			visitor.Visit(parser.SqlQuery())
+
+			logs, _ = visitor.GetResult()
+			assert.Equal(t, tt.expectedCount, logs.Len())
+
+		})
+	}
+
+}
+
+func TestCompoundCondition(t *testing.T) {
+	tests := []struct {
+		name          string
+		query         string
+		expectedCount int
+	}{
+		{
+			name:          "and 1 ",
+			query:         `SELECT name, IsAlive WHERE (name != 'test' and IsAlive = 'true') and (IsAlive = 'true' and price > 50);`,
+			expectedCount: 24,
+		},
+		{
+			name:          "and 2 ",
+			query:         `SELECT name, IsAlive WHERE (name = 'Test name 10' and price > 5) and (IsAlive = 'true' and price > 5);`,
+			expectedCount: 1,
+		},
+		{
+			name:          "and 3 ",
+			query:         `SELECT name, IsAlive WHERE (name = 'Test name 10' and price > 5) and (IsAlive = 'false' and price > 5);`,
+			expectedCount: 0,
+		},
+		{
+			name:          "or 1 ",
+			query:         `SELECT name, IsAlive WHERE (name != 'test' and IsAlive = 'true') or (IsAlive = 'true' and price > 50);`,
+			expectedCount: 50,
+		},
+		{
+			name:          "or 2 ",
+			query:         `SELECT name, IsAlive WHERE (name = 'Test name 10' and price > 5 ) or (IsAlive = 'true');`,
+			expectedCount: 50,
+		},
+		{
+			name:          "or 2 ",
+			query:         `SELECT name, IsAlive WHERE (name = 'Test name 10' and price > 5 ) or (IsAlive = 'false');`,
+			expectedCount: 51,
+		},
+		{
+			name:          "like 1  ",
+			query:         `SELECT name, IsAlive WHERE (name like '2' and price > 5 ) or (IsAlive = 'false');`,
+			expectedCount: 63,
+		},
+		{
+			name:          "like 2  ",
+			query:         `SELECT name, IsAlive WHERE (name like '2' and price > 5 ) or (price < 30 or IsAlive = 'false');`,
+			expectedCount: 72,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			is := antlr.NewInputStream(tt.query)
+
+			lexer := NewSqlLexer(is)
+			stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
+
+			parser := NewSqlParser(stream)
+
+			logs := generateTestLogs()
+			visitor := NewSqlStreamVisitor(logs, zap.NewNop())
 			visitor.Visit(parser.SqlQuery())
 
 			logs, _ = visitor.GetResult()
