@@ -2,10 +2,10 @@ package parser
 
 import (
 	"errors"
-	"fmt"
-	"go.uber.org/zap"
 	"strconv"
 	"testing"
+
+	"go.uber.org/zap"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"github.com/stretchr/testify/assert"
@@ -397,8 +397,4 @@ func generateTestLogs() plog.LogRecordSlice {
 	}
 
 	return ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
-}
-
-func TestSmt(t *testing.T) {
-	fmt.Println("Test name 50" > "Test name 6")
 }
