@@ -12,7 +12,11 @@ func (v *BaseSqlVisitor) VisitSqlQuery(ctx *SqlQueryContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseSqlVisitor) VisitSelectQuery(ctx *SelectQueryContext) interface{} {
+func (v *BaseSqlVisitor) VisitSelectSimple(ctx *SelectSimpleContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseSqlVisitor) VisitSelectTumbling(ctx *SelectTumblingContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -36,19 +40,11 @@ func (v *BaseSqlVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseSqlVisitor) VisitTumblingStmt(ctx *TumblingStmtContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseSqlVisitor) VisitTumblingWindow(ctx *TumblingWindowContext) interface{} {
+func (v *BaseSqlVisitor) VisitWindowTumbling(ctx *WindowTumblingContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
 func (v *BaseSqlVisitor) VisitSimpleCondition(ctx *SimpleConditionContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseSqlVisitor) VisitNullCondition(ctx *NullConditionContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

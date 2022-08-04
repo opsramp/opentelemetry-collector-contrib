@@ -7,13 +7,14 @@ sqlQuery
   : selectQuery EOF;
 
 selectQuery
-  : K_SELECT (resultColumns)  ( whereStatement )?  EOQ
+  : K_SELECT resultColumns (whereStatement)?  EOQ                              #selectSimple
+  | K_SELECT resultColumns K_WINDOW_TUMBLING NUMERIC_LITERAL (whereStatement)? (groupBy)?  EOQ    #selectTumbling
   ;
 
 
 resultColumns
  : column (COMMA column)* # selectColumns
- | avg (COMMA avg)+       # selectAVG
+ | avg                    # selectAVG
  | STAR                   # selectStar
  ;
 
@@ -23,12 +24,11 @@ column
   ;
 
 whereStatement
-  : ( K_WHERE expr )?                            # whereStmt
-  | (tumblingWindow) ( K_WHERE expr )? (groupBy) # tumblingStmt
+  : K_WHERE expr                        #whereStmt
   ;
 
-tumblingWindow
- : K_WINDOW_TUMBLING NUMERIC_LITERAL( K_WHERE expr )?
+windowTumbling
+ : K_WINDOW_TUMBLING NUMERIC_LITERAL
  ;
 
 
@@ -44,7 +44,7 @@ compoundExpr
  ;
 
 comparisonOperator
-  : K_EQUAL | K_GREATER | K_LESS | K_LESS_EQUAL | K_GREATER_EQUAL |  K_NOT_EQUAL  | K_LIKE | K_IN | K_IS | K_NOT_IN
+  : K_EQUAL | K_GREATER | K_LESS | K_LESS_EQUAL | K_GREATER_EQUAL |  K_NOT_EQUAL  | K_LIKE |K_NOT_LIKE | K_IN | K_IS | K_NOT_IN
   ;
 
 
@@ -83,6 +83,7 @@ K_AND : A N D;
 K_OR : O R;
 K_IS : I S;
 K_LIKE : L I K E;
+K_NOT_LIKE : N O T SPACE L I K E;
 K_EQUAL : '=';
 K_GREATER : '>';
 K_LESS : '<';

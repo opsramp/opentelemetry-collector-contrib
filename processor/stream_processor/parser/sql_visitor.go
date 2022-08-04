@@ -11,8 +11,11 @@ type SqlVisitor interface {
 	// Visit a parse tree produced by SqlParser#sqlQuery.
 	VisitSqlQuery(ctx *SqlQueryContext) interface{}
 
-	// Visit a parse tree produced by SqlParser#selectQuery.
-	VisitSelectQuery(ctx *SelectQueryContext) interface{}
+	// Visit a parse tree produced by SqlParser#selectSimple.
+	VisitSelectSimple(ctx *SelectSimpleContext) interface{}
+
+	// Visit a parse tree produced by SqlParser#selectTumbling.
+	VisitSelectTumbling(ctx *SelectTumblingContext) interface{}
 
 	// Visit a parse tree produced by SqlParser#selectColumns.
 	VisitSelectColumns(ctx *SelectColumnsContext) interface{}
@@ -29,17 +32,11 @@ type SqlVisitor interface {
 	// Visit a parse tree produced by SqlParser#whereStmt.
 	VisitWhereStmt(ctx *WhereStmtContext) interface{}
 
-	// Visit a parse tree produced by SqlParser#tumblingStmt.
-	VisitTumblingStmt(ctx *TumblingStmtContext) interface{}
-
-	// Visit a parse tree produced by SqlParser#tumblingWindow.
-	VisitTumblingWindow(ctx *TumblingWindowContext) interface{}
+	// Visit a parse tree produced by SqlParser#windowTumbling.
+	VisitWindowTumbling(ctx *WindowTumblingContext) interface{}
 
 	// Visit a parse tree produced by SqlParser#simpleCondition.
 	VisitSimpleCondition(ctx *SimpleConditionContext) interface{}
-
-	// Visit a parse tree produced by SqlParser#nullCondition.
-	VisitNullCondition(ctx *NullConditionContext) interface{}
 
 	// Visit a parse tree produced by SqlParser#compoundRecursiveCondition.
 	VisitCompoundRecursiveCondition(ctx *CompoundRecursiveConditionContext) interface{}

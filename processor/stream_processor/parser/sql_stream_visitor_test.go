@@ -1,13 +1,14 @@
 package parser
 
 import (
-	"errors"
+	"encoding/csv"
+	"fmt"
+	"os"
 	"strconv"
 	"testing"
 
 	"go.uber.org/zap"
 
-	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/plog"
 )
@@ -43,24 +44,24 @@ func TestResultColumnsSelectColumns(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			is := antlr.NewInputStream(tt.query)
+			//		ls := generateTestLogs()
+			in := make(chan plog.LogRecordSlice)
+			out := make(chan plog.LogRecordSlice)
+			outErr := make(chan error)
+			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			defer visitor.Stop()
+			select {
+			case ls := <-out:
+				assert.Equal(t, tt.expectedCount, ls.Len())
+			case err := <-outErr:
+				fmt.Println(err)
 
-			lexer := NewSqlLexer(is)
-			stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
-
-			parser := NewSqlParser(stream)
-
-			logs := generateTestLogs()
-			visitor := NewSqlStreamVisitor(logs, zap.NewNop())
-			visitor.Visit(parser.SqlQuery())
-
-			logs, _ = visitor.GetResult()
-
-			assert.Equal(t, tt.expectedCount, logs.Len())
+			}
 		})
 	}
 }
 
+/*
 func TestResultColumnsSelectColumnsAttributes(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -384,6 +385,8 @@ func TestCompoundCondition(t *testing.T) {
 
 }
 
+
+*/
 func generateTestLogs() plog.LogRecordSlice {
 
 	ld := plog.NewLogs()
@@ -397,4 +400,44 @@ func generateTestLogs() plog.LogRecordSlice {
 	}
 
 	return ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+}
+
+func TestWriteTestLogsToCSV(t *testing.T) {
+	f, _ := os.Create("test.csv")
+	w := csv.NewWriter(f)
+	defer w.Flush()
+	for i := 0; i < 100; i++ {
+		isAlive := strconv.FormatBool(i%2 == 0)
+		w.Write([]string{"Test name " + strconv.Itoa(i), isAlive, strconv.Itoa(i)})
+
+	}
+
+}
+
+func TestExp(t *testing.T) {
+	ls := generateTestLogs()
+	in := make(chan plog.LogRecordSlice)
+	out := make(chan plog.LogRecordSlice)
+	outErr := make(chan error)
+	query := `select max(price) window tumbling 3 where price > 4;`
+	visitor := NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
+
+	in <- ls
+	//visitor.Start()
+	//	in <- ls
+	select {
+	case ls := <-out:
+		assert.Equal(t, 100, ls.Len())
+
+	case err := <-outErr:
+		fmt.Println(err)
+
+	}
+
+	in <- generateTestLogs()
+	ls = <-out
+	assert.Equal(t, 100, ls.Len())
+
+	visitor.Stop()
+
 }

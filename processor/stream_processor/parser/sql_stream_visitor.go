@@ -2,12 +2,13 @@ package parser
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.uber.org/zap"
-	"strconv"
-	"strings"
 )
 
 // check that type implements SqlVisitor
@@ -15,16 +16,87 @@ var _ SqlVisitor = (*SqlStreamVisitor)(nil)
 
 type SqlStreamVisitor struct {
 	antlr.ParseTreeVisitor
-	*zap.Logger
+	logger *zap.Logger
+
+	query string
+
 	logRecords    plog.LogRecordSlice
 	currentRecord plog.LogRecord
+
+	in        <-chan plog.LogRecordSlice
+	out       chan<- plog.LogRecordSlice
+	outErr    chan<- error
+	shutdownC chan struct{}
 }
 
-func NewSqlStreamVisitor(logs plog.LogRecordSlice, logger *zap.Logger) *SqlStreamVisitor {
-	return &SqlStreamVisitor{
+func NewSqlStreamVisitor(query string, in <-chan plog.LogRecordSlice, out chan<- plog.LogRecordSlice, outErr chan<- error, logger *zap.Logger) *SqlStreamVisitor {
+
+	visitor := &SqlStreamVisitor{
 		ParseTreeVisitor: &SqlStreamVisitor{},
-		logRecords:       logs,
+		query:            query,
+		logger:           logger,
+		in:               in,
+		out:              out,
+		outErr:           outErr,
+		shutdownC:        make(chan struct{}, 1),
 	}
+	if visitor.isWindowTumblingQuery() {
+		go visitor.startSimpleWorkerLoop()
+	} else {
+		go visitor.startSimpleWorkerLoop()
+	}
+
+	return visitor
+}
+
+func (v *SqlStreamVisitor) Stop() {
+	close(v.shutdownC)
+}
+
+func (v *SqlStreamVisitor) startSimpleWorkerLoop() {
+	//res := v.parser.SelectQuery().
+
+	for {
+		select {
+		case v.logRecords = <-v.in:
+			if err := v.runQuery(); err != nil {
+				v.outErr <- err
+				break
+			}
+			v.out <- v.logRecords
+
+		case <-v.shutdownC:
+			v.logger.Debug("sql engine shutting down")
+			return
+
+		}
+
+	}
+}
+
+func (v *SqlStreamVisitor) startWindowTumblingLoop() {
+	for {
+		select {
+		case ls := <-v.in:
+			ls.MoveAndAppendTo(v.logRecords)
+		case <-v.shutdownC:
+			v.logger.Debug("sql engine shutting down")
+			return
+		}
+	}
+}
+
+func (v *SqlStreamVisitor) runQuery() error {
+	is := antlr.NewInputStream(v.query)
+	lexer := NewSqlLexer(is)
+	stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
+	parser := NewSqlParser(stream)
+	res := v.Visit(parser.SqlQuery())
+	switch res := res.(type) {
+	case error:
+		return res
+	}
+	return nil
 }
 
 func (v *SqlStreamVisitor) GetResult() (plog.LogRecordSlice, error) {
@@ -47,7 +119,11 @@ func (v *SqlStreamVisitor) VisitSqlQuery(ctx *SqlQueryContext) interface{} {
 	return ctx.SelectQuery().Accept(v)
 }
 
-func (v *SqlStreamVisitor) VisitSelectQuery(ctx *SelectQueryContext) interface{} {
+func (v *SqlStreamVisitor) VisitSelectSimple(ctx *SelectSimpleContext) interface{} {
+
+	if ctx.WhereStatement() == nil {
+		return nil
+	}
 	switch res := ctx.WhereStatement().Accept(v).(type) {
 	case error:
 		return res
@@ -56,6 +132,14 @@ func (v *SqlStreamVisitor) VisitSelectQuery(ctx *SelectQueryContext) interface{}
 	}
 	return ctx.ResultColumns().Accept(v)
 
+}
+
+func (v *SqlStreamVisitor) VisitSelectTumbling(ctx *SelectTumblingContext) interface{} {
+	return nil
+}
+
+func (v *SqlStreamVisitor) VisitWindowTumbling(ctx *WindowTumblingContext) interface{} {
+	return nil
 }
 
 func (v *SqlStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interface{} {
@@ -113,22 +197,14 @@ func (v *SqlStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
 }
 
 func (v *SqlStreamVisitor) VisitSelectAVG(ctx *SelectAVGContext) interface{} {
-	return v.VisitChildren(ctx)
+	return nil
 }
 
 func (v *SqlStreamVisitor) VisitSelectStar(ctx *SelectStarContext) interface{} {
-	return v.VisitChildren(ctx)
+	return nil
 }
 
 func (v *SqlStreamVisitor) VisitColumn(ctx *ColumnContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *SqlStreamVisitor) VisitTumblingStmt(ctx *TumblingStmtContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *SqlStreamVisitor) VisitTumblingWindow(ctx *TumblingWindowContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -170,10 +246,6 @@ func (v *SqlStreamVisitor) VisitSimpleCondition(ctx *SimpleConditionContext) int
 		return fmt.Errorf("missed literal value type %q", ctx.LiteralValue().GetText())
 	}
 
-}
-
-func (v *SqlStreamVisitor) VisitNullCondition(ctx *NullConditionContext) interface{} {
-	return nil
 }
 
 func (v *SqlStreamVisitor) VisitSimpleRecursiveCondition(ctx *SimpleRecursiveConditionContext) interface{} {
@@ -250,4 +322,13 @@ func (v *SqlStreamVisitor) VisitGroupBy(ctx *GroupByContext) interface{} {
 
 func (v *SqlStreamVisitor) VisitAvg(ctx *AvgContext) interface{} {
 	return v.VisitChildren(ctx)
+}
+
+func (v *SqlStreamVisitor) isWindowTumblingQuery() bool {
+	//is := antlr.NewInputStream(v.query)
+	//lexer := NewSqlLexer(is)
+	//stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
+	//parser := NewSqlParser(stream)
+	//println(parser.WindowTumbling().IsEmpty())
+	return false
 }

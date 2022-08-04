@@ -31,6 +31,8 @@ func compareString(ctx *SimpleConditionContext, fieldVal, comparisonVal string) 
 		return fieldVal <= comparisonVal
 	case SqlParserK_LIKE:
 		return strings.Contains(fmt.Sprint(fieldVal), fmt.Sprint(comparisonVal))
+	case SqlParserK_NOT_LIKE:
+		return !strings.Contains(fmt.Sprint(fieldVal), fmt.Sprint(comparisonVal))
 	case SqlParserK_IS_NULL:
 		return len(fmt.Sprint(fieldVal)) == 0
 	case SqlParserK_IS_NOT_NULL:
