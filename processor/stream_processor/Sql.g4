@@ -7,8 +7,8 @@ sqlQuery
   : selectQuery EOF;
 
 selectQuery
-  : K_SELECT resultColumns (whereStatement)?  EOQ                              #selectSimple
-  | K_SELECT resultColumns K_WINDOW_TUMBLING NUMERIC_LITERAL (whereStatement)? (groupBy)?  EOQ    #selectTumbling
+  : K_SELECT resultColumns (whereStatement)? EOQ                              #selectSimple
+  | K_SELECT resultColumns windowTumbling (whereStatement)? (groupBy)? EOQ    #selectTumbling
   ;
 
 
@@ -28,8 +28,8 @@ whereStatement
   ;
 
 windowTumbling
- : K_WINDOW_TUMBLING NUMERIC_LITERAL
- ;
+  : K_WINDOW_TUMBLING NUMERIC_LITERAL
+  ;
 
 
 expr
@@ -61,7 +61,7 @@ groupBy
 
 
 avg
-  : (K_MIN | K_MAX | K_COUNT | K_AVG) L_BRACKET column R_BRACKET;
+  : (K_MIN | K_MAX | K_COUNT | K_AVG) L_BRACKET (column | STAR) R_BRACKET;
 
 SPACE
  : [ \u000B\t\r\n] -> channel(HIDDEN)

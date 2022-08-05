@@ -2,7 +2,7 @@ package parser
 
 import (
 	"encoding/csv"
-	"fmt"
+	"errors"
 	"os"
 	"strconv"
 	"testing"
@@ -21,22 +21,22 @@ func TestResultColumnsSelectColumns(t *testing.T) {
 		expectedCount int
 	}{
 		{
-			name:          "correct result columns",
+			name:          "correct value columns",
 			query:         `SELECT name, price, IsAlive;`,
 			expectedCount: 100,
 		},
 		{
-			name:          "incorrect result columns",
+			name:          "incorrect value columns",
 			query:         `SELECT field, isAlive;`,
 			expectedCount: 0,
 		},
 		{
-			name:          "one result columns",
+			name:          "one value columns",
 			query:         `SELECT name ;`,
 			expectedCount: 100,
 		},
 		{
-			name:          "one incorrect result columns",
+			name:          "one incorrect value columns",
 			query:         `SELECT field ;`,
 			expectedCount: 0,
 		},
@@ -44,24 +44,18 @@ func TestResultColumnsSelectColumns(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			//		ls := generateTestLogs()
 			in := make(chan plog.LogRecordSlice)
 			out := make(chan plog.LogRecordSlice)
 			outErr := make(chan error)
 			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
-			select {
-			case ls := <-out:
-				assert.Equal(t, tt.expectedCount, ls.Len())
-			case err := <-outErr:
-				fmt.Println(err)
-
-			}
+			in <- generateTestLogs()
+			ls := <-out
+			assert.Equal(t, tt.expectedCount, ls.Len())
 		})
 	}
 }
 
-/*
 func TestResultColumnsSelectColumnsAttributes(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -90,21 +84,19 @@ func TestResultColumnsSelectColumnsAttributes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			is := antlr.NewInputStream(tt.query)
 
-			lexer := NewSqlLexer(is)
-			stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
+			in := make(chan plog.LogRecordSlice)
+			out := make(chan plog.LogRecordSlice)
+			outErr := make(chan error)
+			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			defer visitor.Stop()
+			in <- generateTestLogs()
 
-			parser := NewSqlParser(stream)
+			ls := <-out
+			assert.Equal(t, tt.expectedCount, ls.Len())
 
-			logs := generateTestLogs()
-			visitor := NewSqlStreamVisitor(logs, zap.NewNop())
-			visitor.Visit(parser.SqlQuery())
-
-			logs, _ = visitor.GetResult()
-			assert.Equal(t, tt.expectedCount, logs.Len())
-			for i := 0; i < logs.Len(); i++ {
-				rec := logs.At(i)
+			for i := 0; i < ls.Len(); i++ {
+				rec := ls.At(i)
 				assert.Equal(t, len(tt.expectedAttr), rec.Attributes().Len())
 				for _, expectedAttr := range tt.expectedAttr {
 					_, ok := rec.Attributes().Get(expectedAttr)
@@ -117,10 +109,9 @@ func TestResultColumnsSelectColumnsAttributes(t *testing.T) {
 
 func TestWhereCondition(t *testing.T) {
 	tests := []struct {
-		name         string
-		query        string
-		expectedAttr []string
-		expected     error
+		name     string
+		query    string
+		expected error
 	}{
 
 		{
@@ -137,19 +128,22 @@ func TestWhereCondition(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			is := antlr.NewInputStream(tt.query)
 
-			lexer := NewSqlLexer(is)
-			stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
+			in := make(chan plog.LogRecordSlice)
+			out := make(chan plog.LogRecordSlice)
+			outErr := make(chan error)
+			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			defer visitor.Stop()
+			in <- generateTestLogs()
+			var err error
 
-			parser := NewSqlParser(stream)
+			select {
+			case <-out:
+				return
+			case err = <-outErr:
+			}
 
-			logs := generateTestLogs()
-			visitor := NewSqlStreamVisitor(logs, zap.NewNop())
-			res := visitor.Visit(parser.SqlQuery())
-
-			assert.Equal(t, tt.expected, res)
-
+			assert.Equal(t, tt.expected, err)
 		})
 	}
 
@@ -225,19 +219,14 @@ func TestSimpleCondition(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			is := antlr.NewInputStream(tt.query)
-
-			lexer := NewSqlLexer(is)
-			stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
-
-			parser := NewSqlParser(stream)
-
-			logs := generateTestLogs()
-			visitor := NewSqlStreamVisitor(logs, zap.NewNop())
-			visitor.Visit(parser.SqlQuery())
-
-			logs, _ = visitor.GetResult()
-			assert.Equal(t, tt.expectedCount, logs.Len())
+			in := make(chan plog.LogRecordSlice)
+			out := make(chan plog.LogRecordSlice)
+			outErr := make(chan error)
+			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			defer visitor.Stop()
+			in <- generateTestLogs()
+			ls := <-out
+			assert.Equal(t, tt.expectedCount, ls.Len())
 
 		})
 	}
@@ -298,20 +287,14 @@ func TestRecursiveCondition(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			is := antlr.NewInputStream(tt.query)
-
-			lexer := NewSqlLexer(is)
-			stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
-
-			parser := NewSqlParser(stream)
-
-			logs := generateTestLogs()
-			visitor := NewSqlStreamVisitor(logs, zap.NewNop())
-			visitor.Visit(parser.SqlQuery())
-
-			logs, _ = visitor.GetResult()
-			assert.Equal(t, tt.expectedCount, logs.Len())
-
+			in := make(chan plog.LogRecordSlice)
+			out := make(chan plog.LogRecordSlice)
+			outErr := make(chan error)
+			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			defer visitor.Stop()
+			in <- generateTestLogs()
+			ls := <-out
+			assert.Equal(t, tt.expectedCount, ls.Len())
 		})
 	}
 
@@ -366,27 +349,19 @@ func TestCompoundCondition(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			is := antlr.NewInputStream(tt.query)
-
-			lexer := NewSqlLexer(is)
-			stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
-
-			parser := NewSqlParser(stream)
-
-			logs := generateTestLogs()
-			visitor := NewSqlStreamVisitor(logs, zap.NewNop())
-			visitor.Visit(parser.SqlQuery())
-
-			logs, _ = visitor.GetResult()
-			assert.Equal(t, tt.expectedCount, logs.Len())
-
+			in := make(chan plog.LogRecordSlice)
+			out := make(chan plog.LogRecordSlice)
+			outErr := make(chan error)
+			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			defer visitor.Stop()
+			in <- generateTestLogs()
+			ls := <-out
+			assert.Equal(t, tt.expectedCount, ls.Len())
 		})
 	}
 
 }
 
-
-*/
 func generateTestLogs() plog.LogRecordSlice {
 
 	ld := plog.NewLogs()
@@ -414,30 +389,38 @@ func TestWriteTestLogsToCSV(t *testing.T) {
 
 }
 
-func TestExp(t *testing.T) {
-	ls := generateTestLogs()
-	in := make(chan plog.LogRecordSlice)
-	out := make(chan plog.LogRecordSlice)
-	outErr := make(chan error)
-	query := `select max(price) window tumbling 3 where price > 4;`
-	visitor := NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
-
-	in <- ls
-	//visitor.Start()
-	//	in <- ls
-	select {
-	case ls := <-out:
-		assert.Equal(t, 100, ls.Len())
-
-	case err := <-outErr:
-		fmt.Println(err)
-
+func TestIsWindowTumbling(t *testing.T) {
+	tests := []struct {
+		name  string
+		query string
+		value int
+		res   bool
+	}{
+		{
+			name:  "not tumbling query",
+			query: `SELECT * WHERE price > 80 or name like '3';`,
+			value: 0,
+			res:   false,
+		},
+		{
+			name:  "tumbling query",
+			query: `select max(price) window tumbling 3 where price > 4;`,
+			value: 3,
+			res:   true,
+		},
+		{
+			name:  "incorrect tumbling query",
+			query: `select max(price) window tumbling kwa where price > 4;`,
+			value: 0,
+			res:   false,
+		},
 	}
 
-	in <- generateTestLogs()
-	ls = <-out
-	assert.Equal(t, 100, ls.Len())
-
-	visitor.Stop()
-
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, val := IsTumblingQuery(tt.query)
+			assert.Equal(t, tt.value, val)
+			assert.Equal(t, tt.res, res)
+		})
+	}
 }

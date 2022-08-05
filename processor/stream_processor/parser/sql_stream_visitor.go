@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -19,6 +20,8 @@ type SqlStreamVisitor struct {
 	logger *zap.Logger
 
 	query string
+
+	tumblingPeriod time.Duration
 
 	logRecords    plog.LogRecordSlice
 	currentRecord plog.LogRecord
@@ -40,12 +43,15 @@ func NewSqlStreamVisitor(query string, in <-chan plog.LogRecordSlice, out chan<-
 		outErr:           outErr,
 		shutdownC:        make(chan struct{}, 1),
 	}
-	if visitor.isWindowTumblingQuery() {
-		go visitor.startSimpleWorkerLoop()
-	} else {
-		go visitor.startSimpleWorkerLoop()
+
+	isTumbling, val := IsTumblingQuery(query)
+	if isTumbling {
+		visitor.tumblingPeriod = time.Duration(val)
+		go visitor.startWindowTumblingLoop()
+		return visitor
 	}
 
+	go visitor.startSimpleWorkerLoop()
 	return visitor
 }
 
@@ -120,9 +126,8 @@ func (v *SqlStreamVisitor) VisitSqlQuery(ctx *SqlQueryContext) interface{} {
 }
 
 func (v *SqlStreamVisitor) VisitSelectSimple(ctx *SelectSimpleContext) interface{} {
-
 	if ctx.WhereStatement() == nil {
-		return nil
+		return ctx.ResultColumns().Accept(v)
 	}
 	switch res := ctx.WhereStatement().Accept(v).(type) {
 	case error:
@@ -138,17 +143,13 @@ func (v *SqlStreamVisitor) VisitSelectTumbling(ctx *SelectTumblingContext) inter
 	return nil
 }
 
-func (v *SqlStreamVisitor) VisitWindowTumbling(ctx *WindowTumblingContext) interface{} {
-	return nil
-}
-
 func (v *SqlStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interface{} {
 	for _, column := range ctx.AllColumn() {
 		v.logRecords.RemoveIf(func(record plog.LogRecord) bool {
 			_, ok := record.Attributes().Get(column.GetText())
 
 			if ok {
-				// Remove attributes which are not listed in result columns statement
+				// Remove attributes which are not listed in value columns statement
 				// We can't use RemoveIf as it takes only values
 				removed := make([]string, 0, record.Attributes().Len())
 				record.Attributes().Range(func(k string, value pcommon.Value) bool {
@@ -164,6 +165,7 @@ func (v *SqlStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interfa
 
 				return false
 			}
+			v.logger.Error("field is missing", zap.String("field", column.GetText()))
 			return true
 		})
 
@@ -275,7 +277,9 @@ func (v *SqlStreamVisitor) VisitSimpleRecursiveCondition(ctx *SimpleRecursiveCon
 	}
 	return false
 }
-
+func (v *SqlStreamVisitor) VisitWindowTumbling(ctx *WindowTumblingContext) interface{} {
+	return nil
+}
 func (v *SqlStreamVisitor) VisitCompoundRecursiveCondition(ctx *CompoundRecursiveConditionContext) interface{} {
 
 	left := ctx.CompoundExpr(0).Accept(v)
@@ -322,13 +326,4 @@ func (v *SqlStreamVisitor) VisitGroupBy(ctx *GroupByContext) interface{} {
 
 func (v *SqlStreamVisitor) VisitAvg(ctx *AvgContext) interface{} {
 	return v.VisitChildren(ctx)
-}
-
-func (v *SqlStreamVisitor) isWindowTumblingQuery() bool {
-	//is := antlr.NewInputStream(v.query)
-	//lexer := NewSqlLexer(is)
-	//stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
-	//parser := NewSqlParser(stream)
-	//println(parser.WindowTumbling().IsEmpty())
-	return false
 }
