@@ -8,6 +8,7 @@ import (
 )
 
 //This is just to determine if it is window tumbling query and get time period value
+//TODO find better way
 
 type TumblingVisitor struct {
 	*BaseSqlVisitor

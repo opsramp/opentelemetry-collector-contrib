@@ -14,7 +14,7 @@ selectQuery
 
 resultColumns
  : column (COMMA column)* # selectColumns
- | avg                    # selectAVG
+ | (K_MIN | K_MAX | K_COUNT | K_AVG | K_SUM) L_BRACKET (column | STAR) R_BRACKET                    # selectAVG
  | STAR                   # selectStar
  ;
 
@@ -61,7 +61,7 @@ groupBy
 
 
 avg
-  : (K_MIN | K_MAX | K_COUNT | K_AVG) L_BRACKET (column | STAR) R_BRACKET;
+  : (K_MIN | K_MAX | K_COUNT | K_AVG | K_SUM) L_BRACKET (column | STAR) R_BRACKET;
 
 SPACE
  : [ \u000B\t\r\n] -> channel(HIDDEN)
@@ -99,6 +99,7 @@ K_IN : I N;
 K_TRUE : T R U E;
 K_FALSE : F A L S E;
 K_COUNT : C O U N T;
+K_SUM : S U M;
 K_MIN : M I N;
 K_MAX : M A X;
 K_AVG : A V G;

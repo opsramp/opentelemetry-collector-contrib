@@ -46,8 +46,8 @@ func NewSqlStreamVisitor(query string, in <-chan plog.LogRecordSlice, out chan<-
 
 	isTumbling, val := IsTumblingQuery(query)
 	if isTumbling {
-		visitor.tumblingPeriod = time.Duration(val)
-		go visitor.startWindowTumblingLoop()
+		visitor.tumblingPeriod = time.Millisecond * time.Duration(val)
+		visitor.startWindowTumblingLoop()
 		return visitor
 	}
 
@@ -60,7 +60,6 @@ func (v *SqlStreamVisitor) Stop() {
 }
 
 func (v *SqlStreamVisitor) startSimpleWorkerLoop() {
-	//res := v.parser.SelectQuery().
 
 	for {
 		select {
@@ -70,6 +69,7 @@ func (v *SqlStreamVisitor) startSimpleWorkerLoop() {
 				break
 			}
 			v.out <- v.logRecords
+			v.logRecords = plog.NewLogRecordSlice()
 
 		case <-v.shutdownC:
 			v.logger.Debug("sql engine shutting down")
@@ -81,15 +81,40 @@ func (v *SqlStreamVisitor) startSimpleWorkerLoop() {
 }
 
 func (v *SqlStreamVisitor) startWindowTumblingLoop() {
-	for {
-		select {
-		case ls := <-v.in:
-			ls.MoveAndAppendTo(v.logRecords)
-		case <-v.shutdownC:
-			v.logger.Debug("sql engine shutting down")
-			return
+	v.logRecords = plog.NewLogRecordSlice()
+	ticker := time.NewTicker(v.tumblingPeriod)
+
+	go func() {
+		for {
+			select {
+			case ls := <-v.in:
+				ls.MoveAndAppendTo(v.logRecords)
+			case <-v.shutdownC:
+				v.logger.Debug("sql engine shutting down")
+				return
+			}
 		}
-	}
+	}()
+
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				if v.logRecords.Len() > 0 {
+					if err := v.runQuery(); err != nil {
+						v.outErr <- err
+						break
+					}
+					v.out <- v.logRecords
+					v.logRecords = plog.NewLogRecordSlice()
+				}
+			case <-v.shutdownC:
+				v.logger.Debug("sql engine shutting down")
+				return
+
+			}
+		}
+	}()
 }
 
 func (v *SqlStreamVisitor) runQuery() error {
@@ -140,7 +165,16 @@ func (v *SqlStreamVisitor) VisitSelectSimple(ctx *SelectSimpleContext) interface
 }
 
 func (v *SqlStreamVisitor) VisitSelectTumbling(ctx *SelectTumblingContext) interface{} {
-	return nil
+	if ctx.WhereStatement() == nil {
+		return ctx.ResultColumns().Accept(v)
+	}
+	switch res := ctx.WhereStatement().Accept(v).(type) {
+	case error:
+		return res
+	case nil:
+
+	}
+	return ctx.ResultColumns().Accept(v)
 }
 
 func (v *SqlStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interface{} {
@@ -199,7 +233,28 @@ func (v *SqlStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
 }
 
 func (v *SqlStreamVisitor) VisitSelectAVG(ctx *SelectAVGContext) interface{} {
+
+	column := ctx.Column().GetText()
+	ls := plog.NewLogRecordSlice()
+	avgRecord := ls.AppendEmpty()
+	if ctx.K_AVG() != nil {
+
+	}
+	if ctx.K_SUM() != nil {
+
+	}
+	if ctx.K_COUNT() != nil {
+
+	}
+	if ctx.K_MAX() != nil {
+
+	}
+	if ctx.K_MIN() != nil {
+
+	}
+	fmt.Println(column, avgRecord)
 	return nil
+
 }
 
 func (v *SqlStreamVisitor) VisitSelectStar(ctx *SelectStarContext) interface{} {
@@ -219,11 +274,11 @@ func (v *SqlStreamVisitor) VisitSimpleCondition(ctx *SimpleConditionContext) int
 
 	switch ctx.LiteralValue().GetStart().GetTokenType() {
 	case SqlParserNUMERIC_LITERAL:
-		fieldValue, err := strconv.Atoi(fieldNameValue.AsString())
+		fieldValue, err := strconv.ParseFloat(fieldNameValue.AsString(), 64)
 		if err != nil {
 			return fmt.Errorf("can't convert record field value %q to numeric; %w", fieldNameValue.AsString(), err)
 		}
-		comparisonValue, err := strconv.Atoi(ctx.LiteralValue().GetText())
+		comparisonValue, err := strconv.ParseFloat(ctx.LiteralValue().GetText(), 64)
 		if err != nil {
 			return fmt.Errorf("can't convert comparison value %q to numeric; %w", ctx.LiteralValue().GetText(), err)
 		}
@@ -277,6 +332,7 @@ func (v *SqlStreamVisitor) VisitSimpleRecursiveCondition(ctx *SimpleRecursiveCon
 	}
 	return false
 }
+
 func (v *SqlStreamVisitor) VisitWindowTumbling(ctx *WindowTumblingContext) interface{} {
 	return nil
 }

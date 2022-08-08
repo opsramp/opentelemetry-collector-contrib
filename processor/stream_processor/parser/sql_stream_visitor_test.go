@@ -5,7 +5,9 @@ import (
 	"errors"
 	"os"
 	"strconv"
+	"sync"
 	"testing"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -362,33 +364,6 @@ func TestCompoundCondition(t *testing.T) {
 
 }
 
-func generateTestLogs() plog.LogRecordSlice {
-
-	ld := plog.NewLogs()
-	sc := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
-
-	for i := 0; i < 100; i++ {
-		record := sc.LogRecords().AppendEmpty()
-		record.Attributes().InsertString("name", "Test name "+strconv.Itoa(i))
-		record.Attributes().InsertBool("IsAlive", i%2 == 0)
-		record.Attributes().InsertInt("price", int64(i))
-	}
-
-	return ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
-}
-
-func TestWriteTestLogsToCSV(t *testing.T) {
-	f, _ := os.Create("test.csv")
-	w := csv.NewWriter(f)
-	defer w.Flush()
-	for i := 0; i < 100; i++ {
-		isAlive := strconv.FormatBool(i%2 == 0)
-		w.Write([]string{"Test name " + strconv.Itoa(i), isAlive, strconv.Itoa(i)})
-
-	}
-
-}
-
 func TestIsWindowTumbling(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -423,4 +398,136 @@ func TestIsWindowTumbling(t *testing.T) {
 			assert.Equal(t, tt.res, res)
 		})
 	}
+}
+
+func TestWindowTumblingLoop(t *testing.T) {
+	tests := []struct {
+		name     string
+		query    string
+		expected int
+	}{
+		{
+			name:     "1 ms",
+			query:    "select max(price) window tumbling 50 where price > 4;",
+			expected: 285,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := make(chan plog.LogRecordSlice)
+			out := make(chan plog.LogRecordSlice)
+			outErr := make(chan error)
+			var ls plog.LogRecordSlice
+			var wg sync.WaitGroup
+			wg.Add(1)
+			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			defer visitor.Stop()
+			go func() {
+				defer wg.Done()
+				for {
+					ls = <-out
+					break
+				}
+			}()
+			in <- generateTestLogs()
+			<-time.After(1 * time.Millisecond)
+			in <- generateTestLogs()
+			<-time.After(1 * time.Millisecond)
+			in <- generateTestLogs()
+			<-time.After(1 * time.Millisecond)
+			wg.Wait()
+
+			assert.Equal(t, tt.expected, ls.Len())
+		})
+	}
+}
+
+func TestWindowTumblingLoopInterval(t *testing.T) {
+	in := make(chan plog.LogRecordSlice)
+	out := make(chan plog.LogRecordSlice)
+	outErr := make(chan error)
+	query := "select max(price) window tumbling 30 ;"
+	var ls plog.LogRecordSlice
+
+	visitor := NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
+	defer visitor.Stop()
+
+	for i := 0; i < 3; i++ {
+		in <- generateTestLogs()
+	}
+	ls = <-out
+	assert.Equal(t, 300, ls.Len())
+
+	for i := 0; i < 4; i++ {
+		in <- generateTestLogs()
+	}
+	ls = <-out
+	assert.Equal(t, 400, ls.Len())
+
+	for i := 0; i < 6; i++ {
+		in <- generateTestLogs()
+	}
+	ls = <-out
+	assert.Equal(t, 600, ls.Len())
+
+	for i := 0; i < 12; i++ {
+		in <- generateTestLogs()
+	}
+	ls = <-out
+	assert.Equal(t, 1200, ls.Len())
+}
+
+func TestAvgContext_K_MIN(t *testing.T) {
+	ls := generateTestLogs()
+	res, err := min(ls, "price")
+	assert.Nil(t, err)
+	assert.Equal(t, 0.0, res)
+
+}
+
+func TestAvgContext_K_MAX(t *testing.T) {
+	ls := generateTestLogs()
+	res, err := max(ls, "price")
+	assert.Nil(t, err)
+	assert.Equal(t, 99.0, res)
+}
+
+func TestAvgContext_K_SUM(t *testing.T) {
+	ls := generateTestLogs()
+	res, err := sum(ls, "price")
+	assert.Nil(t, err)
+	assert.Equal(t, 4950.0, res)
+}
+
+func TestAvgContext_K_COUNT(t *testing.T) {
+	ls := generateTestLogs()
+	count := count(ls)
+	assert.Equal(t, 100, count)
+}
+func generateTestLogs() plog.LogRecordSlice {
+
+	ld := plog.NewLogs()
+	sc := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+
+	for i := 0; i < 100; i++ {
+		record := sc.LogRecords().AppendEmpty()
+		record.Attributes().InsertString("name", "Test name "+strconv.Itoa(i))
+		record.Attributes().InsertBool("IsAlive", i%2 == 0)
+		record.Attributes().InsertInt("price", int64(i))
+	}
+
+	return ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+}
+
+func TestWriteTestLogsToCSV(t *testing.T) {
+	f, _ := os.Create("test.csv")
+	w := csv.NewWriter(f)
+	defer w.Flush()
+	for i := 0; i < 100; i++ {
+		isAlive := strconv.FormatBool(i%2 == 0)
+		err := w.Write([]string{"Test name " + strconv.Itoa(i), isAlive, strconv.Itoa(i)})
+		assert.Nil(t, err)
+
+	}
+
 }
