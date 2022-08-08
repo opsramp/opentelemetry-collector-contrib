@@ -234,25 +234,34 @@ func (v *SqlStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
 
 func (v *SqlStreamVisitor) VisitSelectAVG(ctx *SelectAVGContext) interface{} {
 
-	column := ctx.Column().GetText()
+	fieldName := ctx.Column().GetText()
 	ls := plog.NewLogRecordSlice()
-	avgRecord := ls.AppendEmpty()
-	if ctx.K_AVG() != nil {
+	agrRecord := ls.AppendEmpty()
+	var res float64
+	var err error
 
+	if ctx.K_AVG() != nil {
+		res, err = avg(v.logRecords, fieldName)
 	}
 	if ctx.K_SUM() != nil {
-
+		res, err = sum(v.logRecords, fieldName)
 	}
 	if ctx.K_COUNT() != nil {
-
+		res = float64(count(v.logRecords))
 	}
 	if ctx.K_MAX() != nil {
-
+		res, err = max(v.logRecords, fieldName)
 	}
 	if ctx.K_MIN() != nil {
-
+		res, err = min(v.logRecords, fieldName)
 	}
-	fmt.Println(column, avgRecord)
+	if err != nil {
+		return err
+	}
+	fmt.Println(fieldName, res)
+
+	agrRecord.Attributes().Insert(fieldName, pcommon.NewValueDouble(res))
+	v.logRecords = ls
 	return nil
 
 }

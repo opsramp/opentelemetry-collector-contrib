@@ -159,6 +159,23 @@ func max(ls plog.LogRecordSlice, fieldName string) (float64, error) {
 	return 0.0, conErr
 }
 
+func avg(ls plog.LogRecordSlice, fieldName string) (float64, error) {
+	var sum float64
+	for i := 0; i < ls.Len(); i++ {
+		curRec := ls.At(i)
+		val, ok := curRec.Attributes().Get(fieldName)
+		if !ok {
+			return 0, fmt.Errorf("field %q missed", fieldName)
+		}
+		convertedVal, err := strconv.ParseFloat(val.AsString(), 64)
+		if err != nil {
+			return 0.0, err
+		}
+		sum = sum + convertedVal
+	}
+	return sum / float64(ls.Len()), nil
+}
+
 func count(ls plog.LogRecordSlice) int {
 	return ls.Len()
 }

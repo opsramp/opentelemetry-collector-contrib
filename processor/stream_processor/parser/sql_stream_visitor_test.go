@@ -3,6 +3,7 @@ package parser
 import (
 	"encoding/csv"
 	"errors"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"os"
 	"strconv"
 	"sync"
@@ -475,6 +476,86 @@ func TestWindowTumblingLoopInterval(t *testing.T) {
 	}
 	ls = <-out
 	assert.Equal(t, 1200, ls.Len())
+}
+
+func TestWindowTumblingAvg(t *testing.T) {
+	in := make(chan plog.LogRecordSlice)
+	out := make(chan plog.LogRecordSlice)
+	outErr := make(chan error)
+	query := "select avg(price) window tumbling 30 ;"
+	var ls plog.LogRecordSlice
+
+	visitor := NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
+	defer visitor.Stop()
+	in <- generateTestLogs()
+	ls = <-out
+	res, ok := ls.At(0).Attributes().Get("price")
+	assert.True(t, ok)
+	assert.Equal(t, pcommon.NewValueDouble(49.5), res)
+}
+
+func TestWindowTumblingCount(t *testing.T) {
+	in := make(chan plog.LogRecordSlice)
+	out := make(chan plog.LogRecordSlice)
+	outErr := make(chan error)
+	query := "select count(price) window tumbling 30 ;"
+	var ls plog.LogRecordSlice
+
+	visitor := NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
+	defer visitor.Stop()
+	in <- generateTestLogs()
+	ls = <-out
+	res, ok := ls.At(0).Attributes().Get("price")
+	assert.True(t, ok)
+	assert.Equal(t, pcommon.NewValueDouble(100.0), res)
+}
+
+func TestWindowTumblingSum(t *testing.T) {
+	in := make(chan plog.LogRecordSlice)
+	out := make(chan plog.LogRecordSlice)
+	outErr := make(chan error)
+	query := "select sum(price) window tumbling 30 ;"
+	var ls plog.LogRecordSlice
+
+	visitor := NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
+	defer visitor.Stop()
+	in <- generateTestLogs()
+	ls = <-out
+	res, ok := ls.At(0).Attributes().Get("price")
+	assert.True(t, ok)
+	assert.Equal(t, pcommon.NewValueDouble(4950.0), res)
+}
+
+func TestWindowTumblingMin(t *testing.T) {
+	in := make(chan plog.LogRecordSlice)
+	out := make(chan plog.LogRecordSlice)
+	outErr := make(chan error)
+	query := "select min(price) window tumbling 30 ;"
+	var ls plog.LogRecordSlice
+
+	visitor := NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
+	defer visitor.Stop()
+	in <- generateTestLogs()
+	ls = <-out
+	res, ok := ls.At(0).Attributes().Get("price")
+	assert.True(t, ok)
+	assert.Equal(t, pcommon.NewValueDouble(0.0), res)
+}
+
+func TestWindowTumblingMax(t *testing.T) {
+	in := make(chan plog.LogRecordSlice)
+	out := make(chan plog.LogRecordSlice)
+	outErr := make(chan error)
+	query := "select max(price) window tumbling 30 ;"
+	var ls plog.LogRecordSlice
+
+	visitor := NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
+	defer visitor.Stop()
+	in <- generateTestLogs()
+	ls = <-out
+	res, ok := ls.At(0).Attributes().Get("price")
+	assert.True(t, ok)
+	assert.Equal(t, pcommon.NewValueDouble(99.0), res)
 }
 
 func TestAvgContext_K_MIN(t *testing.T) {
