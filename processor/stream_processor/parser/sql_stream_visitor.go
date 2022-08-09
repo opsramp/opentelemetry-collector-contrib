@@ -23,8 +23,9 @@ type SqlStreamVisitor struct {
 
 	tumblingPeriod time.Duration
 
-	logRecords    plog.LogRecordSlice
-	currentRecord plog.LogRecord
+	logRecords        plog.LogRecordSlice
+	currentRecord     plog.LogRecord
+	groupByLogRecords map[string]plog.LogRecordSlice
 
 	in        <-chan plog.LogRecordSlice
 	out       chan<- plog.LogRecordSlice
@@ -160,21 +161,60 @@ func (v *SqlStreamVisitor) VisitSelectSimple(ctx *SelectSimpleContext) interface
 	case nil:
 
 	}
-	return ctx.ResultColumns().Accept(v)
 
+	return ctx.ResultColumns().Accept(v)
 }
 
 func (v *SqlStreamVisitor) VisitSelectTumbling(ctx *SelectTumblingContext) interface{} {
-	if ctx.WhereStatement() == nil {
-		return ctx.ResultColumns().Accept(v)
+
+	if ctx.WhereStatement() != nil {
+		switch res := ctx.WhereStatement().Accept(v).(type) {
+		case error:
+			return res
+		case nil:
+
+		}
 	}
-	switch res := ctx.WhereStatement().Accept(v).(type) {
+
+	return ctx.AggregationColumns().Accept(v)
+}
+
+func (v *SqlStreamVisitor) VisitSelectTumblingGroupBy(ctx *SelectTumblingGroupByContext) interface{} {
+	if ctx.WhereStatement() != nil {
+		switch res := ctx.WhereStatement().Accept(v).(type) {
+		case error:
+			return res
+		case nil:
+		}
+	}
+
+	switch res := ctx.GroupBy().Accept(v).(type) {
 	case error:
 		return res
 	case nil:
-
 	}
-	return ctx.ResultColumns().Accept(v)
+
+	return ctx.AggregationColumns().Accept(v)
+}
+
+func (v *SqlStreamVisitor) VisitGroupBy(ctx *GroupByContext) interface{} {
+
+	v.groupByLogRecords = make(map[string]plog.LogRecordSlice)
+	for i := 0; i < v.logRecords.Len(); i++ {
+		record := v.logRecords.At(i)
+		groupByField, ok := record.Attributes().Get(ctx.Column().GetText())
+		if !ok {
+			return fmt.Errorf("group by field %q missed", ctx.Column().GetText())
+		}
+		_, ok = v.groupByLogRecords[groupByField.AsString()]
+		if !ok {
+			v.groupByLogRecords[groupByField.AsString()] = plog.NewLogRecordSlice()
+		}
+		appendedRec := v.groupByLogRecords[groupByField.AsString()].AppendEmpty()
+		record.CopyTo(appendedRec)
+	}
+
+	return nil
 }
 
 func (v *SqlStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interface{} {
@@ -233,37 +273,60 @@ func (v *SqlStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
 }
 
 func (v *SqlStreamVisitor) VisitSelectAVG(ctx *SelectAVGContext) interface{} {
+	dest := plog.NewLogRecordSlice()
+	if v.groupByLogRecords != nil {
+		for key, recSlice := range v.groupByLogRecords {
+			res, err := v.getSimpleAggregatedValue(ctx, ctx.Column(1).GetText(), recSlice)
+			if err != nil {
+				return err
+			}
 
-	fieldName := ctx.Column().GetText()
-	ls := plog.NewLogRecordSlice()
-	agrRecord := ls.AppendEmpty()
+			res.Attributes().Insert(ctx.Column(0).GetText(), pcommon.NewValueString(key))
+			res.CopyTo(dest.AppendEmpty())
+		}
+		v.logRecords = dest
+		return nil
+	}
+
+	res, err := v.getSimpleAggregatedValue(ctx, ctx.Column(0).GetText(), v.logRecords)
+	if err != nil {
+		return err
+	}
+	res.CopyTo(dest.AppendEmpty())
+	v.logRecords = dest
+
+	return nil
+}
+
+func (v *SqlStreamVisitor) getSimpleAggregatedValue(ctx *SelectAVGContext, fieldName string, ls plog.LogRecordSlice) (plog.LogRecord, error) {
+
+	//fieldName := ctx.Column(1).GetText()
+	resLs := plog.NewLogRecordSlice()
+	aggrRecord := resLs.AppendEmpty()
 	var res float64
 	var err error
 
 	if ctx.K_AVG() != nil {
-		res, err = avg(v.logRecords, fieldName)
+		res, err = avg(ls, fieldName)
 	}
 	if ctx.K_SUM() != nil {
-		res, err = sum(v.logRecords, fieldName)
+		res, err = sum(ls, fieldName)
 	}
 	if ctx.K_COUNT() != nil {
-		res = float64(count(v.logRecords))
+		res = float64(count(ls))
 	}
 	if ctx.K_MAX() != nil {
-		res, err = max(v.logRecords, fieldName)
+		res, err = max(ls, fieldName)
 	}
 	if ctx.K_MIN() != nil {
-		res, err = min(v.logRecords, fieldName)
+		res, err = min(ls, fieldName)
 	}
 	if err != nil {
-		return err
+		return plog.LogRecord{}, err
 	}
-	fmt.Println(fieldName, res)
 
-	agrRecord.Attributes().Insert(fieldName, pcommon.NewValueDouble(res))
-	v.logRecords = ls
-	return nil
-
+	aggrRecord.Attributes().Insert(fieldName, pcommon.NewValueDouble(res))
+	return aggrRecord, nil
 }
 
 func (v *SqlStreamVisitor) VisitSelectStar(ctx *SelectStarContext) interface{} {
@@ -382,10 +445,6 @@ func (v *SqlStreamVisitor) VisitCompoundExpr(ctx *CompoundExprContext) interface
 }
 
 func (v *SqlStreamVisitor) VisitLiteralValue(ctx *LiteralValueContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *SqlStreamVisitor) VisitGroupBy(ctx *GroupByContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

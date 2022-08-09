@@ -17,14 +17,17 @@ type SqlVisitor interface {
 	// Visit a parse tree produced by SqlParser#selectTumbling.
 	VisitSelectTumbling(ctx *SelectTumblingContext) interface{}
 
+	// Visit a parse tree produced by SqlParser#selectTumblingGroupBy.
+	VisitSelectTumblingGroupBy(ctx *SelectTumblingGroupByContext) interface{}
+
 	// Visit a parse tree produced by SqlParser#selectColumns.
 	VisitSelectColumns(ctx *SelectColumnsContext) interface{}
 
-	// Visit a parse tree produced by SqlParser#selectAVG.
-	VisitSelectAVG(ctx *SelectAVGContext) interface{}
-
 	// Visit a parse tree produced by SqlParser#selectStar.
 	VisitSelectStar(ctx *SelectStarContext) interface{}
+
+	// Visit a parse tree produced by SqlParser#selectAVG.
+	VisitSelectAVG(ctx *SelectAVGContext) interface{}
 
 	// Visit a parse tree produced by SqlParser#column.
 	VisitColumn(ctx *ColumnContext) interface{}

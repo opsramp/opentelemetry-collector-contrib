@@ -3,14 +3,11 @@ package parser
 import (
 	"encoding/csv"
 	"errors"
-	"go.opentelemetry.io/collector/pdata/pcommon"
+	"fmt"
+	"go.uber.org/zap"
 	"os"
 	"strconv"
-	"sync"
 	"testing"
-	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -364,227 +361,6 @@ func TestCompoundCondition(t *testing.T) {
 	}
 
 }
-
-func TestIsWindowTumbling(t *testing.T) {
-	tests := []struct {
-		name  string
-		query string
-		value int
-		res   bool
-	}{
-		{
-			name:  "not tumbling query",
-			query: `SELECT * WHERE price > 80 or name like '3';`,
-			value: 0,
-			res:   false,
-		},
-		{
-			name:  "tumbling query",
-			query: `select max(price) window tumbling 3 where price > 4;`,
-			value: 3,
-			res:   true,
-		},
-		{
-			name:  "incorrect tumbling query",
-			query: `select max(price) window tumbling kwa where price > 4;`,
-			value: 0,
-			res:   false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			res, val := IsTumblingQuery(tt.query)
-			assert.Equal(t, tt.value, val)
-			assert.Equal(t, tt.res, res)
-		})
-	}
-}
-
-func TestWindowTumblingLoop(t *testing.T) {
-	tests := []struct {
-		name     string
-		query    string
-		expected int
-	}{
-		{
-			name:     "1 ms",
-			query:    "select max(price) window tumbling 50 where price > 4;",
-			expected: 285,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			in := make(chan plog.LogRecordSlice)
-			out := make(chan plog.LogRecordSlice)
-			outErr := make(chan error)
-			var ls plog.LogRecordSlice
-			var wg sync.WaitGroup
-			wg.Add(1)
-			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
-			defer visitor.Stop()
-			go func() {
-				defer wg.Done()
-				for {
-					ls = <-out
-					break
-				}
-			}()
-			in <- generateTestLogs()
-			<-time.After(1 * time.Millisecond)
-			in <- generateTestLogs()
-			<-time.After(1 * time.Millisecond)
-			in <- generateTestLogs()
-			<-time.After(1 * time.Millisecond)
-			wg.Wait()
-
-			assert.Equal(t, tt.expected, ls.Len())
-		})
-	}
-}
-
-func TestWindowTumblingLoopInterval(t *testing.T) {
-	in := make(chan plog.LogRecordSlice)
-	out := make(chan plog.LogRecordSlice)
-	outErr := make(chan error)
-	query := "select max(price) window tumbling 30 ;"
-	var ls plog.LogRecordSlice
-
-	visitor := NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
-	defer visitor.Stop()
-
-	for i := 0; i < 3; i++ {
-		in <- generateTestLogs()
-	}
-	ls = <-out
-	assert.Equal(t, 300, ls.Len())
-
-	for i := 0; i < 4; i++ {
-		in <- generateTestLogs()
-	}
-	ls = <-out
-	assert.Equal(t, 400, ls.Len())
-
-	for i := 0; i < 6; i++ {
-		in <- generateTestLogs()
-	}
-	ls = <-out
-	assert.Equal(t, 600, ls.Len())
-
-	for i := 0; i < 12; i++ {
-		in <- generateTestLogs()
-	}
-	ls = <-out
-	assert.Equal(t, 1200, ls.Len())
-}
-
-func TestWindowTumblingAvg(t *testing.T) {
-	in := make(chan plog.LogRecordSlice)
-	out := make(chan plog.LogRecordSlice)
-	outErr := make(chan error)
-	query := "select avg(price) window tumbling 30 ;"
-	var ls plog.LogRecordSlice
-
-	visitor := NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
-	defer visitor.Stop()
-	in <- generateTestLogs()
-	ls = <-out
-	res, ok := ls.At(0).Attributes().Get("price")
-	assert.True(t, ok)
-	assert.Equal(t, pcommon.NewValueDouble(49.5), res)
-}
-
-func TestWindowTumblingCount(t *testing.T) {
-	in := make(chan plog.LogRecordSlice)
-	out := make(chan plog.LogRecordSlice)
-	outErr := make(chan error)
-	query := "select count(price) window tumbling 30 ;"
-	var ls plog.LogRecordSlice
-
-	visitor := NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
-	defer visitor.Stop()
-	in <- generateTestLogs()
-	ls = <-out
-	res, ok := ls.At(0).Attributes().Get("price")
-	assert.True(t, ok)
-	assert.Equal(t, pcommon.NewValueDouble(100.0), res)
-}
-
-func TestWindowTumblingSum(t *testing.T) {
-	in := make(chan plog.LogRecordSlice)
-	out := make(chan plog.LogRecordSlice)
-	outErr := make(chan error)
-	query := "select sum(price) window tumbling 30 ;"
-	var ls plog.LogRecordSlice
-
-	visitor := NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
-	defer visitor.Stop()
-	in <- generateTestLogs()
-	ls = <-out
-	res, ok := ls.At(0).Attributes().Get("price")
-	assert.True(t, ok)
-	assert.Equal(t, pcommon.NewValueDouble(4950.0), res)
-}
-
-func TestWindowTumblingMin(t *testing.T) {
-	in := make(chan plog.LogRecordSlice)
-	out := make(chan plog.LogRecordSlice)
-	outErr := make(chan error)
-	query := "select min(price) window tumbling 30 ;"
-	var ls plog.LogRecordSlice
-
-	visitor := NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
-	defer visitor.Stop()
-	in <- generateTestLogs()
-	ls = <-out
-	res, ok := ls.At(0).Attributes().Get("price")
-	assert.True(t, ok)
-	assert.Equal(t, pcommon.NewValueDouble(0.0), res)
-}
-
-func TestWindowTumblingMax(t *testing.T) {
-	in := make(chan plog.LogRecordSlice)
-	out := make(chan plog.LogRecordSlice)
-	outErr := make(chan error)
-	query := "select max(price) window tumbling 30 ;"
-	var ls plog.LogRecordSlice
-
-	visitor := NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
-	defer visitor.Stop()
-	in <- generateTestLogs()
-	ls = <-out
-	res, ok := ls.At(0).Attributes().Get("price")
-	assert.True(t, ok)
-	assert.Equal(t, pcommon.NewValueDouble(99.0), res)
-}
-
-func TestAvgContext_K_MIN(t *testing.T) {
-	ls := generateTestLogs()
-	res, err := min(ls, "price")
-	assert.Nil(t, err)
-	assert.Equal(t, 0.0, res)
-
-}
-
-func TestAvgContext_K_MAX(t *testing.T) {
-	ls := generateTestLogs()
-	res, err := max(ls, "price")
-	assert.Nil(t, err)
-	assert.Equal(t, 99.0, res)
-}
-
-func TestAvgContext_K_SUM(t *testing.T) {
-	ls := generateTestLogs()
-	res, err := sum(ls, "price")
-	assert.Nil(t, err)
-	assert.Equal(t, 4950.0, res)
-}
-
-func TestAvgContext_K_COUNT(t *testing.T) {
-	ls := generateTestLogs()
-	count := count(ls)
-	assert.Equal(t, 100, count)
-}
 func generateTestLogs() plog.LogRecordSlice {
 
 	ld := plog.NewLogs()
@@ -607,6 +383,20 @@ func TestWriteTestLogsToCSV(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		isAlive := strconv.FormatBool(i%2 == 0)
 		err := w.Write([]string{"Test name " + strconv.Itoa(i), isAlive, strconv.Itoa(i)})
+		assert.Nil(t, err)
+
+	}
+
+}
+
+func TestWriteTestLogsGroupByToCSV(t *testing.T) {
+	f, _ := os.Create("testGroupBy.csv")
+	w := csv.NewWriter(f)
+	defer w.Flush()
+	for i := 0; i < 100; i++ {
+		isAlive := strconv.FormatBool(i%2 == 0)
+		name := strconv.Itoa(i)
+		err := w.Write([]string{fmt.Sprint("Test name ", string(name[0])), isAlive, strconv.Itoa(i)})
 		assert.Nil(t, err)
 
 	}

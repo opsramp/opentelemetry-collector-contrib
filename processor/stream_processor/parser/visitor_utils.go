@@ -23,7 +23,6 @@ func compareString(ctx *SimpleConditionContext, fieldVal, comparisonVal string) 
 	case SqlParserK_NOT_EQUAL:
 		return fieldVal != comparisonVal
 	case SqlParserK_GREATER:
-		fmt.Println(fieldVal, " ", comparisonVal, " ", fieldVal > comparisonVal)
 		return fieldVal > comparisonVal
 	case SqlParserK_GREATER_EQUAL:
 		return fieldVal >= comparisonVal

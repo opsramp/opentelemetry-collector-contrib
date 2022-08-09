@@ -20,15 +20,19 @@ func (v *BaseSqlVisitor) VisitSelectTumbling(ctx *SelectTumblingContext) interfa
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseSqlVisitor) VisitSelectTumblingGroupBy(ctx *SelectTumblingGroupByContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseSqlVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseSqlVisitor) VisitSelectAVG(ctx *SelectAVGContext) interface{} {
+func (v *BaseSqlVisitor) VisitSelectStar(ctx *SelectStarContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseSqlVisitor) VisitSelectStar(ctx *SelectStarContext) interface{} {
+func (v *BaseSqlVisitor) VisitSelectAVG(ctx *SelectAVGContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

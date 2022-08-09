@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/stream_processor/parser"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.uber.org/zap"
 	"os"
@@ -29,21 +30,13 @@ func main() {
 		in <- logs
 
 		select {
-		case ld := <-out:
-			for i := 0; i < ld.Len(); i++ {
-				name, ok := ld.At(i).Attributes().Get("name")
-				if ok {
-					fmt.Printf("name: %q ", name.AsString())
-				}
+		case ls := <-out:
+			for i := 0; i < ls.Len(); i++ {
+				ls.At(i).Attributes().Range(func(k string, v pcommon.Value) bool {
+					fmt.Printf("%q: %q ", k, v.AsString())
+					return true
+				})
 
-				isAlive, ok := ld.At(i).Attributes().Get("IsAlive")
-				if ok {
-					fmt.Printf("IsAlive: %q ", isAlive.AsString())
-				}
-				price, ok := ld.At(i).Attributes().Get("price")
-				if ok {
-					fmt.Printf("price:%q ", price.AsString())
-				}
 				fmt.Print("\n")
 			}
 

@@ -7,15 +7,19 @@ sqlQuery
   : selectQuery EOF;
 
 selectQuery
-  : K_SELECT resultColumns (whereStatement)? EOQ                              #selectSimple
-  | K_SELECT resultColumns windowTumbling (whereStatement)? (groupBy)? EOQ    #selectTumbling
+  : K_SELECT resultColumns (whereStatement)? EOQ                                  #selectSimple
+  | K_SELECT aggregationColumns windowTumbling (whereStatement)? EOQ              #selectTumbling
+  | K_SELECT aggregationColumns windowTumbling (whereStatement)? groupBy EOQ      #selectTumblingGroupBy
   ;
 
 
 resultColumns
  : column (COMMA column)* # selectColumns
- | (K_MIN | K_MAX | K_COUNT | K_AVG | K_SUM) L_BRACKET (column | STAR) R_BRACKET                    # selectAVG
  | STAR                   # selectStar
+ ;
+
+aggregationColumns
+ : (column COMMA)? (K_MIN | K_MAX | K_COUNT | K_AVG | K_SUM) L_BRACKET (column | STAR) R_BRACKET    #selectAVG
  ;
 
 
@@ -56,7 +60,7 @@ literalValue
 
 
 groupBy
- : K_GROUP_BY column
+ : K_GROUP_BY  column
  ;
 
 
