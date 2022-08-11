@@ -9,6 +9,7 @@ import (
 
 //This is just to determine if it is window tumbling query and get time period value
 //TODO find better way
+var _ SqlVisitor = (*TumblingVisitor)(nil)
 
 type TumblingVisitor struct {
 	*BaseSqlVisitor
@@ -52,4 +53,12 @@ func (v *TumblingVisitor) VisitWindowTumbling(ctx *WindowTumblingContext) interf
 		return res
 	}
 	return errors.New("this is not window tumbling query")
+}
+
+func (v *TumblingVisitor) VisitGroupBy(ctx *GroupByContext) interface{} {
+	return nil
+}
+
+func (v *TumblingVisitor) VisitSelectTumblingGroupBy(ctx *SelectTumblingGroupByContext) interface{} {
+	return ctx.WindowTumbling().Accept(v)
 }

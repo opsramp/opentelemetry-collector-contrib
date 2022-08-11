@@ -24,6 +24,10 @@ func (v *BaseSqlVisitor) VisitSelectTumblingGroupBy(ctx *SelectTumblingGroupByCo
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseSqlVisitor) VisitWindowTumbling(ctx *WindowTumblingContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseSqlVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -44,10 +48,6 @@ func (v *BaseSqlVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseSqlVisitor) VisitWindowTumbling(ctx *WindowTumblingContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseSqlVisitor) VisitSimpleCondition(ctx *SimpleConditionContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -56,11 +56,19 @@ func (v *BaseSqlVisitor) VisitCompoundRecursiveCondition(ctx *CompoundRecursiveC
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseSqlVisitor) VisitSimpleCompoundCondition(ctx *SimpleCompoundConditionContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseSqlVisitor) VisitSimpleRecursiveCondition(ctx *SimpleRecursiveConditionContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseSqlVisitor) VisitCompoundExpr(ctx *CompoundExprContext) interface{} {
+func (v *BaseSqlVisitor) VisitSimpleExpression(ctx *SimpleExpressionContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseSqlVisitor) VisitCompoundExpression(ctx *CompoundExpressionContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -73,9 +81,5 @@ func (v *BaseSqlVisitor) VisitLiteralValue(ctx *LiteralValueContext) interface{}
 }
 
 func (v *BaseSqlVisitor) VisitGroupBy(ctx *GroupByContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseSqlVisitor) VisitAvg(ctx *AvgContext) interface{} {
 	return v.VisitChildren(ctx)
 }

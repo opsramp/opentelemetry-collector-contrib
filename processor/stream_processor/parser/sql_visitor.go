@@ -20,6 +20,9 @@ type SqlVisitor interface {
 	// Visit a parse tree produced by SqlParser#selectTumblingGroupBy.
 	VisitSelectTumblingGroupBy(ctx *SelectTumblingGroupByContext) interface{}
 
+	// Visit a parse tree produced by SqlParser#windowTumbling.
+	VisitWindowTumbling(ctx *WindowTumblingContext) interface{}
+
 	// Visit a parse tree produced by SqlParser#selectColumns.
 	VisitSelectColumns(ctx *SelectColumnsContext) interface{}
 
@@ -35,20 +38,23 @@ type SqlVisitor interface {
 	// Visit a parse tree produced by SqlParser#whereStmt.
 	VisitWhereStmt(ctx *WhereStmtContext) interface{}
 
-	// Visit a parse tree produced by SqlParser#windowTumbling.
-	VisitWindowTumbling(ctx *WindowTumblingContext) interface{}
-
 	// Visit a parse tree produced by SqlParser#simpleCondition.
 	VisitSimpleCondition(ctx *SimpleConditionContext) interface{}
 
 	// Visit a parse tree produced by SqlParser#compoundRecursiveCondition.
 	VisitCompoundRecursiveCondition(ctx *CompoundRecursiveConditionContext) interface{}
 
+	// Visit a parse tree produced by SqlParser#simpleCompoundCondition.
+	VisitSimpleCompoundCondition(ctx *SimpleCompoundConditionContext) interface{}
+
 	// Visit a parse tree produced by SqlParser#simpleRecursiveCondition.
 	VisitSimpleRecursiveCondition(ctx *SimpleRecursiveConditionContext) interface{}
 
-	// Visit a parse tree produced by SqlParser#compoundExpr.
-	VisitCompoundExpr(ctx *CompoundExprContext) interface{}
+	// Visit a parse tree produced by SqlParser#simpleExpression.
+	VisitSimpleExpression(ctx *SimpleExpressionContext) interface{}
+
+	// Visit a parse tree produced by SqlParser#compoundExpression.
+	VisitCompoundExpression(ctx *CompoundExpressionContext) interface{}
 
 	// Visit a parse tree produced by SqlParser#comparisonOperator.
 	VisitComparisonOperator(ctx *ComparisonOperatorContext) interface{}
@@ -58,7 +64,4 @@ type SqlVisitor interface {
 
 	// Visit a parse tree produced by SqlParser#groupBy.
 	VisitGroupBy(ctx *GroupByContext) interface{}
-
-	// Visit a parse tree produced by SqlParser#avg.
-	VisitAvg(ctx *AvgContext) interface{}
 }

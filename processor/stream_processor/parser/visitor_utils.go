@@ -16,7 +16,7 @@ func KeyExists(key string, resultColumns []IColumnContext) bool {
 	return false
 }
 
-func compareString(ctx *SimpleConditionContext, fieldVal, comparisonVal string) bool {
+func compareString(ctx *SimpleExpressionContext, fieldVal, comparisonVal string) bool {
 	switch ctx.ComparisonOperator().GetStart().GetTokenType() {
 	case SqlParserK_EQUAL:
 		return fieldVal == comparisonVal
@@ -43,7 +43,7 @@ func compareString(ctx *SimpleConditionContext, fieldVal, comparisonVal string) 
 	}
 }
 
-func compareNumeric(ctx *SimpleConditionContext, fieldVal, comparisonVal float64) bool {
+func compareNumeric(ctx *SimpleExpressionContext, fieldVal, comparisonVal float64) bool {
 	switch ctx.ComparisonOperator().GetStart().GetTokenType() {
 	case SqlParserK_EQUAL:
 		return fieldVal == comparisonVal
@@ -66,7 +66,7 @@ func compareNumeric(ctx *SimpleConditionContext, fieldVal, comparisonVal float64
 	}
 }
 
-func compareBool(ctx *SimpleConditionContext, fieldVal, comparisonVal bool) bool {
+func compareBool(ctx *SimpleExpressionContext, fieldVal, comparisonVal bool) bool {
 	switch ctx.ComparisonOperator().GetStart().GetTokenType() {
 	case SqlParserK_EQUAL:
 		return fieldVal == comparisonVal

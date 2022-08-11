@@ -264,7 +264,6 @@ func (v *SqlStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
 
 		case bool:
 			return !res
-
 		}
 		return false
 	})
@@ -338,7 +337,10 @@ func (v *SqlStreamVisitor) VisitColumn(ctx *ColumnContext) interface{} {
 }
 
 func (v *SqlStreamVisitor) VisitSimpleCondition(ctx *SimpleConditionContext) interface{} {
+	return ctx.SimpleExpr().Accept(v)
+}
 
+func (v *SqlStreamVisitor) VisitSimpleExpression(ctx *SimpleExpressionContext) interface{} {
 	fieldNameValue, ok := v.currentRecord.Attributes().Get(ctx.IDENTIFIER().GetText())
 	if !ok {
 		return fmt.Errorf("field %q missed in log record", ctx.IDENTIFIER().GetText())
@@ -359,7 +361,7 @@ func (v *SqlStreamVisitor) VisitSimpleCondition(ctx *SimpleConditionContext) int
 		// we need to remove quotes
 		value := strings.TrimSuffix(strings.TrimPrefix(ctx.LiteralValue().GetText(), `'`), `'`)
 		return compareString(ctx, fieldNameValue.AsString(), value)
-	case SqlParserK_TRUE, SqlParserK_FALSE:
+	case SqlParserBOOLEAN_LITERAL:
 		fieldValue, err := strconv.ParseBool(fieldNameValue.AsString())
 		if err != nil {
 			return fmt.Errorf("can't convert field value %q to boolean; %w", fieldNameValue.AsString(), err)
@@ -374,7 +376,6 @@ func (v *SqlStreamVisitor) VisitSimpleCondition(ctx *SimpleConditionContext) int
 	default:
 		return fmt.Errorf("missed literal value type %q", ctx.LiteralValue().GetText())
 	}
-
 }
 
 func (v *SqlStreamVisitor) VisitSimpleRecursiveCondition(ctx *SimpleRecursiveConditionContext) interface{} {
@@ -409,18 +410,46 @@ func (v *SqlStreamVisitor) VisitWindowTumbling(ctx *WindowTumblingContext) inter
 	return nil
 }
 func (v *SqlStreamVisitor) VisitCompoundRecursiveCondition(ctx *CompoundRecursiveConditionContext) interface{} {
+	var left, right interface{}
 
-	left := ctx.CompoundExpr(0).Accept(v)
-	switch left := ctx.CompoundExpr(0).Accept(v).(type) {
+	/*if ctx.CompoundExpr(0) != nil {
+		fmt.Println("left: ", ctx.CompoundExpr(0).GetText())
+	}
+	if ctx.CompoundExpr(1) != nil {
+		fmt.Println("right: ", ctx.CompoundExpr(1).GetText())
+	}
+	if ctx.SimpleExpr(0) != nil {
+		fmt.Println("simple: ", ctx.SimpleExpr(0).GetText())
+	}
+
+	*/
+
+	if ctx.CompoundExpr(0) != nil {
+		left = ctx.CompoundExpr(0).Accept(v)
+		if ctx.CompoundExpr(1) != nil {
+			right = ctx.CompoundExpr(1).Accept(v)
+		} else {
+			right = ctx.SimpleExpr(0).Accept(v)
+		}
+	} else {
+		left = ctx.SimpleExpr(0).Accept(v)
+		if ctx.SimpleExpr(1) != nil {
+			right = ctx.SimpleExpr(1).Accept(v)
+		} else {
+			right = ctx.CompoundExpr(1).Accept(v)
+		}
+
+	}
+
+	switch left.(type) {
 	case error:
 		return left
 	case bool:
 	}
 
-	right := ctx.CompoundExpr(1).Accept(v)
 	switch right.(type) {
 	case error:
-		return right
+		return left
 	case bool:
 	}
 
@@ -436,18 +465,18 @@ func (v *SqlStreamVisitor) VisitCompoundRecursiveCondition(ctx *CompoundRecursiv
 	return false
 }
 
+func (v *SqlStreamVisitor) VisitSimpleCompoundCondition(ctx *SimpleCompoundConditionContext) interface{} {
+	return ctx.CompoundExpr().Accept(v)
+}
+
+func (v *SqlStreamVisitor) VisitCompoundExpression(ctx *CompoundExpressionContext) interface{} {
+	return ctx.Expr().Accept(v)
+}
+
 func (v *SqlStreamVisitor) VisitComparisonOperator(ctx *ComparisonOperatorContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *SqlStreamVisitor) VisitCompoundExpr(ctx *CompoundExprContext) interface{} {
-	return ctx.Expr().Accept(v)
-}
-
 func (v *SqlStreamVisitor) VisitLiteralValue(ctx *LiteralValueContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *SqlStreamVisitor) VisitAvg(ctx *AvgContext) interface{} {
 	return v.VisitChildren(ctx)
 }

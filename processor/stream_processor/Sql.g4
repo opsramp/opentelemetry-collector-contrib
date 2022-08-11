@@ -12,6 +12,10 @@ selectQuery
   | K_SELECT aggregationColumns windowTumbling (whereStatement)? groupBy EOQ      #selectTumblingGroupBy
   ;
 
+windowTumbling
+   : K_WINDOW_TUMBLING NUMERIC_LITERAL
+   ;
+
 
 resultColumns
  : column (COMMA column)* # selectColumns
@@ -31,20 +35,21 @@ whereStatement
   : K_WHERE expr                        #whereStmt
   ;
 
-windowTumbling
-  : K_WINDOW_TUMBLING NUMERIC_LITERAL
-  ;
-
 
 expr
- : IDENTIFIER comparisonOperator literalValue       #simpleCondition
- | compoundExpr ( K_AND | K_OR ) compoundExpr       #compoundRecursiveCondition
+ : simpleExpr                                                                    #simpleCondition
+ | (compoundExpr | simpleExpr)   ( K_AND | K_OR )  (compoundExpr | simpleExpr)   #compoundRecursiveCondition
  // IDENTIFIER (K_IS_NULL | K_IS_NOT_NULL)           #nullCondition
- | expr (K_AND| K_OR) expr                          #simpleRecursiveCondition
+ | expr (K_AND| K_OR) expr                                                       #simpleRecursiveCondition
+ | compoundExpr                                                                  #simpleCompoundCondition
+ ;
+
+simpleExpr
+ : IDENTIFIER comparisonOperator literalValue  #simpleExpression
  ;
 
 compoundExpr
- : L_BRACKET expr R_BRACKET
+ : L_BRACKET expr R_BRACKET                    #compoundExpression
  ;
 
 comparisonOperator
@@ -54,8 +59,8 @@ comparisonOperator
 
 literalValue
  : NUMERIC_LITERAL
- | STRING_LITERAL
  | BOOLEAN_LITERAL
+ | STRING_LITERAL
  ;
 
 
@@ -63,9 +68,6 @@ groupBy
  : K_GROUP_BY  column
  ;
 
-
-avg
-  : (K_MIN | K_MAX | K_COUNT | K_AVG | K_SUM) L_BRACKET (column | STAR) R_BRACKET;
 
 SPACE
  : [ \u000B\t\r\n] -> channel(HIDDEN)
@@ -78,6 +80,10 @@ L_BRACKET : '(' ;
 R_BRACKET : ')' ;
 
 EOQ: ';';
+
+BOOLEAN_LITERAL
+ : (K_TRUE | K_FALSE)
+ ;
 
 K_SELECT : S E L E C T;
 K_WHERE : W H E R E;
@@ -100,13 +106,13 @@ K_IS_NOT_NULL : (K_IS SPACE K_NOT SPACE K_NULL);
 K_NOT : N O T;
 K_NOT_IN : (K_NOT SPACE I N);
 K_IN : I N;
-K_TRUE : T R U E;
-K_FALSE : F A L S E;
 K_COUNT : C O U N T;
 K_SUM : S U M;
 K_MIN : M I N;
 K_MAX : M A X;
 K_AVG : A V G;
+K_TRUE : T R U E;
+K_FALSE : F A L S E;
 
 IDENTIFIER
   : '"' (~'"' | '""')* '"'
@@ -115,10 +121,6 @@ IDENTIFIER
   | [a-zA-Z_] [a-zA-Z_0-9]*
   ;
 
-
-BOOLEAN_LITERAL
- : (K_TRUE | K_FALSE)
- ;
 
 NUMERIC_LITERAL
  : DIGIT+ ( '.' DIGIT* )? ( E [-+]? DIGIT+ )?

@@ -4,10 +4,11 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
 	"os"
 	"strconv"
 	"testing"
+
+	"go.uber.org/zap"
 
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -361,6 +362,74 @@ func TestCompoundCondition(t *testing.T) {
 	}
 
 }
+
+func TestComplexCompoundCondition(t *testing.T) {
+	tests := []struct {
+		name          string
+		query         string
+		expectedCount int
+	}{
+		{
+			name:          "3 compounds ",
+			query:         `SELECT * WHERE (name like '2' and price < 3) or (name like '3' and price = 3) or (name = 'Test name 4' );`,
+			expectedCount: 3,
+		},
+		{
+			name:          "3 compounds without brackets",
+			query:         `SELECT * WHERE (name like '2' and price < 3) or (name like '3' and price = 3) or name = 'Test name 4' ;`,
+			expectedCount: 3,
+		},
+		{
+			name:          "3 and compounds",
+			query:         `SELECT * WHERE (name like '2' and price < 3) or (name like '3' and price = 3) or (name = 'Test name 4' and price = 4) ;`,
+			expectedCount: 3,
+		},
+		{
+			name:          "4 compounds",
+			query:         `SELECT * WHERE (name like '2' and price < 3) or (name like '3' and price = 3) or (name = 'Test name 4' and price = 4) or (name = 'Test name 5' and price = 5) ;`,
+			expectedCount: 4,
+		},
+		{
+			name:          "5 compounds",
+			query:         `SELECT * WHERE (name like '2' and price < 3) or (name like '3' and price = 3) or (name = 'Test name 4' and price = 4) or (name = 'Test name 5' and price = 5) or (name = 'Test name 6' and price = 6) ;`,
+			expectedCount: 5,
+		},
+		{
+			name:          "5 compounds",
+			query:         `SELECT * WHERE (name like '2' and price < 3) or (name like '3' and price = 3) or (name = 'Test name 4' and price = 4) or (name = 'Test name 5' and price = 5) and (name = 'Test name 6' and price = 6) ;`,
+			expectedCount: 0,
+		},
+		{
+			name:          "3 and",
+			query:         `SELECT * WHERE name like '2' and price < 3 and IsAlive = true ;`,
+			expectedCount: 1,
+		},
+		{
+			name:          "3 and",
+			query:         `SELECT * WHERE name like '2' and price < 3 and IsAlive != true ;`,
+			expectedCount: 0,
+		},
+		{
+			name:          "3 and",
+			query:         `SELECT * WHERE (name like '2' and price < 3 and IsAlive = true) ;`,
+			expectedCount: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := make(chan plog.LogRecordSlice)
+			out := make(chan plog.LogRecordSlice)
+			outErr := make(chan error)
+			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			defer visitor.Stop()
+			in <- generateTestLogs()
+			ls := <-out
+			assert.Equal(t, tt.expectedCount, ls.Len())
+		})
+	}
+
+}
+
 func generateTestLogs() plog.LogRecordSlice {
 
 	ld := plog.NewLogs()

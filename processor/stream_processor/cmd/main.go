@@ -22,12 +22,13 @@ func main() {
 			break
 		}
 
-		logs := generateTestLogs()
 		in := make(chan plog.LogRecordSlice)
 		out := make(chan plog.LogRecordSlice)
 		outErr := make(chan error)
 		visitor := parser.NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
-		in <- logs
+		//test := plog.NewLogRecordSlice()
+		//generateTestLogs().At(0).CopyTo(test.AppendEmpty())
+		in <- generateTestLogs()
 
 		select {
 		case ls := <-out:
