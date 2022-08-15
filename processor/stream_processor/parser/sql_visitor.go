@@ -32,8 +32,11 @@ type SqlVisitor interface {
 	// Visit a parse tree produced by SqlParser#selectAVG.
 	VisitSelectAVG(ctx *SelectAVGContext) interface{}
 
-	// Visit a parse tree produced by SqlParser#column.
-	VisitColumn(ctx *ColumnContext) interface{}
+	// Visit a parse tree produced by SqlParser#identifierCol.
+	VisitIdentifierCol(ctx *IdentifierColContext) interface{}
+
+	// Visit a parse tree produced by SqlParser#functionCol.
+	VisitFunctionCol(ctx *FunctionColContext) interface{}
 
 	// Visit a parse tree produced by SqlParser#whereStmt.
 	VisitWhereStmt(ctx *WhereStmtContext) interface{}

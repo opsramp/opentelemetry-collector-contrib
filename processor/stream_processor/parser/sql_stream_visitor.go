@@ -218,9 +218,13 @@ func (v *SqlStreamVisitor) VisitGroupBy(ctx *GroupByContext) interface{} {
 }
 
 func (v *SqlStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interface{} {
+
 	for _, column := range ctx.AllColumn() {
 		v.logRecords.RemoveIf(func(record plog.LogRecord) bool {
-			_, ok := record.Attributes().Get(column.GetText())
+			// apply scalar function
+			v.currentRecord = record
+			identifier := getColumnIdentifier(column)
+			_, ok := record.Attributes().Get(identifier)
 
 			if ok {
 				// Remove attributes which are not listed in value columns statement
@@ -236,9 +240,11 @@ func (v *SqlStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interfa
 				for _, removedKey := range removed {
 					record.Attributes().Remove(removedKey)
 				}
+				column.Accept(v)
 
 				return false
 			}
+
 			v.logger.Error("field is missing", zap.String("field", column.GetText()))
 			return true
 		})
@@ -246,6 +252,20 @@ func (v *SqlStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interfa
 	}
 	return nil
 
+}
+
+func (v *SqlStreamVisitor) VisitIdentifierCol(ctx *IdentifierColContext) interface{} {
+	return nil
+}
+
+func (v *SqlStreamVisitor) VisitFunctionCol(ctx *FunctionColContext) interface{} {
+	if ctx.K_LOWER() != nil {
+		return lower(v.currentRecord, ctx.IDENTIFIER().GetText())
+	}
+	if ctx.K_UPPER() != nil {
+		return upper(v.currentRecord, ctx.IDENTIFIER().GetText())
+	}
+	return nil
 }
 
 func (v *SqlStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
@@ -257,6 +277,7 @@ func (v *SqlStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
 
 	v.logRecords.RemoveIf(func(record plog.LogRecord) bool {
 		v.currentRecord = record
+
 		switch res := ctx.Expr().Accept(v).(type) {
 		case error:
 			err = res
@@ -264,6 +285,7 @@ func (v *SqlStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
 
 		case bool:
 			return !res
+
 		}
 		return false
 	})
@@ -299,7 +321,6 @@ func (v *SqlStreamVisitor) VisitSelectAVG(ctx *SelectAVGContext) interface{} {
 
 func (v *SqlStreamVisitor) getSimpleAggregatedValue(ctx *SelectAVGContext, fieldName string, ls plog.LogRecordSlice) (plog.LogRecord, error) {
 
-	//fieldName := ctx.Column(1).GetText()
 	resLs := plog.NewLogRecordSlice()
 	aggrRecord := resLs.AppendEmpty()
 	var res float64
@@ -333,7 +354,7 @@ func (v *SqlStreamVisitor) VisitSelectStar(ctx *SelectStarContext) interface{} {
 }
 
 func (v *SqlStreamVisitor) VisitColumn(ctx *ColumnContext) interface{} {
-	return v.VisitChildren(ctx)
+	return nil
 }
 
 func (v *SqlStreamVisitor) VisitSimpleCondition(ctx *SimpleConditionContext) interface{} {

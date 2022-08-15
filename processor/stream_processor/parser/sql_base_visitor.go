@@ -40,7 +40,11 @@ func (v *BaseSqlVisitor) VisitSelectAVG(ctx *SelectAVGContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseSqlVisitor) VisitColumn(ctx *ColumnContext) interface{} {
+func (v *BaseSqlVisitor) VisitIdentifierCol(ctx *IdentifierColContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseSqlVisitor) VisitFunctionCol(ctx *FunctionColContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

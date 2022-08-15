@@ -7,15 +7,6 @@ import (
 	"strings"
 )
 
-func KeyExists(key string, resultColumns []IColumnContext) bool {
-	for _, col := range resultColumns {
-		if key == col.GetText() {
-			return true
-		}
-	}
-	return false
-}
-
 func compareString(ctx *SimpleExpressionContext, fieldVal, comparisonVal string) bool {
 	switch ctx.ComparisonOperator().GetStart().GetTokenType() {
 	case SqlParserK_EQUAL:
@@ -177,4 +168,51 @@ func avg(ls plog.LogRecordSlice, fieldName string) (float64, error) {
 
 func count(ls plog.LogRecordSlice) int {
 	return ls.Len()
+}
+
+func lower(record plog.LogRecord, fieldName string) error {
+	val, ok := record.Attributes().Get(fieldName)
+	if !ok {
+		return fmt.Errorf("field %q missed", fieldName)
+	}
+	record.Attributes().UpdateString(fieldName, strings.ToLower(val.AsString()))
+	return nil
+}
+
+func upper(record plog.LogRecord, fieldName string) error {
+	val, ok := record.Attributes().Get(fieldName)
+	if !ok {
+		return fmt.Errorf("field %q missed", fieldName)
+	}
+	record.Attributes().UpdateString(fieldName, strings.ToUpper(val.AsString()))
+	return nil
+}
+
+func getColumnIdentifier(column IColumnContext) string {
+	switch col := column.GetRuleContext().(type) {
+	case *FunctionColContext:
+		return col.IDENTIFIER().GetText()
+	case *IdentifierColContext:
+		return col.IDENTIFIER().GetText()
+	default:
+		return ""
+	}
+}
+
+func KeyExists(key string, resultColumns []IColumnContext) bool {
+	for _, col := range resultColumns {
+		var id string
+		switch col := col.GetRuleContext().(type) {
+		case *FunctionColContext:
+			id = col.IDENTIFIER().GetText()
+		case *IdentifierColContext:
+			id = col.IDENTIFIER().GetText()
+		default:
+			return false
+		}
+		if key == id {
+			return true
+		}
+	}
+	return false
 }

@@ -28,8 +28,10 @@ aggregationColumns
 
 
 column
-  : IDENTIFIER
+  : IDENTIFIER                                                     #identifierCol
+  | (K_UPPER | K_LOWER ) L_BRACKET IDENTIFIER R_BRACKET            #functionCol
   ;
+
 
 whereStatement
   : K_WHERE expr                        #whereStmt
@@ -113,6 +115,9 @@ K_MAX : M A X;
 K_AVG : A V G;
 K_TRUE : T R U E;
 K_FALSE : F A L S E;
+// function
+K_UPPER : U P P E R;
+K_LOWER : L O W E R;
 
 IDENTIFIER
   : '"' (~'"' | '""')* '"'
