@@ -1,0 +1,18 @@
+receivers:
+  nop:
+
+
+processors:
+  sqlStream:
+    query: "select * where price = 5;"
+
+exporters:
+  nop:
+
+
+service:
+  pipelines:
+    logs:
+      receivers: [nop]
+      processors: [sqlStream]
+      exporters: [nop]

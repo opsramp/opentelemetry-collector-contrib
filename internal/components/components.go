@@ -18,6 +18,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/opsrampotlpexporter"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/batchmemlimitprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/scrubbingprocessor"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/stream_processor"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/exporter/loggingexporter"
 	"go.opentelemetry.io/collector/exporter/otlpexporter"
@@ -351,6 +352,7 @@ func Components() (component.Factories, error) {
 		transformprocessor.NewFactory(),
 		scrubbingprocessor.NewFactory(),
 		batchmemlimitprocessor.NewFactory(),
+		stream_processor.NewFactory(),
 	}
 	factories.Processors, err = component.MakeProcessorFactoryMap(processors...)
 	if err != nil {
