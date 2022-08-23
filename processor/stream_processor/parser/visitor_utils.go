@@ -2,13 +2,14 @@ package parser
 
 import (
 	"fmt"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"strconv"
 	"strings"
 )
 
-func compareString(ctx *SimpleExpressionContext, fieldVal, comparisonVal string) bool {
-	switch ctx.ComparisonOperator().GetStart().GetTokenType() {
+func compareString(comparisonToken int, fieldVal, comparisonVal string) bool {
+	switch comparisonToken {
 	case SqlParserK_EQUAL:
 		return fieldVal == comparisonVal
 	case SqlParserK_NOT_EQUAL:
@@ -34,8 +35,8 @@ func compareString(ctx *SimpleExpressionContext, fieldVal, comparisonVal string)
 	}
 }
 
-func compareNumeric(ctx *SimpleExpressionContext, fieldVal, comparisonVal float64) bool {
-	switch ctx.ComparisonOperator().GetStart().GetTokenType() {
+func compareNumeric(comparisonToken int, fieldVal, comparisonVal float64) bool {
+	switch comparisonToken {
 	case SqlParserK_EQUAL:
 		return fieldVal == comparisonVal
 	case SqlParserK_NOT_EQUAL:
@@ -57,8 +58,8 @@ func compareNumeric(ctx *SimpleExpressionContext, fieldVal, comparisonVal float6
 	}
 }
 
-func compareBool(ctx *SimpleExpressionContext, fieldVal, comparisonVal bool) bool {
-	switch ctx.ComparisonOperator().GetStart().GetTokenType() {
+func compareBool(comparisonToken int, fieldVal, comparisonVal bool) bool {
+	switch comparisonToken {
 	case SqlParserK_EQUAL:
 		return fieldVal == comparisonVal
 	case SqlParserK_NOT_EQUAL:
@@ -215,4 +216,37 @@ func KeyExists(key string, resultColumns []IColumnContext) bool {
 		}
 	}
 	return false
+}
+
+func compareExpression(operator IComparisonOperatorContext, literalValue ILiteralValueContext, fieldValue pcommon.Value) (bool, error) {
+	switch literalValue.GetStart().GetTokenType() {
+	case SqlParserNUMERIC_LITERAL:
+		parsedValue, err := strconv.ParseFloat(fieldValue.AsString(), 64)
+		if err != nil {
+			return false, fmt.Errorf("can't convert record field value %q to numeric; %w", fieldValue.AsString(), err)
+		}
+		comparisonValue, err := strconv.ParseFloat(literalValue.GetText(), 64)
+		if err != nil {
+			return false, fmt.Errorf("can't convert comparison value %q to numeric; %w", literalValue.GetText(), err)
+		}
+		return compareNumeric(operator.GetStart().GetTokenType(), parsedValue, comparisonValue), nil
+	case SqlParserSTRING_LITERAL:
+		// we need to remove quotes
+		value := strings.TrimSuffix(strings.TrimPrefix(literalValue.GetText(), `'`), `'`)
+		return compareString(operator.GetStart().GetTokenType(), fieldValue.AsString(), value), nil
+	case SqlParserBOOLEAN_LITERAL:
+		parsedValue, err := strconv.ParseBool(fieldValue.AsString())
+		if err != nil {
+			return false, fmt.Errorf("can't convert field value %q to boolean; %w", fieldValue.AsString(), err)
+		}
+		comparisonValue, err := strconv.ParseBool(literalValue.GetText())
+		if err != nil {
+			return false, fmt.Errorf("can't convert comparison value %q to boolean; %w", literalValue.GetText(), err)
+		}
+
+		return compareBool(operator.GetStart().GetTokenType(), parsedValue, comparisonValue), nil
+
+	default:
+		return false, fmt.Errorf("missed literal value type %q", literalValue.GetText())
+	}
 }

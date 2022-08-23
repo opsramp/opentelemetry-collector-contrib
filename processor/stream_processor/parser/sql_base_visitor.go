@@ -72,6 +72,10 @@ func (v *BaseSqlVisitor) VisitSimpleExpression(ctx *SimpleExpressionContext) int
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseSqlVisitor) VisitNestedExpression(ctx *NestedExpressionContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseSqlVisitor) VisitCompoundExpression(ctx *CompoundExpressionContext) interface{} {
 	return v.VisitChildren(ctx)
 }

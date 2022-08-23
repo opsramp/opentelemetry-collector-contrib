@@ -2,8 +2,6 @@ package parser
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
@@ -362,41 +360,42 @@ func (v *SqlStreamVisitor) VisitSimpleCondition(ctx *SimpleConditionContext) int
 }
 
 func (v *SqlStreamVisitor) VisitSimpleExpression(ctx *SimpleExpressionContext) interface{} {
-	fieldNameValue, ok := v.currentRecord.Attributes().Get(ctx.IDENTIFIER().GetText())
+	fieldValue, ok := v.currentRecord.Attributes().Get(ctx.IDENTIFIER().GetText())
 	if !ok {
 		return fmt.Errorf("field %q missed in log record", ctx.IDENTIFIER().GetText())
 	}
 
-	switch ctx.LiteralValue().GetStart().GetTokenType() {
-	case SqlParserNUMERIC_LITERAL:
-		fieldValue, err := strconv.ParseFloat(fieldNameValue.AsString(), 64)
-		if err != nil {
-			return fmt.Errorf("can't convert record field value %q to numeric; %w", fieldNameValue.AsString(), err)
-		}
-		comparisonValue, err := strconv.ParseFloat(ctx.LiteralValue().GetText(), 64)
-		if err != nil {
-			return fmt.Errorf("can't convert comparison value %q to numeric; %w", ctx.LiteralValue().GetText(), err)
-		}
-		return compareNumeric(ctx, fieldValue, comparisonValue)
-	case SqlParserSTRING_LITERAL:
-		// we need to remove quotes
-		value := strings.TrimSuffix(strings.TrimPrefix(ctx.LiteralValue().GetText(), `'`), `'`)
-		return compareString(ctx, fieldNameValue.AsString(), value)
-	case SqlParserBOOLEAN_LITERAL:
-		fieldValue, err := strconv.ParseBool(fieldNameValue.AsString())
-		if err != nil {
-			return fmt.Errorf("can't convert field value %q to boolean; %w", fieldNameValue.AsString(), err)
-		}
-		comparisonValue, err := strconv.ParseBool(ctx.LiteralValue().GetText())
-		if err != nil {
-			return fmt.Errorf("can't convert comparison value %q to boolean; %w", ctx.LiteralValue().GetText(), err)
-		}
-
-		return compareBool(ctx, fieldValue, comparisonValue)
-
-	default:
-		return fmt.Errorf("missed literal value type %q", ctx.LiteralValue().GetText())
+	res, err := compareExpression(ctx.ComparisonOperator(), ctx.LiteralValue(), fieldValue)
+	if err != nil {
+		return err
 	}
+	return res
+
+}
+
+func (v *SqlStreamVisitor) VisitNestedExpression(ctx *NestedExpressionContext) interface{} {
+	fieldName := ctx.IDENTIFIER(0).GetText()
+	fieldValue, ok := v.currentRecord.Attributes().Get(fieldName)
+	if !ok {
+		return fmt.Errorf("field %q missed in log record", fieldValue.AsString())
+	}
+	if fieldValue.Type() != pcommon.ValueTypeMap {
+		return fmt.Errorf("field %q is not nested map", fieldName)
+	}
+
+	nestedFieldName := ctx.IDENTIFIER(1).GetText()
+	nestedFieldValue, ok := fieldValue.MapVal().Get(nestedFieldName)
+	if !ok {
+		v.logger.Error("nested key missed", zap.String("name: ", nestedFieldName))
+		return false
+	}
+
+	res, err := compareExpression(ctx.ComparisonOperator(), ctx.LiteralValue(), nestedFieldValue)
+	if err != nil {
+		return err
+	}
+	return res
+
 }
 
 func (v *SqlStreamVisitor) VisitSimpleRecursiveCondition(ctx *SimpleRecursiveConditionContext) interface{} {

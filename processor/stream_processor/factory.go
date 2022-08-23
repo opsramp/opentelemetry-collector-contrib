@@ -9,7 +9,7 @@ import (
 
 const (
 	// The value of "type" key in configuration.
-	typeStr = "sqlStream"
+	typeStr = "sql_stream"
 	// The stability level of the processor.
 	stability = component.StabilityLevelInDevelopment
 )

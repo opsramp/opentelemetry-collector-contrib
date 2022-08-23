@@ -5,7 +5,7 @@ import (
 	"go.opentelemetry.io/collector/config"
 )
 
-// Config defines configuration for Resource processor.
+// Config defines configuration for batch memory limit processor.
 type Config struct {
 	config.ProcessorSettings `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct
 	adapter.BaseConfig       `mapstructure:",squash"`

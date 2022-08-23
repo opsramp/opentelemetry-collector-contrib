@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"os"
 	"strconv"
 	"testing"
@@ -23,12 +24,12 @@ func TestResultColumnsSelectColumns(t *testing.T) {
 	}{
 		{
 			name:          "correct value columns",
-			query:         `SELECT name, price, IsAlive;`,
+			query:         `SELECT name, price, is_alive;`,
 			expectedCount: 100,
 		},
 		{
 			name:          "incorrect value columns",
-			query:         `SELECT field, isAlive;`,
+			query:         `SELECT field, is_alive;`,
 			expectedCount: 0,
 		},
 		{
@@ -72,8 +73,8 @@ func TestResultColumnsSelectColumnsAttributes(t *testing.T) {
 		},
 		{
 			name:          "two attributes must be left",
-			query:         `SELECT price, IsAlive ;`,
-			expectedAttr:  []string{"price", "IsAlive"},
+			query:         `SELECT price, is_alive ;`,
+			expectedAttr:  []string{"price", "is_alive"},
 			expectedCount: 100,
 		},
 		{
@@ -117,13 +118,13 @@ func TestWhereCondition(t *testing.T) {
 
 		{
 			name:     "where fields exists ",
-			query:    `SELECT name, IsAlive WHERE name = 'test' and IsAlive = 'true';`,
+			query:    `SELECT name, is_alive WHERE name = 'test' and is_alive = 'true';`,
 			expected: nil,
 		},
 
 		{
 			name:     "where fields missed ",
-			query:    `SELECT name, IsAlive WHERE name = 'test' and non_exists = 'true';`,
+			query:    `SELECT name, is_alive WHERE name = 'test' and non_exists = 'true';`,
 			expected: errors.New(`field "non_exists" missed in log record`),
 		},
 	}
@@ -201,20 +202,20 @@ func TestSimpleCondition(t *testing.T) {
 		},
 		{
 			name:          "equal true ",
-			query:         `SELECT name, IsAlive WHERE IsAlive = true;`,
+			query:         `SELECT name, is_alive WHERE is_alive = true;`,
 			expectedAttr:  []string{"name, price"},
 			expectedCount: 50,
 		},
 		{
 			name:          "not equal true ",
-			query:         `SELECT name, IsAlive WHERE IsAlive != true;`,
-			expectedAttr:  []string{"name, IsAlive"},
+			query:         `SELECT name, is_alive WHERE is_alive != true;`,
+			expectedAttr:  []string{"name, is_alive"},
 			expectedCount: 50,
 		},
 		{
 			name:          "equal false ",
-			query:         `SELECT name, IsAlive WHERE IsAlive = false;`,
-			expectedAttr:  []string{"name, IsAlive"},
+			query:         `SELECT name, is_alive WHERE is_alive = false;`,
+			expectedAttr:  []string{"name, is_alive"},
 			expectedCount: 50,
 		},
 	}
@@ -242,27 +243,27 @@ func TestRecursiveCondition(t *testing.T) {
 	}{
 		{
 			name:          "where and condition ",
-			query:         `SELECT name, IsAlive WHERE name != 'test' and IsAlive = 'true';`,
+			query:         `SELECT name, is_alive WHERE name != 'test' and is_alive = 'true';`,
 			expectedCount: 50,
 		},
 		{
 			name:          "where or 1 ",
-			query:         `SELECT name, IsAlive WHERE name != 'test' or IsAlive = 'true';`,
+			query:         `SELECT name, is_alive WHERE name != 'test' or is_alive = 'true';`,
 			expectedCount: 100,
 		},
 		{
 			name:          "test or 2",
-			query:         `SELECT name WHERE name = 'Test name 10' or IsAlive = 'false';`,
+			query:         `SELECT name WHERE name = 'Test name 10' or is_alive = 'false';`,
 			expectedCount: 51,
 		},
 		{
 			name:          "test and 1",
-			query:         `SELECT name WHERE name = 'Test name 10' and IsAlive = 'false';`,
+			query:         `SELECT name WHERE name = 'Test name 10' and is_alive = 'false';`,
 			expectedCount: 0,
 		},
 		{
 			name:          "test and 2",
-			query:         `SELECT name WHERE name = 'Test name 10' and IsAlive = 'true';`,
+			query:         `SELECT name WHERE name = 'Test name 10' and is_alive = 'true';`,
 			expectedCount: 1,
 		},
 		{
@@ -277,7 +278,7 @@ func TestRecursiveCondition(t *testing.T) {
 		},
 		{
 			name:          "like 1",
-			query:         `SELECT name WHERE name like 'Test name 1' and IsAlive = 'false';`,
+			query:         `SELECT name WHERE name like 'Test name 1' and is_alive = 'false';`,
 			expectedCount: 6,
 		},
 		{
@@ -309,42 +310,42 @@ func TestCompoundCondition(t *testing.T) {
 	}{
 		{
 			name:          "and 1 ",
-			query:         `SELECT name, IsAlive WHERE (name != 'test' and IsAlive = 'true') and (IsAlive = 'true' and price > 50);`,
+			query:         `SELECT name, is_alive WHERE (name != 'test' and is_alive = 'true') and (is_alive = 'true' and price > 50);`,
 			expectedCount: 24,
 		},
 		{
 			name:          "and 2 ",
-			query:         `SELECT name, IsAlive WHERE (name = 'Test name 10' and price > 5) and (IsAlive = 'true' and price > 5);`,
+			query:         `SELECT name, is_alive WHERE (name = 'Test name 10' and price > 5) and (is_alive = 'true' and price > 5);`,
 			expectedCount: 1,
 		},
 		{
 			name:          "and 3 ",
-			query:         `SELECT name, IsAlive WHERE (name = 'Test name 10' and price > 5) and (IsAlive = 'false' and price > 5);`,
+			query:         `SELECT name, is_alive WHERE (name = 'Test name 10' and price > 5) and (is_alive = 'false' and price > 5);`,
 			expectedCount: 0,
 		},
 		{
 			name:          "or 1 ",
-			query:         `SELECT name, IsAlive WHERE (name != 'test' and IsAlive = 'true') or (IsAlive = 'true' and price > 50);`,
+			query:         `SELECT name, is_alive WHERE (name != 'test' and is_alive = 'true') or (is_alive = 'true' and price > 50);`,
 			expectedCount: 50,
 		},
 		{
 			name:          "or 2 ",
-			query:         `SELECT name, IsAlive WHERE (name = 'Test name 10' and price > 5 ) or (IsAlive = 'true');`,
+			query:         `SELECT name, is_alive WHERE (name = 'Test name 10' and price > 5 ) or (is_alive = 'true');`,
 			expectedCount: 50,
 		},
 		{
 			name:          "or 2 ",
-			query:         `SELECT name, IsAlive WHERE (name = 'Test name 10' and price > 5 ) or (IsAlive = 'false');`,
+			query:         `SELECT name, is_alive WHERE (name = 'Test name 10' and price > 5 ) or (is_alive = 'false');`,
 			expectedCount: 51,
 		},
 		{
 			name:          "like 1  ",
-			query:         `SELECT name, IsAlive WHERE (name like '2' and price > 5 ) or (IsAlive = 'false');`,
+			query:         `SELECT name, is_alive WHERE (name like '2' and price > 5 ) or (is_alive = 'false');`,
 			expectedCount: 63,
 		},
 		{
 			name:          "like 2  ",
-			query:         `SELECT name, IsAlive WHERE (name like '2' and price > 5 ) or (price < 30 or IsAlive = 'false');`,
+			query:         `SELECT name, is_alive WHERE (name like '2' and price > 5 ) or (price < 30 or is_alive = 'false');`,
 			expectedCount: 72,
 		},
 	}
@@ -401,17 +402,17 @@ func TestComplexCompoundCondition(t *testing.T) {
 		},
 		{
 			name:          "3 and",
-			query:         `SELECT * WHERE name like '2' and price < 3 and IsAlive = true ;`,
+			query:         `SELECT * WHERE name like '2' and price < 3 and is_alive = true ;`,
 			expectedCount: 1,
 		},
 		{
 			name:          "3 and",
-			query:         `SELECT * WHERE name like '2' and price < 3 and IsAlive != true ;`,
+			query:         `SELECT * WHERE name like '2' and price < 3 and is_alive != true ;`,
 			expectedCount: 0,
 		},
 		{
 			name:          "3 and",
-			query:         `SELECT * WHERE (name like '2' and price < 3 and IsAlive = true) ;`,
+			query:         `SELECT * WHERE (name like '2' and price < 3 and is_alive = true) ;`,
 			expectedCount: 1,
 		},
 	}
@@ -434,18 +435,26 @@ func generateTestLogs() plog.LogRecordSlice {
 
 	ld := plog.NewLogs()
 	sc := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+	types := []string{"middle", "small", "big"}
 
 	for i := 0; i < 100; i++ {
 		record := sc.LogRecords().AppendEmpty()
 		record.Attributes().InsertString("name", "Test name "+strconv.Itoa(i))
-		record.Attributes().InsertBool("IsAlive", i%2 == 0)
+		record.Attributes().InsertBool("is_alive", i%2 == 0)
 		record.Attributes().InsertInt("price", int64(i))
+		nested := pcommon.NewValueMap()
+		typeIndex := i % 3
+		nested.MapVal().InsertString("source", "Source "+strconv.Itoa(i))
+		nested.MapVal().InsertString("type", types[typeIndex])
+		nested.MapVal().InsertDouble("number", float64(i))
+		record.Attributes().Insert("provider", nested)
 	}
 
 	return ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
 }
 
 func TestWriteTestLogsToCSV(t *testing.T) {
+	t.Skip()
 	f, _ := os.Create("test.csv")
 	w := csv.NewWriter(f)
 	defer w.Flush()
@@ -459,6 +468,7 @@ func TestWriteTestLogsToCSV(t *testing.T) {
 }
 
 func TestWriteTestLogsGroupByToCSV(t *testing.T) {
+	t.Skip()
 	f, _ := os.Create("testGroupBy.csv")
 	w := csv.NewWriter(f)
 	defer w.Flush()

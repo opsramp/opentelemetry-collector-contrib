@@ -16,6 +16,7 @@ package helper // import "github.com/open-telemetry/opentelemetry-collector-cont
 
 import (
 	"context"
+	"fmt"
 
 	"go.uber.org/zap"
 
@@ -76,6 +77,26 @@ type InputOperator struct {
 func (i *InputOperator) NewEntry(value interface{}) (*entry.Entry, error) {
 	entry := entry.New()
 	entry.Body = value
+
+	if err := i.Attribute(entry); err != nil {
+		return nil, errors.Wrap(err, "add attributes to entry")
+	}
+
+	if err := i.Identify(entry); err != nil {
+		return nil, errors.Wrap(err, "add resource keys to entry")
+	}
+
+	return entry, nil
+}
+
+func (i *InputOperator) NewEntryWithAttr(value interface{}) (*entry.Entry, error) {
+	entry := entry.New()
+
+	converted, ok := value.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("value type is not map")
+	}
+	entry.Attributes = converted
 
 	if err := i.Attribute(entry); err != nil {
 		return nil, errors.Wrap(err, "add attributes to entry")

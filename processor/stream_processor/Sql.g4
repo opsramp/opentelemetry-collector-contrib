@@ -48,6 +48,7 @@ expr
 
 simpleExpr
  : IDENTIFIER comparisonOperator literalValue  #simpleExpression
+ | IDENTIFIER DOT IDENTIFIER comparisonOperator literalValue #nestedExpression
  ;
 
 compoundExpr
@@ -80,6 +81,7 @@ WS : [ \t]+ -> skip ;
 COMMA : ',' ;
 L_BRACKET : '(' ;
 R_BRACKET : ')' ;
+DOT : '.';
 
 EOQ: ';';
 

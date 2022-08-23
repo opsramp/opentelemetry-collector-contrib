@@ -56,6 +56,9 @@ type SqlVisitor interface {
 	// Visit a parse tree produced by SqlParser#simpleExpression.
 	VisitSimpleExpression(ctx *SimpleExpressionContext) interface{}
 
+	// Visit a parse tree produced by SqlParser#nestedExpression.
+	VisitNestedExpression(ctx *NestedExpressionContext) interface{}
+
 	// Visit a parse tree produced by SqlParser#compoundExpression.
 	VisitCompoundExpression(ctx *CompoundExpressionContext) interface{}
 

@@ -3,8 +3,6 @@ package stream_processor
 import (
 	"context"
 	"fmt"
-	"time"
-
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/stream_processor/parser"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
@@ -56,17 +54,27 @@ func printLogs(ls plog.LogRecordSlice) {
 		return
 	}
 	for i := 0; i < ls.Len(); i++ {
+		fmt.Println("EVENT: ")
 		ls.At(i).Attributes().Range(func(k string, v pcommon.Value) bool {
-			fmt.Printf("%q: %q ", k, v.AsString())
+			if v.Type() == pcommon.ValueTypeMap {
+				fmt.Printf(" Nested key %q \n", k)
+				v.MapVal().Range(func(key string, val pcommon.Value) bool {
+					fmt.Printf("Key: %q: Value: %q \n", key, val.AsString())
+					return true
+				})
+				fmt.Println()
+				return true
+			}
+			fmt.Printf("%q: %q \n", k, v.AsString())
 			return true
 		})
 		fmt.Print("\n")
 	}
-	fmt.Println("END OF THIS BATCH")
+	//fmt.Println("END OF THIS BATCH")
 }
 
 func (sp *sqlStreamProcessor) ConsumeLogs(ctx context.Context, ld plog.Logs) error {
-	<-time.After(1 * time.Second)
+	//<-time.After(1 * time.Second)
 	sp.in <- ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
 	return nil
 }

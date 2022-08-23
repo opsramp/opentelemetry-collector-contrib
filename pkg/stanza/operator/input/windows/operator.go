@@ -20,6 +20,7 @@ package windows // import "github.com/open-telemetry/opentelemetry-collector-con
 import (
 	"context"
 	"fmt"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/entry"
 	"sync"
 	"time"
 
@@ -39,6 +40,7 @@ type Config struct {
 	Channel            string          `mapstructure:"channel" json:"channel" yaml:"channel"`
 	MaxReads           int             `mapstructure:"max_reads,omitempty" json:"max_reads,omitempty" yaml:"max_reads,omitempty"`
 	StartAt            string          `mapstructure:"start_at,omitempty" json:"start_at,omitempty" yaml:"start_at,omitempty"`
+	BodyToAttr         bool            `mapstructure:"body_to_attr" json:"body_to_attr" yaml:"body_to_attr"`
 	PollInterval       helper.Duration `mapstructure:"poll_interval,omitempty" json:"poll_interval,omitempty" yaml:"poll_interval,omitempty"`
 }
 
@@ -68,6 +70,7 @@ func (c *Config) Build(logger *zap.SugaredLogger) (operator.Operator, error) {
 		maxReads:      c.MaxReads,
 		startAt:       c.StartAt,
 		pollInterval:  c.PollInterval,
+		bodyToAttr:    c.BodyToAttr,
 	}, nil
 }
 
@@ -92,6 +95,7 @@ type Input struct {
 	channel      string
 	maxReads     int
 	startAt      string
+	bodyToAttr   bool
 	pollInterval helper.Duration
 	persister    operator.Persister
 	cancel       context.CancelFunc
@@ -223,7 +227,15 @@ func (e *Input) processEvent(ctx context.Context, event Event) {
 // sendEvent will send EventXML as an entry to the operator's output.
 func (e *Input) sendEvent(ctx context.Context, eventXML EventXML) {
 	body := eventXML.parseBody()
-	entry, err := e.NewEntry(body)
+	var entry *entry.Entry
+	var err error
+
+	if e.bodyToAttr {
+		entry, err = e.NewEntryWithAttr(body)
+	} else {
+		entry, err = e.NewEntry(body)
+	}
+
 	if err != nil {
 		e.Errorf("Failed to create entry: %s", err)
 		return

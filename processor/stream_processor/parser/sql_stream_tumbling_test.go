@@ -296,7 +296,7 @@ func generateRandomSplittedTestLogs() plog.LogRecordSlice {
 	for i := 0; i < r; i++ {
 		record := sc.LogRecords().AppendEmpty()
 		record.Attributes().InsertString("name", "Test name "+strconv.Itoa(i))
-		record.Attributes().InsertBool("IsAlive", i%2 == 0)
+		record.Attributes().InsertBool("is_alive", i%2 == 0)
 		record.Attributes().InsertInt("price", int64(i))
 	}
 
@@ -311,7 +311,7 @@ func generateGroupByTestLogs() plog.LogRecordSlice {
 		record := sc.LogRecords().AppendEmpty()
 		name := strconv.Itoa(i)
 		record.Attributes().InsertString("name", fmt.Sprint("Test name ", string(name[0])))
-		record.Attributes().InsertBool("IsAlive", i%2 == 0)
+		record.Attributes().InsertBool("is_alive", i%2 == 0)
 		record.Attributes().InsertInt("price", int64(i))
 	}
 
