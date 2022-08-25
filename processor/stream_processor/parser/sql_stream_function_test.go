@@ -34,7 +34,7 @@ func TestScalarFunctions(t *testing.T) {
 			outErr := make(chan error)
 			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
-			in <- generateTestLogs()
+			in <- GenerateTestLogs()
 			ls := <-out
 
 			assert.Equal(t, tt.expectedCount, ls.Len())

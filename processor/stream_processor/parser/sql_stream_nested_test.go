@@ -36,7 +36,7 @@ func TestWhereNestedCorrectFIelds(t *testing.T) {
 			outErr := make(chan error)
 			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
-			in <- generateTestLogs()
+			in <- GenerateTestLogs()
 			var err error
 
 			select {
@@ -85,7 +85,7 @@ func TestWhereNestedSimple(t *testing.T) {
 			outErr := make(chan error)
 			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
-			in <- generateTestLogs()
+			in <- GenerateTestLogs()
 
 			ls := <-out
 
@@ -202,7 +202,7 @@ func TestWhereNestedCompound(t *testing.T) {
 			outErr := make(chan error)
 			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
-			in <- generateTestLogs()
+			in <- GenerateTestLogs()
 
 			ls := <-out
 

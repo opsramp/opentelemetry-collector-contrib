@@ -160,7 +160,7 @@ func (v *SqlStreamVisitor) VisitSelectSimple(ctx *SelectSimpleContext) interface
 
 	}
 
-	return ctx.ResultColumns().Accept(v)
+	return nil
 }
 
 func (v *SqlStreamVisitor) VisitSelectTumbling(ctx *SelectTumblingContext) interface{} {
@@ -215,48 +215,56 @@ func (v *SqlStreamVisitor) VisitGroupBy(ctx *GroupByContext) interface{} {
 	return nil
 }
 
+// VisitSelectColumns  is called in case of missed where statement
 func (v *SqlStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interface{} {
+	var err error
+	v.logRecords.RemoveIf(func(record plog.LogRecord) bool {
+		// apply scalar function
+		v.currentRecord = record
 
-	for _, column := range ctx.AllColumn() {
-		v.logRecords.RemoveIf(func(record plog.LogRecord) bool {
-			// apply scalar function
-			v.currentRecord = record
-			identifier := getColumnIdentifier(column)
-			_, ok := record.Attributes().Get(identifier)
-
-			if ok {
-				// Remove attributes which are not listed in value columns statement
-				// We can't use RemoveIf as it takes only values
-				removed := make([]string, 0, record.Attributes().Len())
-				record.Attributes().Range(func(k string, value pcommon.Value) bool {
-					if !KeyExists(k, ctx.AllColumn()) {
-						removed = append(removed, k)
-					}
-					return true
-				})
-
-				for _, removedKey := range removed {
-					record.Attributes().Remove(removedKey)
-				}
-				column.Accept(v)
-
-				return false
+		// Remove attributes which are not listed in value columns statement
+		// We can't use RemoveIf as it takes only values
+		removed := make([]string, 0, record.Attributes().Len())
+		record.Attributes().Range(func(k string, value pcommon.Value) bool {
+			if !keyExists(k, ctx.AllColumn()) {
+				removed = append(removed, k)
 			}
-
-			v.logger.Error("field is missing", zap.String("field", column.GetText()))
 			return true
 		})
 
+		for _, removedKey := range removed {
+			record.Attributes().Remove(removedKey)
+		}
+		for _, col := range ctx.AllColumn() {
+			switch res := col.Accept(v).(type) {
+			case error:
+				err = res
+			}
+		}
+
+		return false
+	})
+
+	if err != nil {
+		return err
 	}
+
 	return nil
 
 }
 
 func (v *SqlStreamVisitor) VisitIdentifierCol(ctx *IdentifierColContext) interface{} {
+	if !columnExistsInAttr(ctx, v.currentRecord.Attributes()) {
+		return fmt.Errorf("column %q missed in input", getColumnIdentifier(ctx))
+	}
 	return nil
 }
 
 func (v *SqlStreamVisitor) VisitFunctionCol(ctx *FunctionColContext) interface{} {
+	if !columnExistsInAttr(ctx, v.currentRecord.Attributes()) {
+		return fmt.Errorf("column %q missed in input", getColumnIdentifier(ctx))
+	}
+
 	if ctx.K_LOWER() != nil {
 		return lower(v.currentRecord, ctx.IDENTIFIER().GetText())
 	}
@@ -282,13 +290,48 @@ func (v *SqlStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
 			return false
 
 		case bool:
-			return !res
+			if errRes := v.adjustResultColumns(ctx); errRes != nil {
+				err = errRes
+			}
 
+			return !res
 		}
 		return false
 	})
 
 	return err
+}
+
+//adjustResultColumns this is called if where statement exists
+func (v *SqlStreamVisitor) adjustResultColumns(ctx *WhereStmtContext) error {
+	for _, resCtx := range ctx.GetParent().GetChildren() {
+		resColumnCtx, ok := resCtx.(*SelectColumnsContext)
+		if !ok {
+			continue
+		}
+
+		for _, col := range resCtx.(*SelectColumnsContext).AllColumn() {
+			switch res := col.Accept(v).(type) {
+			case error:
+				return res
+			}
+		}
+		// Remove attributes which are not listed in value columns statement
+		// We can't use RemoveIf as it takes only values
+		removed := make([]string, 0, v.currentRecord.Attributes().Len())
+		v.currentRecord.Attributes().Range(func(k string, value pcommon.Value) bool {
+			if !keyExists(k, resColumnCtx.AllColumn()) {
+				removed = append(removed, k)
+			}
+			return true
+		})
+
+		for _, removedKey := range removed {
+			v.currentRecord.Attributes().Remove(removedKey)
+		}
+
+	}
+	return nil
 }
 
 func (v *SqlStreamVisitor) VisitSelectAVG(ctx *SelectAVGContext) interface{} {
@@ -348,10 +391,6 @@ func (v *SqlStreamVisitor) getSimpleAggregatedValue(ctx *SelectAVGContext, field
 }
 
 func (v *SqlStreamVisitor) VisitSelectStar(ctx *SelectStarContext) interface{} {
-	return nil
-}
-
-func (v *SqlStreamVisitor) VisitColumn(ctx *ColumnContext) interface{} {
 	return nil
 }
 

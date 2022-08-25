@@ -8,6 +8,39 @@ import (
 	"strings"
 )
 
+func compareExpression(operator IComparisonOperatorContext, literalValue ILiteralValueContext, fieldValue pcommon.Value) (bool, error) {
+	switch literalValue.GetStart().GetTokenType() {
+	case SqlParserNUMERIC_LITERAL:
+		parsedValue, err := strconv.ParseFloat(fieldValue.AsString(), 64)
+		if err != nil {
+			return false, fmt.Errorf("can't convert record field value %q to numeric; %w", fieldValue.AsString(), err)
+		}
+		comparisonValue, err := strconv.ParseFloat(literalValue.GetText(), 64)
+		if err != nil {
+			return false, fmt.Errorf("can't convert comparison value %q to numeric; %w", literalValue.GetText(), err)
+		}
+		return compareNumeric(operator.GetStart().GetTokenType(), parsedValue, comparisonValue), nil
+	case SqlParserSTRING_LITERAL:
+		// we need to remove quotes
+		value := strings.TrimSuffix(strings.TrimPrefix(literalValue.GetText(), `'`), `'`)
+		return compareString(operator.GetStart().GetTokenType(), fieldValue.AsString(), value), nil
+	case SqlParserBOOLEAN_LITERAL:
+		parsedValue, err := strconv.ParseBool(fieldValue.AsString())
+		if err != nil {
+			return false, fmt.Errorf("can't convert field value %q to boolean; %w", fieldValue.AsString(), err)
+		}
+		comparisonValue, err := strconv.ParseBool(literalValue.GetText())
+		if err != nil {
+			return false, fmt.Errorf("can't convert comparison value %q to boolean; %w", literalValue.GetText(), err)
+		}
+
+		return compareBool(operator.GetStart().GetTokenType(), parsedValue, comparisonValue), nil
+
+	default:
+		return false, fmt.Errorf("missed literal value type %q", literalValue.GetText())
+	}
+}
+
 func compareString(comparisonToken int, fieldVal, comparisonVal string) bool {
 	switch comparisonToken {
 	case SqlParserK_EQUAL:
@@ -200,17 +233,10 @@ func getColumnIdentifier(column IColumnContext) string {
 	}
 }
 
-func KeyExists(key string, resultColumns []IColumnContext) bool {
+// if key exists in resultColumns
+func keyExists(key string, resultColumns []IColumnContext) bool {
 	for _, col := range resultColumns {
-		var id string
-		switch col := col.GetRuleContext().(type) {
-		case *FunctionColContext:
-			id = col.IDENTIFIER().GetText()
-		case *IdentifierColContext:
-			id = col.IDENTIFIER().GetText()
-		default:
-			return false
-		}
+		id := getColumnIdentifier(col)
 		if key == id {
 			return true
 		}
@@ -218,35 +244,11 @@ func KeyExists(key string, resultColumns []IColumnContext) bool {
 	return false
 }
 
-func compareExpression(operator IComparisonOperatorContext, literalValue ILiteralValueContext, fieldValue pcommon.Value) (bool, error) {
-	switch literalValue.GetStart().GetTokenType() {
-	case SqlParserNUMERIC_LITERAL:
-		parsedValue, err := strconv.ParseFloat(fieldValue.AsString(), 64)
-		if err != nil {
-			return false, fmt.Errorf("can't convert record field value %q to numeric; %w", fieldValue.AsString(), err)
-		}
-		comparisonValue, err := strconv.ParseFloat(literalValue.GetText(), 64)
-		if err != nil {
-			return false, fmt.Errorf("can't convert comparison value %q to numeric; %w", literalValue.GetText(), err)
-		}
-		return compareNumeric(operator.GetStart().GetTokenType(), parsedValue, comparisonValue), nil
-	case SqlParserSTRING_LITERAL:
-		// we need to remove quotes
-		value := strings.TrimSuffix(strings.TrimPrefix(literalValue.GetText(), `'`), `'`)
-		return compareString(operator.GetStart().GetTokenType(), fieldValue.AsString(), value), nil
-	case SqlParserBOOLEAN_LITERAL:
-		parsedValue, err := strconv.ParseBool(fieldValue.AsString())
-		if err != nil {
-			return false, fmt.Errorf("can't convert field value %q to boolean; %w", fieldValue.AsString(), err)
-		}
-		comparisonValue, err := strconv.ParseBool(literalValue.GetText())
-		if err != nil {
-			return false, fmt.Errorf("can't convert comparison value %q to boolean; %w", literalValue.GetText(), err)
-		}
-
-		return compareBool(operator.GetStart().GetTokenType(), parsedValue, comparisonValue), nil
-
-	default:
-		return false, fmt.Errorf("missed literal value type %q", literalValue.GetText())
+func columnExistsInAttr(col IColumnContext, attr pcommon.Map) bool {
+	id := getColumnIdentifier(col)
+	_, ok := attr.Get(id)
+	if !ok {
+		return false
 	}
+	return true
 }

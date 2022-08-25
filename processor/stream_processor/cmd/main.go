@@ -8,7 +8,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.uber.org/zap"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -28,7 +27,7 @@ func main() {
 		visitor := parser.NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
 		//test := plog.NewLogRecordSlice()
 		//generateTestLogs().At(0).CopyTo(test.AppendEmpty())
-		in <- generateTestLogs()
+		in <- parser.GenerateTestLogs()
 
 		select {
 		case ls := <-out:
@@ -49,19 +48,4 @@ func main() {
 
 	}
 
-}
-
-func generateTestLogs() plog.LogRecordSlice {
-
-	ld := plog.NewLogs()
-	sc := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
-
-	for i := 0; i < 100; i++ {
-		record := sc.LogRecords().AppendEmpty()
-		record.Attributes().InsertString("name", "Test name "+strconv.Itoa(i))
-		record.Attributes().InsertBool("IsAlive", i%2 == 0)
-		record.Attributes().InsertInt("price", int64(i))
-	}
-
-	return ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
 }

@@ -4,7 +4,6 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
-	"go.opentelemetry.io/collector/pdata/pcommon"
 	"os"
 	"strconv"
 	"testing"
@@ -21,25 +20,30 @@ func TestResultColumnsSelectColumns(t *testing.T) {
 		name          string
 		query         string
 		expectedCount int
+		err           error
 	}{
 		{
 			name:          "correct value columns",
 			query:         `SELECT name, price, is_alive;`,
 			expectedCount: 100,
+			err:           nil,
 		},
 		{
 			name:          "incorrect value columns",
 			query:         `SELECT field, is_alive;`,
+			err:           errors.New(`column "field" missed in input`),
 			expectedCount: 0,
 		},
 		{
 			name:          "one value columns",
 			query:         `SELECT name ;`,
+			err:           nil,
 			expectedCount: 100,
 		},
 		{
 			name:          "one incorrect value columns",
 			query:         `SELECT field ;`,
+			err:           errors.New(`column "field" missed in input`),
 			expectedCount: 0,
 		},
 	}
@@ -51,9 +55,18 @@ func TestResultColumnsSelectColumns(t *testing.T) {
 			outErr := make(chan error)
 			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
-			in <- generateTestLogs()
-			ls := <-out
-			assert.Equal(t, tt.expectedCount, ls.Len())
+			in <- GenerateTestLogs()
+			var ls plog.LogRecordSlice
+			var err error
+			select {
+			case ls = <-out:
+			case err = <-outErr:
+			}
+
+			assert.Equal(t, tt.err, err)
+			if tt.err == nil {
+				assert.Equal(t, tt.expectedCount, ls.Len())
+			}
 		})
 	}
 }
@@ -77,12 +90,6 @@ func TestResultColumnsSelectColumnsAttributes(t *testing.T) {
 			expectedAttr:  []string{"price", "is_alive"},
 			expectedCount: 100,
 		},
-		{
-			name:          "incorrect attributes ",
-			query:         `SELECT field, field2 ;`,
-			expectedAttr:  []string{},
-			expectedCount: 0,
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -92,7 +99,7 @@ func TestResultColumnsSelectColumnsAttributes(t *testing.T) {
 			outErr := make(chan error)
 			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
-			in <- generateTestLogs()
+			in <- GenerateTestLogs()
 
 			ls := <-out
 			assert.Equal(t, tt.expectedCount, ls.Len())
@@ -136,7 +143,7 @@ func TestWhereCondition(t *testing.T) {
 			outErr := make(chan error)
 			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
-			in <- generateTestLogs()
+			in <- GenerateTestLogs()
 			var err error
 
 			select {
@@ -226,7 +233,7 @@ func TestSimpleCondition(t *testing.T) {
 			outErr := make(chan error)
 			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
-			in <- generateTestLogs()
+			in <- GenerateTestLogs()
 			ls := <-out
 			assert.Equal(t, tt.expectedCount, ls.Len())
 
@@ -294,7 +301,7 @@ func TestRecursiveCondition(t *testing.T) {
 			outErr := make(chan error)
 			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
-			in <- generateTestLogs()
+			in <- GenerateTestLogs()
 			ls := <-out
 			assert.Equal(t, tt.expectedCount, ls.Len())
 		})
@@ -356,7 +363,7 @@ func TestCompoundCondition(t *testing.T) {
 			outErr := make(chan error)
 			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
-			in <- generateTestLogs()
+			in <- GenerateTestLogs()
 			ls := <-out
 			assert.Equal(t, tt.expectedCount, ls.Len())
 		})
@@ -423,34 +430,12 @@ func TestComplexCompoundCondition(t *testing.T) {
 			outErr := make(chan error)
 			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
-			in <- generateTestLogs()
+			in <- GenerateTestLogs()
 			ls := <-out
 			assert.Equal(t, tt.expectedCount, ls.Len())
 		})
 	}
 
-}
-
-func generateTestLogs() plog.LogRecordSlice {
-
-	ld := plog.NewLogs()
-	sc := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
-	types := []string{"middle", "small", "big"}
-
-	for i := 0; i < 100; i++ {
-		record := sc.LogRecords().AppendEmpty()
-		record.Attributes().InsertString("name", "Test name "+strconv.Itoa(i))
-		record.Attributes().InsertBool("is_alive", i%2 == 0)
-		record.Attributes().InsertInt("price", int64(i))
-		nested := pcommon.NewValueMap()
-		typeIndex := i % 3
-		nested.MapVal().InsertString("source", "Source "+strconv.Itoa(i))
-		nested.MapVal().InsertString("type", types[typeIndex])
-		nested.MapVal().InsertDouble("number", float64(i))
-		record.Attributes().Insert("provider", nested)
-	}
-
-	return ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
 }
 
 func TestWriteTestLogsToCSV(t *testing.T) {

@@ -81,11 +81,11 @@ func TestWindowTumblingLoop(t *testing.T) {
 					break
 				}
 			}()
-			in <- generateTestLogs()
+			in <- GenerateTestLogs()
 			<-time.After(1 * time.Millisecond)
-			in <- generateTestLogs()
+			in <- GenerateTestLogs()
 			<-time.After(1 * time.Millisecond)
-			in <- generateTestLogs()
+			in <- GenerateTestLogs()
 			<-time.After(1 * time.Millisecond)
 			wg.Wait()
 
@@ -106,7 +106,7 @@ func TestWindowTumblingAvg(t *testing.T) {
 
 	visitor := NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
 	defer visitor.Stop()
-	in <- generateTestLogs()
+	in <- GenerateTestLogs()
 	ls = <-out
 	res, ok := ls.At(0).Attributes().Get("price")
 	assert.True(t, ok)
@@ -122,7 +122,7 @@ func TestWindowTumblingCount(t *testing.T) {
 
 	visitor := NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
 	defer visitor.Stop()
-	in <- generateTestLogs()
+	in <- GenerateTestLogs()
 	ls = <-out
 	res, ok := ls.At(0).Attributes().Get("price")
 	assert.True(t, ok)
@@ -138,7 +138,7 @@ func TestWindowTumblingSum(t *testing.T) {
 
 	visitor := NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
 	defer visitor.Stop()
-	in <- generateTestLogs()
+	in <- GenerateTestLogs()
 	ls = <-out
 	res, ok := ls.At(0).Attributes().Get("price")
 	assert.True(t, ok)
@@ -154,7 +154,7 @@ func TestWindowTumblingMin(t *testing.T) {
 
 	visitor := NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
 	defer visitor.Stop()
-	in <- generateTestLogs()
+	in <- GenerateTestLogs()
 	ls = <-out
 	res, ok := ls.At(0).Attributes().Get("price")
 	assert.True(t, ok)
@@ -170,7 +170,7 @@ func TestWindowTumblingMax(t *testing.T) {
 
 	visitor := NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
 	defer visitor.Stop()
-	in <- generateTestLogs()
+	in <- GenerateTestLogs()
 	ls = <-out
 	res, ok := ls.At(0).Attributes().Get("price")
 	assert.True(t, ok)
@@ -178,7 +178,7 @@ func TestWindowTumblingMax(t *testing.T) {
 }
 
 func TestAvgContext_K_MIN(t *testing.T) {
-	ls := generateTestLogs()
+	ls := GenerateTestLogs()
 	res, err := min(ls, "price")
 	assert.Nil(t, err)
 	assert.Equal(t, 0.0, res)
@@ -186,21 +186,21 @@ func TestAvgContext_K_MIN(t *testing.T) {
 }
 
 func TestAvgContext_K_MAX(t *testing.T) {
-	ls := generateTestLogs()
+	ls := GenerateTestLogs()
 	res, err := max(ls, "price")
 	assert.Nil(t, err)
 	assert.Equal(t, 99.0, res)
 }
 
 func TestAvgContext_K_SUM(t *testing.T) {
-	ls := generateTestLogs()
+	ls := GenerateTestLogs()
 	res, err := sum(ls, "price")
 	assert.Nil(t, err)
 	assert.Equal(t, 4950.0, res)
 }
 
 func TestAvgContext_K_COUNT(t *testing.T) {
-	ls := generateTestLogs()
+	ls := GenerateTestLogs()
 	count := count(ls)
 	assert.Equal(t, 100, count)
 }
