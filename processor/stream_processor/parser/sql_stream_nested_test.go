@@ -212,3 +212,34 @@ func TestWhereNestedCompound(t *testing.T) {
 	}
 
 }
+
+func TestSelectNested(t *testing.T) {
+	tests := []struct {
+		name     string
+		query    string
+		expected int
+	}{
+		{
+			name:     "nested 1",
+			query:    `SELECT provider.source;`,
+			expected: 100,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			in := make(chan plog.LogRecordSlice)
+			out := make(chan plog.LogRecordSlice)
+			outErr := make(chan error)
+			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			defer visitor.Stop()
+			in <- GenerateTestLogs()
+
+			ls := <-out
+
+			assert.Equal(t, tt.expected, ls.Len())
+
+		})
+	}
+
+}

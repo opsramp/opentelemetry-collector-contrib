@@ -222,33 +222,106 @@ func upper(record plog.LogRecord, fieldName string) error {
 	return nil
 }
 
-func getColumnIdentifier(column IColumnContext) string {
-	switch col := column.GetRuleContext().(type) {
-	case *FunctionColContext:
-		return col.IDENTIFIER().GetText()
-	case *IdentifierColContext:
-		return col.IDENTIFIER().GetText()
-	default:
-		return ""
+// check if we need remove attribute missed in select list
+func fieldExists(key string, value pcommon.Value, allColumns []IColumnContext) bool {
+	//simple attribute
+	if value.Type() != pcommon.ValueTypeMap {
+		for _, col := range allColumns {
+			var id string
+			switch typedCol := col.(type) {
+			case *IdentifierColumnContext:
+				id = typedCol.IDENTIFIER(0).GetText()
+			case *FunctionColumnContext:
+				id = typedCol.IDENTIFIER(0).GetText()
+			}
+			if key == id {
+				return false
+			}
+		}
+		return true
 	}
-}
 
-// if key exists in resultColumns
-func keyExists(key string, resultColumns []IColumnContext) bool {
-	for _, col := range resultColumns {
-		id := getColumnIdentifier(col)
-		if key == id {
-			return true
+	//find if nested attr existed in select list
+	for _, col := range allColumns {
+		switch typedCol := col.(type) {
+		case *IdentifierColumnContext:
+			if len(typedCol.AllIDENTIFIER()) == 1 {
+				if key == typedCol.IDENTIFIER(0).GetText() {
+					return false
+				}
+			}
+		case *FunctionColumnContext:
+			if len(typedCol.AllIDENTIFIER()) == 1 {
+				if key == typedCol.IDENTIFIER(0).GetText() {
+					return false
+				}
+			}
 		}
 	}
-	return false
+
+	nestedFound := false
+	//now check is we have only nested field in select list e.g. field.nestedField
+	value.MapVal().RemoveIf(func(nestedKey string, value pcommon.Value) bool {
+		for _, col := range allColumns {
+			switch typedCol := col.(type) {
+			case *IdentifierColumnContext:
+				if len(typedCol.AllIDENTIFIER()) > 1 {
+					if key == typedCol.IDENTIFIER(0).GetText() && nestedKey == typedCol.IDENTIFIER(1).GetText() {
+						nestedFound = true
+						return false
+					}
+				}
+			case *FunctionColumnContext:
+				if len(typedCol.AllIDENTIFIER()) > 1 {
+					if key == typedCol.IDENTIFIER(0).GetText() && nestedKey == typedCol.IDENTIFIER(1).GetText() {
+						nestedFound = true
+						return false
+					}
+				}
+			}
+		}
+		return true
+	})
+
+	return !nestedFound
 }
 
-func columnExistsInAttr(col IColumnContext, attr pcommon.Map) bool {
-	id := getColumnIdentifier(col)
-	_, ok := attr.Get(id)
+// check if field exists in attr
+func fieldExistsInAttr(fieldName string, attr pcommon.Map) error {
+	_, ok := attr.Get(fieldName)
 	if !ok {
-		return false
+		return fmt.Errorf("field %q missed", fieldName)
 	}
-	return true
+	return nil
+}
+
+// check is nested field exists
+func nestedFieldExistsInAttr(fieldName, nestedFieldName string, attr pcommon.Map) error {
+	value, ok := attr.Get(fieldName)
+	if !ok {
+		return fmt.Errorf("field %q missed", fieldName)
+	}
+
+	//if this nested field
+	if value.Type() != pcommon.ValueTypeMap {
+		return fmt.Errorf("field %q isn't nested", fieldName)
+	}
+
+	_, ok = value.MapVal().Get(nestedFieldName)
+	if !ok {
+		return fmt.Errorf("field %q missed nested field %q", fieldName, nestedFieldName)
+	}
+
+	return nil
+}
+
+func getSelectColumnsFromWhereCtx(ctx *WhereStmtContext) *SelectColumnsContext {
+	for _, resCtx := range ctx.GetParent().GetChildren() {
+		resColumnCtx, ok := resCtx.(*SelectColumnsContext)
+		if !ok {
+			continue
+		}
+		return resColumnCtx
+	}
+	return nil
 }

@@ -29,14 +29,20 @@ type SqlVisitor interface {
 	// Visit a parse tree produced by SqlParser#selectStar.
 	VisitSelectStar(ctx *SelectStarContext) interface{}
 
-	// Visit a parse tree produced by SqlParser#selectAVG.
-	VisitSelectAVG(ctx *SelectAVGContext) interface{}
+	// Visit a parse tree produced by SqlParser#selectAggregation.
+	VisitSelectAggregation(ctx *SelectAggregationContext) interface{}
 
-	// Visit a parse tree produced by SqlParser#identifierCol.
-	VisitIdentifierCol(ctx *IdentifierColContext) interface{}
+	// Visit a parse tree produced by SqlParser#identifierColumn.
+	VisitIdentifierColumn(ctx *IdentifierColumnContext) interface{}
 
-	// Visit a parse tree produced by SqlParser#functionCol.
-	VisitFunctionCol(ctx *FunctionColContext) interface{}
+	// Visit a parse tree produced by SqlParser#functionColumn.
+	VisitFunctionColumn(ctx *FunctionColumnContext) interface{}
+
+	// Visit a parse tree produced by SqlParser#columnAggregation.
+	VisitColumnAggregation(ctx *ColumnAggregationContext) interface{}
+
+	// Visit a parse tree produced by SqlParser#columnCountAggregation.
+	VisitColumnCountAggregation(ctx *ColumnCountAggregationContext) interface{}
 
 	// Visit a parse tree produced by SqlParser#whereStmt.
 	VisitWhereStmt(ctx *WhereStmtContext) interface{}

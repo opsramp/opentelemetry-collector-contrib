@@ -23,13 +23,19 @@ resultColumns
  ;
 
 aggregationColumns
- : (column COMMA)? (K_MIN | K_MAX | K_COUNT | K_AVG | K_SUM) L_BRACKET (column | STAR) R_BRACKET    #selectAVG
+ : (column COMMA)? aggregationColumn (column | STAR) R_BRACKET    #selectAggregation
  ;
 
 
 column
-  : IDENTIFIER                                                     #identifierCol
-  | (K_UPPER | K_LOWER ) L_BRACKET IDENTIFIER R_BRACKET            #functionCol
+  : (IDENTIFIER | IDENTIFIER DOT IDENTIFIER)                                               #identifierColumn
+  | (K_UPPER | K_LOWER ) L_BRACKET (IDENTIFIER | IDENTIFIER DOT IDENTIFIER)   R_BRACKET    #functionColumn
+  ;
+
+
+aggregationColumn
+  : (K_MIN | K_MAX | K_COUNT | K_AVG | K_SUM) L_BRACKET ( IDENTIFIER | IDENTIFIER DOT IDENTIFIER) R_BRACKET           # columnAggregation
+  | (IDENTIFIER | IDENTIFIER DOT IDENTIFIER)? K_COUNT L_BRACKET STAR R_BRACKET                                       # columnCountAggregation
   ;
 
 
@@ -47,12 +53,12 @@ expr
  ;
 
 simpleExpr
- : IDENTIFIER comparisonOperator literalValue  #simpleExpression
+ : IDENTIFIER comparisonOperator literalValue                #simpleExpression
  | IDENTIFIER DOT IDENTIFIER comparisonOperator literalValue #nestedExpression
  ;
 
 compoundExpr
- : L_BRACKET expr R_BRACKET                    #compoundExpression
+ : L_BRACKET expr R_BRACKET                                  #compoundExpression
  ;
 
 comparisonOperator
@@ -69,6 +75,7 @@ literalValue
 
 groupBy
  : K_GROUP_BY  column
+ |
  ;
 
 

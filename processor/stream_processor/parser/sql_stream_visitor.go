@@ -34,13 +34,14 @@ type SqlStreamVisitor struct {
 func NewSqlStreamVisitor(query string, in <-chan plog.LogRecordSlice, out chan<- plog.LogRecordSlice, outErr chan<- error, logger *zap.Logger) *SqlStreamVisitor {
 
 	visitor := &SqlStreamVisitor{
-		ParseTreeVisitor: &SqlStreamVisitor{},
-		query:            query,
-		logger:           logger,
-		in:               in,
-		out:              out,
-		outErr:           outErr,
-		shutdownC:        make(chan struct{}, 1),
+		ParseTreeVisitor:  &SqlStreamVisitor{},
+		query:             query,
+		logger:            logger,
+		groupByLogRecords: map[string]plog.LogRecordSlice{},
+		in:                in,
+		out:               out,
+		outErr:            outErr,
+		shutdownC:         make(chan struct{}, 1),
 	}
 
 	isTumbling, val := IsTumblingQuery(query)
@@ -126,6 +127,7 @@ func (v *SqlStreamVisitor) runQuery() error {
 	case error:
 		return res
 	}
+
 	return nil
 }
 
@@ -197,7 +199,7 @@ func (v *SqlStreamVisitor) VisitSelectTumblingGroupBy(ctx *SelectTumblingGroupBy
 
 func (v *SqlStreamVisitor) VisitGroupBy(ctx *GroupByContext) interface{} {
 
-	v.groupByLogRecords = make(map[string]plog.LogRecordSlice)
+	//v.groupByLogRecords = make(map[string]plog.LogRecordSlice)
 	for i := 0; i < v.logRecords.Len(); i++ {
 		record := v.logRecords.At(i)
 		groupByField, ok := record.Attributes().Get(ctx.Column().GetText())
@@ -215,26 +217,16 @@ func (v *SqlStreamVisitor) VisitGroupBy(ctx *GroupByContext) interface{} {
 	return nil
 }
 
-// VisitSelectColumns  is called in case of missed where statement
+// VisitSelectColumns is called in case of missed where statement and removes missed attributes
 func (v *SqlStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interface{} {
 	var err error
-	v.logRecords.RemoveIf(func(record plog.LogRecord) bool {
-		// apply scalar function
-		v.currentRecord = record
+	for i := 0; i < v.logRecords.Len(); i++ {
+		v.currentRecord = v.logRecords.At(i)
 
-		// Remove attributes which are not listed in value columns statement
-		// We can't use RemoveIf as it takes only values
-		removed := make([]string, 0, record.Attributes().Len())
-		record.Attributes().Range(func(k string, value pcommon.Value) bool {
-			if !keyExists(k, ctx.AllColumn()) {
-				removed = append(removed, k)
-			}
-			return true
+		v.currentRecord.Attributes().RemoveIf(func(k string, value pcommon.Value) bool {
+			return fieldExists(k, value, ctx.AllColumn())
 		})
 
-		for _, removedKey := range removed {
-			record.Attributes().Remove(removedKey)
-		}
 		for _, col := range ctx.AllColumn() {
 			switch res := col.Accept(v).(type) {
 			case error:
@@ -242,36 +234,10 @@ func (v *SqlStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interfa
 			}
 		}
 
-		return false
-	})
-
-	if err != nil {
-		return err
 	}
 
-	return nil
+	return err
 
-}
-
-func (v *SqlStreamVisitor) VisitIdentifierCol(ctx *IdentifierColContext) interface{} {
-	if !columnExistsInAttr(ctx, v.currentRecord.Attributes()) {
-		return fmt.Errorf("column %q missed in input", getColumnIdentifier(ctx))
-	}
-	return nil
-}
-
-func (v *SqlStreamVisitor) VisitFunctionCol(ctx *FunctionColContext) interface{} {
-	if !columnExistsInAttr(ctx, v.currentRecord.Attributes()) {
-		return fmt.Errorf("column %q missed in input", getColumnIdentifier(ctx))
-	}
-
-	if ctx.K_LOWER() != nil {
-		return lower(v.currentRecord, ctx.IDENTIFIER().GetText())
-	}
-	if ctx.K_UPPER() != nil {
-		return upper(v.currentRecord, ctx.IDENTIFIER().GetText())
-	}
-	return nil
 }
 
 func (v *SqlStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
@@ -290,7 +256,11 @@ func (v *SqlStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
 			return false
 
 		case bool:
-			if errRes := v.adjustResultColumns(ctx); errRes != nil {
+			resColumnCtx := getSelectColumnsFromWhereCtx(ctx)
+			if errRes := v.applySelectColumns(resColumnCtx); errRes != nil {
+				err = errRes
+			}
+			if errRes := v.adjustResultColumns(resColumnCtx); errRes != nil {
 				err = errRes
 			}
 
@@ -302,65 +272,103 @@ func (v *SqlStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
 	return err
 }
 
-//adjustResultColumns this is called if where statement exists
-func (v *SqlStreamVisitor) adjustResultColumns(ctx *WhereStmtContext) error {
-	for _, resCtx := range ctx.GetParent().GetChildren() {
-		resColumnCtx, ok := resCtx.(*SelectColumnsContext)
-		if !ok {
-			continue
+func (v *SqlStreamVisitor) applySelectColumns(ctx *SelectColumnsContext) error {
+	for _, col := range ctx.AllColumn() {
+		switch res := col.Accept(v).(type) {
+		case error:
+			return res
 		}
-
-		for _, col := range resCtx.(*SelectColumnsContext).AllColumn() {
-			switch res := col.Accept(v).(type) {
-			case error:
-				return res
-			}
-		}
-		// Remove attributes which are not listed in value columns statement
-		// We can't use RemoveIf as it takes only values
-		removed := make([]string, 0, v.currentRecord.Attributes().Len())
-		v.currentRecord.Attributes().Range(func(k string, value pcommon.Value) bool {
-			if !keyExists(k, resColumnCtx.AllColumn()) {
-				removed = append(removed, k)
-			}
-			return true
-		})
-
-		for _, removedKey := range removed {
-			v.currentRecord.Attributes().Remove(removedKey)
-		}
-
 	}
 	return nil
 }
 
-func (v *SqlStreamVisitor) VisitSelectAVG(ctx *SelectAVGContext) interface{} {
-	dest := plog.NewLogRecordSlice()
+//adjustResultColumns this is called if where statement exists
+func (v *SqlStreamVisitor) adjustResultColumns(ctx *SelectColumnsContext) error {
+
+	// Remove attributes which are not listed in value columns statement
+	// We can't use RemoveIf as it takes only values
+	removed := make([]string, 0, v.currentRecord.Attributes().Len())
+
+	v.currentRecord.Attributes().RemoveIf(func(k string, value pcommon.Value) bool {
+		return fieldExists(k, value, ctx.AllColumn())
+	})
+
+	for _, removedKey := range removed {
+		v.currentRecord.Attributes().Remove(removedKey)
+	}
+
+	return nil
+}
+
+func (v *SqlStreamVisitor) VisitSelectAggregation(ctx *SelectAggregationContext) interface{} {
+	return ctx.AggregationColumn().Accept(v)
+}
+
+func (v *SqlStreamVisitor) VisitColumnAggregation(ctx *ColumnAggregationContext) interface{} {
+	/*dest := plog.NewLogRecordSlice()
+
 	if v.groupByLogRecords != nil {
 		for key, recSlice := range v.groupByLogRecords {
-			res, err := v.getSimpleAggregatedValue(ctx, ctx.Column(1).GetText(), recSlice)
+			res, err := v.getSimpleAggregatedValue(ctx, ctx.().GetText(), recSlice)
 			if err != nil {
 				return err
 			}
 
-			res.Attributes().Insert(ctx.Column(0).GetText(), pcommon.NewValueString(key))
+			res.Attributes().Insert(ctx.Column().GetText(), pcommon.NewValueString(key))
 			res.CopyTo(dest.AppendEmpty())
 		}
 		v.logRecords = dest
 		return nil
 	}
 
-	res, err := v.getSimpleAggregatedValue(ctx, ctx.Column(0).GetText(), v.logRecords)
+	res, err := v.getSimpleAggregatedValue(ctx, ctx.Column().GetText(), v.logRecords)
 	if err != nil {
 		return err
 	}
 	res.CopyTo(dest.AppendEmpty())
 	v.logRecords = dest
 
+	*/
+
 	return nil
 }
 
-func (v *SqlStreamVisitor) getSimpleAggregatedValue(ctx *SelectAVGContext, fieldName string, ls plog.LogRecordSlice) (plog.LogRecord, error) {
+func (v *SqlStreamVisitor) VisitColumnCountAggregation(ctx *ColumnCountAggregationContext) interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (v *SqlStreamVisitor) getSimpleAggregatedValue(ctx *ColumnAggregationContext, fieldName string, ls plog.LogRecordSlice) (plog.LogRecord, error) {
+
+	resLs := plog.NewLogRecordSlice()
+	aggrRecord := resLs.AppendEmpty()
+	var res float64
+	var err error
+
+	if ctx.K_AVG() != nil {
+		res, err = avg(ls, fieldName)
+	}
+	if ctx.K_SUM() != nil {
+		res, err = sum(ls, fieldName)
+	}
+	if ctx.K_COUNT() != nil {
+		res = float64(count(ls))
+	}
+	if ctx.K_MAX() != nil {
+		res, err = max(ls, fieldName)
+	}
+	if ctx.K_MIN() != nil {
+		res, err = min(ls, fieldName)
+	}
+	if err != nil {
+		return plog.LogRecord{}, err
+	}
+
+	aggrRecord.Attributes().Insert(fieldName, pcommon.NewValueDouble(res))
+	return aggrRecord, nil
+}
+
+func (v *SqlStreamVisitor) getCountAggregatedValue(ctx *ColumnAggregationContext, fieldName string, ls plog.LogRecordSlice) (plog.LogRecord, error) {
 
 	resLs := plog.NewLogRecordSlice()
 	aggrRecord := resLs.AppendEmpty()
@@ -391,6 +399,24 @@ func (v *SqlStreamVisitor) getSimpleAggregatedValue(ctx *SelectAVGContext, field
 }
 
 func (v *SqlStreamVisitor) VisitSelectStar(ctx *SelectStarContext) interface{} {
+	return nil
+}
+
+func (v *SqlStreamVisitor) VisitIdentifierColumn(ctx *IdentifierColumnContext) interface{} {
+	fieldName := ctx.IDENTIFIER(0).GetText()
+	_, ok := v.currentRecord.Attributes().Get(fieldName)
+	if !ok {
+		return fmt.Errorf("field %q missed", fieldName)
+	}
+
+	if len(ctx.AllIDENTIFIER()) == 1 {
+		return fieldExistsInAttr(fieldName, v.currentRecord.Attributes())
+	}
+
+	return nestedFieldExistsInAttr(fieldName, ctx.IDENTIFIER(1).GetText(), v.currentRecord.Attributes())
+}
+
+func (v *SqlStreamVisitor) VisitFunctionColumn(ctx *FunctionColumnContext) interface{} {
 	return nil
 }
 
