@@ -90,6 +90,12 @@ func TestResultColumnsSelectColumnsAttributes(t *testing.T) {
 			expectedAttr:  []string{"price", "is_alive"},
 			expectedCount: 100,
 		},
+		{
+			name:          "as clause",
+			query:         `SELECT price as NewPrice, is_alive as DEAD ;`,
+			expectedAttr:  []string{"NewPrice", "DEAD"},
+			expectedCount: 100,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

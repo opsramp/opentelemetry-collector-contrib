@@ -25,6 +25,13 @@ func TestScalarFunctions(t *testing.T) {
 			appliedFunc:   strings.ToLower,
 			expectedCount: 1,
 		},
+		{
+			name:          "upper",
+			query:         `SELECT substr(name,2,3) WHERE name = 'Test name 50';`,
+			expectedAttr:  []string{"name"},
+			appliedFunc:   strings.ToLower,
+			expectedCount: 1,
+		},
 	}
 
 	for _, tt := range tests {

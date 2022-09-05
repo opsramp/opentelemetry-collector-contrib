@@ -16,7 +16,7 @@ local/
 *.dylib
 bin/
 dist/
-
+test/
 # Emacs
 *~
 \#*\#

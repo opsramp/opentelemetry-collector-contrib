@@ -28,13 +28,22 @@ aggregationColumns
 
 
 column
-  : (IDENTIFIER | IDENTIFIER DOT IDENTIFIER)                                               #identifierColumn
-  | (K_UPPER | K_LOWER ) L_BRACKET (IDENTIFIER | IDENTIFIER DOT IDENTIFIER)   R_BRACKET    #functionColumn
+  : (IDENTIFIER | IDENTIFIER DOT IDENTIFIER) alias?                                                       #identifierColumn
+  | function L_BRACKET (IDENTIFIER | IDENTIFIER DOT IDENTIFIER) (COMMA literalValue)* R_BRACKET alias?    #functionColumn
+  ;
+
+alias
+  : K_AS IDENTIFIER
+  ;
+
+function
+  : IDENTIFIER
   ;
 
 
+
 aggregationColumn
-  : (K_MIN | K_MAX | K_COUNT | K_AVG | K_SUM) L_BRACKET ( IDENTIFIER | IDENTIFIER DOT IDENTIFIER) R_BRACKET           # columnAggregation
+  : (K_MIN | K_MAX | K_COUNT | K_AVG | K_SUM) L_BRACKET ( IDENTIFIER | IDENTIFIER DOT IDENTIFIER) R_BRACKET          # columnAggregation
   | (IDENTIFIER | IDENTIFIER DOT IDENTIFIER)? K_COUNT L_BRACKET STAR R_BRACKET                                       # columnCountAggregation
   ;
 
@@ -92,15 +101,12 @@ DOT : '.';
 
 EOQ: ';';
 
-BOOLEAN_LITERAL
- : (K_TRUE | K_FALSE)
- ;
-
 K_SELECT : S E L E C T;
 K_WHERE : W H E R E;
 K_WINDOW_TUMBLING : W I N D O W SPACE T U M B L I N G;
 K_GROUP_BY : G R O U P SPACE B Y;
 K_AND : A N D;
+K_AS : A S;
 K_OR : O R;
 K_IS : I S;
 K_LIKE : L I K E;
@@ -124,9 +130,8 @@ K_MAX : M A X;
 K_AVG : A V G;
 K_TRUE : T R U E;
 K_FALSE : F A L S E;
-// function
-K_UPPER : U P P E R;
-K_LOWER : L O W E R;
+
+
 
 IDENTIFIER
   : '"' (~'"' | '""')* '"'
@@ -145,6 +150,10 @@ STRING_LITERAL
  : '\'' ( ~'\'' | '\'\'' )* '\''
  ;
 
+
+BOOLEAN_LITERAL
+ : (K_TRUE | K_FALSE)
+ ;
 
 STAR : '*';
 

@@ -432,14 +432,24 @@ func (v *SqlStreamVisitor) VisitIdentifierColumn(ctx *IdentifierColumnContext) i
 
 	//this is simple field
 	if len(ctx.AllIDENTIFIER()) == 1 {
+		if ctx.Alias() != nil {
+			fieldName = ctx.Alias().GetStop().GetText()
+		}
 		v.currentResultRecord.Attributes().Insert(fieldName, value)
+
 		return nil
 	}
+
 	// here we process nested field
 	nestedFieldName := ctx.IDENTIFIER(1).GetText()
 	nestedVal, err := nestedFieldExistsInAttr(fieldName, nestedFieldName, v.currentOrigRecord.Attributes())
 	if err != nil {
 		return err
+	}
+	if ctx.Alias() != nil {
+		fieldName = ctx.Alias().GetStop().GetText()
+		v.currentResultRecord.Attributes().Insert(fieldName, nestedVal)
+		return nil
 	}
 	newMapVal := pcommon.NewValueMap()
 	newMapVal.MapVal().Insert(nestedFieldName, nestedVal)
@@ -449,7 +459,59 @@ func (v *SqlStreamVisitor) VisitIdentifierColumn(ctx *IdentifierColumnContext) i
 }
 
 func (v *SqlStreamVisitor) VisitFunctionColumn(ctx *FunctionColumnContext) interface{} {
+	//first we check that fields listed in select (including nested) exist in log record
+	fieldName := ctx.IDENTIFIER(0).GetText()
+	functionMame := ctx.Function().GetText()
+	args := ctx.AllLiteralValue()
+
+	value, ok := v.currentOrigRecord.Attributes().Get(fieldName)
+	if !ok {
+		return fmt.Errorf("field %q missed", fieldName)
+	}
+
+	//this is simple field
+	if len(ctx.AllIDENTIFIER()) == 1 {
+
+		if ctx.Alias() != nil {
+			fieldName = ctx.Alias().GetStop().GetText()
+		}
+		newValue, err := v.applyFunction(value, functionMame, args...)
+		if err != nil {
+			return err
+		}
+
+		v.currentResultRecord.Attributes().Insert(fieldName, newValue)
+
+		return nil
+	}
+
+	// here we process nested field
+	nestedFieldName := ctx.IDENTIFIER(1).GetText()
+	nestedVal, err := nestedFieldExistsInAttr(fieldName, nestedFieldName, v.currentOrigRecord.Attributes())
+	if err != nil {
+		return err
+	}
+	if ctx.Alias() != nil {
+		fieldName = ctx.Alias().GetStop().GetText()
+		v.currentResultRecord.Attributes().Insert(fieldName, nestedVal)
+		return nil
+	}
+	newMapVal := pcommon.NewValueMap()
+	newMapVal.MapVal().Insert(nestedFieldName, nestedVal)
+	v.currentResultRecord.Attributes().Insert(fieldName, newMapVal)
+
 	return nil
+}
+func (v *SqlStreamVisitor) applyFunction(value pcommon.Value, functionName string, args ...ILiteralValueContext) (pcommon.Value, error) {
+	switch functionName {
+	case "upper":
+	case "lower":
+	case "substr":
+	default:
+		return pcommon.NewValueEmpty(), fmt.Errorf("function %q isn't available", functionName)
+
+	}
+	return pcommon.NewValueEmpty(), nil
 }
 
 func (v *SqlStreamVisitor) VisitSimpleCondition(ctx *SimpleConditionContext) interface{} {
@@ -596,4 +658,13 @@ func (v *SqlStreamVisitor) VisitComparisonOperator(ctx *ComparisonOperatorContex
 
 func (v *SqlStreamVisitor) VisitLiteralValue(ctx *LiteralValueContext) interface{} {
 	return v.VisitChildren(ctx)
+}
+
+func (v *SqlStreamVisitor) VisitAlias(ctx *AliasContext) interface{} {
+	return nil
+}
+
+func (v *SqlStreamVisitor) VisitFunction(ctx *FunctionContext) interface{} {
+
+	return nil
 }

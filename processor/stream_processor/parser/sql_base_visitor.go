@@ -48,6 +48,14 @@ func (v *BaseSqlVisitor) VisitFunctionColumn(ctx *FunctionColumnContext) interfa
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseSqlVisitor) VisitAlias(ctx *AliasContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseSqlVisitor) VisitFunction(ctx *FunctionContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseSqlVisitor) VisitColumnAggregation(ctx *ColumnAggregationContext) interface{} {
 	return v.VisitChildren(ctx)
 }
