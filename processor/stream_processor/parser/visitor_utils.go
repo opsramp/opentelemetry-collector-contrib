@@ -296,23 +296,23 @@ func fieldExistsInAttr(fieldName string, attr pcommon.Map) error {
 }
 
 // check is nested field exists
-func nestedFieldExistsInAttr(fieldName, nestedFieldName string, attr pcommon.Map) error {
+func nestedFieldExistsInAttr(fieldName, nestedFieldName string, attr pcommon.Map) (pcommon.Value, error) {
 	value, ok := attr.Get(fieldName)
 	if !ok {
-		return fmt.Errorf("field %q missed", fieldName)
+		return pcommon.NewValueEmpty(), fmt.Errorf("field %q missed", fieldName)
 	}
 
 	//if this nested field
 	if value.Type() != pcommon.ValueTypeMap {
-		return fmt.Errorf("field %q isn't nested", fieldName)
+		return pcommon.NewValueEmpty(), fmt.Errorf("field %q isn't nested", fieldName)
 	}
 
-	_, ok = value.MapVal().Get(nestedFieldName)
+	nestedValue, ok := value.MapVal().Get(nestedFieldName)
 	if !ok {
-		return fmt.Errorf("field %q missed nested field %q", fieldName, nestedFieldName)
+		return pcommon.NewValueEmpty(), fmt.Errorf("field %q missed nested field %q", fieldName, nestedFieldName)
 	}
 
-	return nil
+	return nestedValue, nil
 }
 
 func getSelectColumnsFromWhereCtx(ctx *WhereStmtContext) *SelectColumnsContext {

@@ -21,8 +21,14 @@ type SqlStreamVisitor struct {
 
 	tumblingPeriod time.Duration
 
-	logRecords        plog.LogRecordSlice
-	currentRecord     plog.LogRecord
+	// this is what we've got
+	origLogRecords    plog.LogRecordSlice
+	currentOrigRecord plog.LogRecord
+
+	// this is logs to emin
+	resultLogRecords    plog.LogRecordSlice
+	currentResultRecord plog.LogRecord
+
 	groupByLogRecords map[string]plog.LogRecordSlice
 
 	in        <-chan plog.LogRecordSlice
@@ -63,15 +69,20 @@ func (v *SqlStreamVisitor) startSimpleWorkerLoop() {
 
 	for {
 		select {
-		case v.logRecords = <-v.in:
+		case v.origLogRecords = <-v.in:
+			v.resultLogRecords = plog.NewLogRecordSlice()
 			if err := v.runQuery(); err != nil {
 				v.outErr <- err
 				break
 			}
-			v.out <- v.logRecords
-			v.logRecords = plog.NewLogRecordSlice()
+			v.out <- v.resultLogRecords
+			v.origLogRecords = plog.NewLogRecordSlice()
+			v.resultLogRecords = plog.NewLogRecordSlice()
 
 		case <-v.shutdownC:
+			if v.resultLogRecords.Len() > 0 {
+				v.out <- v.resultLogRecords
+			}
 			v.logger.Debug("sql engine shutting down")
 			return
 
@@ -81,14 +92,14 @@ func (v *SqlStreamVisitor) startSimpleWorkerLoop() {
 }
 
 func (v *SqlStreamVisitor) startWindowTumblingLoop() {
-	v.logRecords = plog.NewLogRecordSlice()
+	v.origLogRecords = plog.NewLogRecordSlice()
 	ticker := time.NewTicker(v.tumblingPeriod)
 
 	go func() {
 		for {
 			select {
 			case ls := <-v.in:
-				ls.MoveAndAppendTo(v.logRecords)
+				ls.MoveAndAppendTo(v.origLogRecords)
 			case <-v.shutdownC:
 				v.logger.Debug("sql engine shutting down")
 				return
@@ -100,13 +111,13 @@ func (v *SqlStreamVisitor) startWindowTumblingLoop() {
 		for {
 			select {
 			case <-ticker.C:
-				if v.logRecords.Len() > 0 {
+				if v.origLogRecords.Len() > 0 {
 					if err := v.runQuery(); err != nil {
 						v.outErr <- err
 						break
 					}
-					v.out <- v.logRecords
-					v.logRecords = plog.NewLogRecordSlice()
+					v.out <- v.origLogRecords
+					v.origLogRecords = plog.NewLogRecordSlice()
 				}
 			case <-v.shutdownC:
 				v.logger.Debug("sql engine shutting down")
@@ -132,7 +143,7 @@ func (v *SqlStreamVisitor) runQuery() error {
 }
 
 func (v *SqlStreamVisitor) GetResult() (plog.LogRecordSlice, error) {
-	return v.logRecords, nil
+	return v.origLogRecords, nil
 }
 
 func (v *SqlStreamVisitor) Visit(tree antlr.ParseTree) interface{} {
@@ -200,8 +211,8 @@ func (v *SqlStreamVisitor) VisitSelectTumblingGroupBy(ctx *SelectTumblingGroupBy
 func (v *SqlStreamVisitor) VisitGroupBy(ctx *GroupByContext) interface{} {
 
 	//v.groupByLogRecords = make(map[string]plog.LogRecordSlice)
-	for i := 0; i < v.logRecords.Len(); i++ {
-		record := v.logRecords.At(i)
+	for i := 0; i < v.origLogRecords.Len(); i++ {
+		record := v.origLogRecords.At(i)
 		groupByField, ok := record.Attributes().Get(ctx.Column().GetText())
 		if !ok {
 			return fmt.Errorf("group by field %q missed", ctx.Column().GetText())
@@ -220,12 +231,9 @@ func (v *SqlStreamVisitor) VisitGroupBy(ctx *GroupByContext) interface{} {
 // VisitSelectColumns is called in case of missed where statement and removes missed attributes
 func (v *SqlStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interface{} {
 	var err error
-	for i := 0; i < v.logRecords.Len(); i++ {
-		v.currentRecord = v.logRecords.At(i)
-
-		v.currentRecord.Attributes().RemoveIf(func(k string, value pcommon.Value) bool {
-			return fieldExists(k, value, ctx.AllColumn())
-		})
+	for i := 0; i < v.origLogRecords.Len(); i++ {
+		v.currentOrigRecord = v.origLogRecords.At(i)
+		v.currentResultRecord = plog.NewLogRecord()
 
 		for _, col := range ctx.AllColumn() {
 			switch res := col.Accept(v).(type) {
@@ -233,6 +241,8 @@ func (v *SqlStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interfa
 				err = res
 			}
 		}
+
+		v.currentResultRecord.MoveTo(v.resultLogRecords.AppendEmpty())
 
 	}
 
@@ -246,9 +256,11 @@ func (v *SqlStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
 	if ctx.Expr() == nil {
 		return nil
 	}
+	resColumnCtx := getSelectColumnsFromWhereCtx(ctx)
 
-	v.logRecords.RemoveIf(func(record plog.LogRecord) bool {
-		v.currentRecord = record
+	v.origLogRecords.RemoveIf(func(record plog.LogRecord) bool {
+		v.currentOrigRecord = record
+		v.currentResultRecord = plog.NewLogRecord()
 
 		switch res := ctx.Expr().Accept(v).(type) {
 		case error:
@@ -256,15 +268,15 @@ func (v *SqlStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
 			return false
 
 		case bool:
-			resColumnCtx := getSelectColumnsFromWhereCtx(ctx)
+			if !res {
+				return true
+			}
+
 			if errRes := v.applySelectColumns(resColumnCtx); errRes != nil {
 				err = errRes
 			}
-			if errRes := v.adjustResultColumns(resColumnCtx); errRes != nil {
-				err = errRes
-			}
 
-			return !res
+			return false
 		}
 		return false
 	})
@@ -273,12 +285,19 @@ func (v *SqlStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
 }
 
 func (v *SqlStreamVisitor) applySelectColumns(ctx *SelectColumnsContext) error {
+	//if * in select list
+	if ctx == nil {
+		v.currentOrigRecord.MoveTo(v.resultLogRecords.AppendEmpty())
+		return nil
+	}
+
 	for _, col := range ctx.AllColumn() {
 		switch res := col.Accept(v).(type) {
 		case error:
 			return res
 		}
 	}
+	v.currentResultRecord.MoveTo(v.resultLogRecords.AppendEmpty())
 	return nil
 }
 
@@ -287,14 +306,14 @@ func (v *SqlStreamVisitor) adjustResultColumns(ctx *SelectColumnsContext) error 
 
 	// Remove attributes which are not listed in value columns statement
 	// We can't use RemoveIf as it takes only values
-	removed := make([]string, 0, v.currentRecord.Attributes().Len())
+	removed := make([]string, 0, v.currentOrigRecord.Attributes().Len())
 
-	v.currentRecord.Attributes().RemoveIf(func(k string, value pcommon.Value) bool {
+	v.currentOrigRecord.Attributes().RemoveIf(func(k string, value pcommon.Value) bool {
 		return fieldExists(k, value, ctx.AllColumn())
 	})
 
 	for _, removedKey := range removed {
-		v.currentRecord.Attributes().Remove(removedKey)
+		v.currentOrigRecord.Attributes().Remove(removedKey)
 	}
 
 	return nil
@@ -317,16 +336,16 @@ func (v *SqlStreamVisitor) VisitColumnAggregation(ctx *ColumnAggregationContext)
 			res.Attributes().Insert(ctx.Column().GetText(), pcommon.NewValueString(key))
 			res.CopyTo(dest.AppendEmpty())
 		}
-		v.logRecords = dest
+		v.origLogRecords = dest
 		return nil
 	}
 
-	res, err := v.getSimpleAggregatedValue(ctx, ctx.Column().GetText(), v.logRecords)
+	res, err := v.getSimpleAggregatedValue(ctx, ctx.Column().GetText(), v.origLogRecords)
 	if err != nil {
 		return err
 	}
 	res.CopyTo(dest.AppendEmpty())
-	v.logRecords = dest
+	v.origLogRecords = dest
 
 	*/
 
@@ -399,21 +418,34 @@ func (v *SqlStreamVisitor) getCountAggregatedValue(ctx *ColumnAggregationContext
 }
 
 func (v *SqlStreamVisitor) VisitSelectStar(ctx *SelectStarContext) interface{} {
+	v.origLogRecords.CopyTo(v.resultLogRecords)
 	return nil
 }
 
 func (v *SqlStreamVisitor) VisitIdentifierColumn(ctx *IdentifierColumnContext) interface{} {
+	//first we check that fields listed in select (including nested) exist in log record
 	fieldName := ctx.IDENTIFIER(0).GetText()
-	_, ok := v.currentRecord.Attributes().Get(fieldName)
+	value, ok := v.currentOrigRecord.Attributes().Get(fieldName)
 	if !ok {
 		return fmt.Errorf("field %q missed", fieldName)
 	}
 
+	//this is simple field
 	if len(ctx.AllIDENTIFIER()) == 1 {
-		return fieldExistsInAttr(fieldName, v.currentRecord.Attributes())
+		v.currentResultRecord.Attributes().Insert(fieldName, value)
+		return nil
 	}
+	// here we process nested field
+	nestedFieldName := ctx.IDENTIFIER(1).GetText()
+	nestedVal, err := nestedFieldExistsInAttr(fieldName, nestedFieldName, v.currentOrigRecord.Attributes())
+	if err != nil {
+		return err
+	}
+	newMapVal := pcommon.NewValueMap()
+	newMapVal.MapVal().Insert(nestedFieldName, nestedVal)
+	v.currentResultRecord.Attributes().Insert(fieldName, newMapVal)
 
-	return nestedFieldExistsInAttr(fieldName, ctx.IDENTIFIER(1).GetText(), v.currentRecord.Attributes())
+	return nil
 }
 
 func (v *SqlStreamVisitor) VisitFunctionColumn(ctx *FunctionColumnContext) interface{} {
@@ -425,7 +457,7 @@ func (v *SqlStreamVisitor) VisitSimpleCondition(ctx *SimpleConditionContext) int
 }
 
 func (v *SqlStreamVisitor) VisitSimpleExpression(ctx *SimpleExpressionContext) interface{} {
-	fieldValue, ok := v.currentRecord.Attributes().Get(ctx.IDENTIFIER().GetText())
+	fieldValue, ok := v.currentOrigRecord.Attributes().Get(ctx.IDENTIFIER().GetText())
 	if !ok {
 		return fmt.Errorf("field %q missed in log record", ctx.IDENTIFIER().GetText())
 	}
@@ -440,7 +472,7 @@ func (v *SqlStreamVisitor) VisitSimpleExpression(ctx *SimpleExpressionContext) i
 
 func (v *SqlStreamVisitor) VisitNestedExpression(ctx *NestedExpressionContext) interface{} {
 	fieldName := ctx.IDENTIFIER(0).GetText()
-	fieldValue, ok := v.currentRecord.Attributes().Get(fieldName)
+	fieldValue, ok := v.currentOrigRecord.Attributes().Get(fieldName)
 	if !ok {
 		return fmt.Errorf("field %q missed in log record", fieldValue.AsString())
 	}

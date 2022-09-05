@@ -31,7 +31,7 @@ func TestResultColumnsSelectColumns(t *testing.T) {
 		{
 			name:          "incorrect value columns",
 			query:         `SELECT field, is_alive;`,
-			err:           errors.New(`column "field" missed in input`),
+			err:           errors.New(`field "field" missed`),
 			expectedCount: 0,
 		},
 		{
@@ -43,7 +43,7 @@ func TestResultColumnsSelectColumns(t *testing.T) {
 		{
 			name:          "one incorrect value columns",
 			query:         `SELECT field ;`,
-			err:           errors.New(`column "field" missed in input`),
+			err:           errors.New(`field "field" missed`),
 			expectedCount: 0,
 		},
 	}
