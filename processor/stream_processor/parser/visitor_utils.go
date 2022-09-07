@@ -339,3 +339,34 @@ func substring(value pcommon.Value, start, length string) (pcommon.Value, error)
 	return pcommon.NewValueString(string(runes[startN : startN+lengthN])), nil
 
 }
+
+func getSimpleFunctionContext(ctx *FunctionColumnContext) *SimpleFunctionContext {
+	var simpleFuncCtx *SimpleFunctionContext
+	for _, childRecCtx := range ctx.Function().GetChildren() {
+		switch childRecCtx.(type) {
+		case *SimpleFunctionContext:
+			simpleFuncCtx = childRecCtx.(*SimpleFunctionContext)
+		case *RecursiveFunctionContext:
+			simpleFuncCtx = findSimpleFuncCtx(childRecCtx.(*RecursiveFunctionContext))
+		default:
+			continue
+		}
+	}
+
+	return simpleFuncCtx
+}
+
+func findSimpleFuncCtx(ctx *RecursiveFunctionContext) *SimpleFunctionContext {
+	for _, childCtx := range ctx.GetChildren() {
+		switch childCtx.(type) {
+		case *RecursiveFunctionContext:
+			return findSimpleFuncCtx(childCtx.(*RecursiveFunctionContext))
+		case *SimpleFunctionContext:
+			return childCtx.(*SimpleFunctionContext)
+		default:
+			continue
+		}
+	}
+
+	return nil
+}

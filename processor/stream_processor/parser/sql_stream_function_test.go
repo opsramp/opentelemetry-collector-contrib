@@ -1,11 +1,12 @@
 package parser
 
 import (
+	"strings"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.uber.org/zap"
-	"strings"
-	"testing"
 )
 
 func TestScalarFunctions(t *testing.T) {
@@ -64,6 +65,56 @@ func TestScalarFunctions(t *testing.T) {
 				val, ok := rec.Attributes().Get("name")
 				assert.True(t, ok)
 				assert.Equal(t, tt.appliedFunc(val.AsString()), val.AsString())
+			}
+
+		})
+	}
+}
+
+func TestRecursiveScalarFunctions(t *testing.T) {
+
+	tests := []struct {
+		name, query, attr string
+		expectedAttr      map[string]string
+		expectedResult    int
+	}{
+		{
+			name:         "recursive 1",
+			query:        `SELECT substr(name,2,3) WHERE name = 'Test name 50';`,
+			expectedAttr: map[string]string{"name": "st "},
+		},
+		{
+			name:         "recursive 2",
+			query:        `SELECT upper(lower(upper(substr(name,2,3)))) WHERE name = 'Test name 50';`,
+			expectedAttr: map[string]string{"name": "ST "},
+		},
+		{
+			name:         "recursive with alias",
+			query:        `SELECT upper(substr(name,2,3)), upper(name) as UpperName WHERE name = 'Test name 50';`,
+			expectedAttr: map[string]string{"name": "ST ", "UpperName": "TEST NAME 50"},
+		},
+		{
+			name:         "recursive with alias",
+			query:        `SELECT upper(substr(name,2,3)), upper(name) as UpperName, name as JustName  WHERE name = 'Test name 50';`,
+			expectedAttr: map[string]string{"name": "ST ", "UpperName": "TEST NAME 50", "JustName": "Test name 50"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := make(chan plog.LogRecordSlice)
+			out := make(chan plog.LogRecordSlice)
+			outErr := make(chan error)
+			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			defer visitor.Stop()
+			in <- GenerateTestLogs()
+			ls := <-out
+
+			res := ls.At(0).Attributes()
+			for k, v := range tt.expectedAttr {
+				val, ok := res.Get(k)
+				assert.True(t, ok)
+				assert.Equal(t, v, val.AsString())
 			}
 
 		})

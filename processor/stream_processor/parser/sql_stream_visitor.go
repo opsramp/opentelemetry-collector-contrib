@@ -30,9 +30,6 @@ type SqlStreamVisitor struct {
 	resultLogRecords    plog.LogRecordSlice
 	currentResultRecord plog.LogRecord
 
-	//this is temp value for functions
-	tempValue pcommon.Value
-
 	groupByLogRecords map[string]plog.LogRecordSlice
 
 	in        <-chan plog.LogRecordSlice
@@ -455,57 +452,37 @@ func (v *SqlStreamVisitor) VisitFunctionColumn(ctx *FunctionColumnContext) inter
 	var simpleFuncCtx *SimpleFunctionContext
 	res := ctx.Function().Accept(v)
 
-	simpleFuncCtx, ok := ctx.GetChild(0).(*SimpleFunctionContext)
-	if !ok {
-		//we need to find needed attributes from child context
-		for _, childRecCtx := range ctx.Function().GetChildren() {
-			switch childRecCtx.(type) {
-			case *SimpleFunctionContext:
-				simpleFuncCtx = childRecCtx.(*SimpleFunctionContext)
-			case *RecursiveFunctionContext:
-				simpleFuncCtx = findSimpleFuncCtx(childRecCtx.(*RecursiveFunctionContext))
-			default:
-				continue
-			}
-		}
+	switch res.(type) {
+	case error:
+		return res
+	case pcommon.Value:
+	default:
+		return fmt.Errorf("undefined result type")
 	}
 
+	simpleFuncCtx, ok := ctx.GetChild(0).(*SimpleFunctionContext)
+	if !ok {
+		simpleFuncCtx = getSimpleFunctionContext(ctx)
+	}
+
+	fieldName := simpleFuncCtx.IDENTIFIER(0).GetText()
+	if ctx.Alias() != nil {
+		fieldName = ctx.Alias().GetStop().GetText()
+	}
+
+	// if simple field
 	if len(simpleFuncCtx.AllIDENTIFIER()) == 1 {
-		fieldName := simpleFuncCtx.IDENTIFIER(0).GetText()
-		if ctx.Alias() != nil {
-			fieldName = ctx.Alias().GetStop().GetText()
-		}
-		v.currentResultRecord.Attributes().Insert(fieldName, v.tempValue)
+		v.currentResultRecord.Attributes().Insert(fieldName, res.(pcommon.Value))
 		return nil
 	}
 
-	if ctx.Alias() != nil {
-		fieldName := ctx.Alias().GetStop().GetText()
-		v.currentResultRecord.Attributes().Insert(fieldName, v.tempValue)
-	}
-
+	//this is nested field
 	nestedFieldName := simpleFuncCtx.IDENTIFIER(1).GetText()
 	newMapVal := pcommon.NewValueMap()
-	newMapVal.MapVal().Insert(nestedFieldName, v.tempValue)
-
+	newMapVal.MapVal().Insert(nestedFieldName, res.(pcommon.Value))
 	v.currentResultRecord.Attributes().Insert(nestedFieldName, newMapVal)
 
 	return res
-}
-
-func findSimpleFuncCtx(ctx *RecursiveFunctionContext) *SimpleFunctionContext {
-	for _, childCtx := range ctx.GetChildren() {
-		switch childCtx.(type) {
-		case *RecursiveFunctionContext:
-			return findSimpleFuncCtx(childCtx.(*RecursiveFunctionContext))
-		case *SimpleFunctionContext:
-			return childCtx.(*SimpleFunctionContext)
-		default:
-			continue
-		}
-	}
-
-	return nil
 }
 
 func (v *SqlStreamVisitor) VisitSimpleFunction(ctx *SimpleFunctionContext) interface{} {
@@ -528,7 +505,6 @@ func (v *SqlStreamVisitor) VisitSimpleFunction(ctx *SimpleFunctionContext) inter
 		}
 
 		//v.currentResultRecord.Attributes().Insert(fieldName, newValue)
-		v.tempValue = newValue
 		return newValue
 	}
 
@@ -543,25 +519,27 @@ func (v *SqlStreamVisitor) VisitSimpleFunction(ctx *SimpleFunctionContext) inter
 	newMapVal := pcommon.NewValueMap()
 	newMapVal.MapVal().Insert(nestedFieldName, nestedVal)
 	//v.currentResultRecord.Attributes().Insert(fieldName, newValue)
-	v.tempValue = newValue
 	return newValue
 }
 
 func (v *SqlStreamVisitor) VisitRecursiveFunction(ctx *RecursiveFunctionContext) interface{} {
 
 	res := ctx.Function().Accept(v)
-	fmt.Println(res.(pcommon.Value).AsString())
+
 	switch res.(type) {
 	case error:
 		return res
+	case pcommon.Value:
+	default:
+		return fmt.Errorf("undefined return type")
+
 	}
-	newValue, err := v.applyFunction(v.tempValue, ctx.FunctionName().GetText(), ctx.AllLiteralValue()...)
+	tmpValue, err := v.applyFunction(res.(pcommon.Value), ctx.FunctionName().GetText(), ctx.AllLiteralValue()...)
 	if err != nil {
 		return nil
 	}
-	v.tempValue = newValue
 
-	return res
+	return tmpValue
 }
 
 func (v *SqlStreamVisitor) applyFunction(value pcommon.Value, functionName string, args ...ILiteralValueContext) (pcommon.Value, error) {
