@@ -8,6 +8,12 @@ import (
 	"strings"
 )
 
+const (
+	lower  = "lower"
+	upper  = "upper"
+	substr = "substr"
+)
+
 func compareExpression(operator IComparisonOperatorContext, literalValue ILiteralValueContext, fieldValue pcommon.Value) (bool, error) {
 	switch literalValue.GetStart().GetTokenType() {
 	case SqlParserNUMERIC_LITERAL:
@@ -204,26 +210,8 @@ func count(ls plog.LogRecordSlice) int {
 	return ls.Len()
 }
 
-func lower(record plog.LogRecord, fieldName string) error {
-	val, ok := record.Attributes().Get(fieldName)
-	if !ok {
-		return fmt.Errorf("field %q missed", fieldName)
-	}
-	record.Attributes().UpdateString(fieldName, strings.ToLower(val.AsString()))
-	return nil
-}
-
-func upper(record plog.LogRecord, fieldName string) error {
-	val, ok := record.Attributes().Get(fieldName)
-	if !ok {
-		return fmt.Errorf("field %q missed", fieldName)
-	}
-	record.Attributes().UpdateString(fieldName, strings.ToUpper(val.AsString()))
-	return nil
-}
-
 // check if we need remove attribute missed in select list
-func fieldExists(key string, value pcommon.Value, allColumns []IColumnContext) bool {
+func fieldExists(key string, value pcommon.Value, allColumns []interface{}) bool {
 	//simple attribute
 	if value.Type() != pcommon.ValueTypeMap {
 		for _, col := range allColumns {
@@ -231,7 +219,7 @@ func fieldExists(key string, value pcommon.Value, allColumns []IColumnContext) b
 			switch typedCol := col.(type) {
 			case *IdentifierColumnContext:
 				id = typedCol.IDENTIFIER(0).GetText()
-			case *FunctionColumnContext:
+			case *SimpleFunctionContext:
 				id = typedCol.IDENTIFIER(0).GetText()
 			}
 			if key == id {
@@ -250,7 +238,7 @@ func fieldExists(key string, value pcommon.Value, allColumns []IColumnContext) b
 					return false
 				}
 			}
-		case *FunctionColumnContext:
+		case *SimpleFunctionContext:
 			if len(typedCol.AllIDENTIFIER()) == 1 {
 				if key == typedCol.IDENTIFIER(0).GetText() {
 					return false
@@ -271,7 +259,7 @@ func fieldExists(key string, value pcommon.Value, allColumns []IColumnContext) b
 						return false
 					}
 				}
-			case *FunctionColumnContext:
+			case *SimpleFunctionContext:
 				if len(typedCol.AllIDENTIFIER()) > 1 {
 					if key == typedCol.IDENTIFIER(0).GetText() && nestedKey == typedCol.IDENTIFIER(1).GetText() {
 						nestedFound = true
@@ -323,5 +311,31 @@ func getSelectColumnsFromWhereCtx(ctx *WhereStmtContext) *SelectColumnsContext {
 		}
 		return resColumnCtx
 	}
+
 	return nil
+}
+
+func substring(value pcommon.Value, start, length string) (pcommon.Value, error) {
+
+	startN, err := strconv.Atoi(start)
+	if err != nil {
+		return pcommon.NewValueEmpty(), fmt.Errorf("first arg must be numeric")
+	}
+
+	lengthN, err := strconv.Atoi(length)
+	if err != nil {
+		return pcommon.NewValueEmpty(), fmt.Errorf("second arg must be numeric")
+	}
+
+	runes := []rune(value.AsString())
+	if startN > len(runes) {
+		return pcommon.NewValueString(""), nil
+	}
+
+	if startN+lengthN > len(runes) {
+		lengthN = len(runes) - startN
+	}
+
+	return pcommon.NewValueString(string(runes[startN : startN+lengthN])), nil
+
 }

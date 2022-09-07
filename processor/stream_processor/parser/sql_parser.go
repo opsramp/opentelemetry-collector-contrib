@@ -48,95 +48,111 @@ func sqlParserInit() {
 	}
 	staticData.ruleNames = []string{
 		"sqlQuery", "selectQuery", "windowTumbling", "resultColumns", "aggregationColumns",
-		"column", "alias", "function", "aggregationColumn", "whereStatement",
-		"expr", "simpleExpr", "compoundExpr", "comparisonOperator", "literalValue",
-		"groupBy",
+		"column", "alias", "function", "functionName", "aggregationColumn",
+		"whereStatement", "expr", "simpleExpr", "compoundExpr", "comparisonOperator",
+		"literalValue", "groupBy",
 	}
 	staticData.predictionContextCache = antlr.NewPredictionContextCache()
 	staticData.serializedATN = []int32{
-		4, 1, 41, 194, 2, 0, 7, 0, 2, 1, 7, 1, 2, 2, 7, 2, 2, 3, 7, 3, 2, 4, 7,
+		4, 1, 41, 229, 2, 0, 7, 0, 2, 1, 7, 1, 2, 2, 7, 2, 2, 3, 7, 3, 2, 4, 7,
 		4, 2, 5, 7, 5, 2, 6, 7, 6, 2, 7, 7, 7, 2, 8, 7, 8, 2, 9, 7, 9, 2, 10, 7,
 		10, 2, 11, 7, 11, 2, 12, 7, 12, 2, 13, 7, 13, 2, 14, 7, 14, 2, 15, 7, 15,
-		1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 3, 1, 39, 8, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 3, 1, 47, 8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 1,
-		55, 8, 1, 1, 1, 1, 1, 1, 1, 3, 1, 60, 8, 1, 1, 2, 1, 2, 1, 2, 1, 3, 1,
-		3, 1, 3, 5, 3, 68, 8, 3, 10, 3, 12, 3, 71, 9, 3, 1, 3, 3, 3, 74, 8, 3,
-		1, 4, 1, 4, 1, 4, 3, 4, 79, 8, 4, 1, 4, 1, 4, 1, 4, 3, 4, 84, 8, 4, 1,
-		4, 1, 4, 1, 5, 1, 5, 1, 5, 1, 5, 3, 5, 92, 8, 5, 1, 5, 3, 5, 95, 8, 5,
-		1, 5, 1, 5, 1, 5, 1, 5, 1, 5, 1, 5, 3, 5, 103, 8, 5, 1, 5, 1, 5, 5, 5,
-		107, 8, 5, 10, 5, 12, 5, 110, 9, 5, 1, 5, 1, 5, 3, 5, 114, 8, 5, 3, 5,
-		116, 8, 5, 1, 6, 1, 6, 1, 6, 1, 7, 1, 7, 1, 8, 1, 8, 1, 8, 1, 8, 1, 8,
-		1, 8, 3, 8, 129, 8, 8, 1, 8, 1, 8, 1, 8, 1, 8, 1, 8, 3, 8, 136, 8, 8, 1,
-		8, 1, 8, 1, 8, 1, 8, 3, 8, 142, 8, 8, 1, 9, 1, 9, 1, 9, 1, 10, 1, 10, 1,
-		10, 1, 10, 3, 10, 151, 8, 10, 1, 10, 1, 10, 1, 10, 3, 10, 156, 8, 10, 1,
-		10, 3, 10, 159, 8, 10, 1, 10, 1, 10, 1, 10, 5, 10, 164, 8, 10, 10, 10,
-		12, 10, 167, 9, 10, 1, 11, 1, 11, 1, 11, 1, 11, 1, 11, 1, 11, 1, 11, 1,
-		11, 1, 11, 1, 11, 3, 11, 179, 8, 11, 1, 12, 1, 12, 1, 12, 1, 12, 1, 13,
-		1, 13, 1, 14, 1, 14, 1, 15, 1, 15, 1, 15, 3, 15, 192, 8, 15, 1, 15, 0,
-		1, 20, 16, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 0,
-		4, 1, 0, 30, 34, 2, 0, 12, 12, 14, 14, 2, 0, 15, 23, 28, 29, 1, 0, 38,
-		40, 203, 0, 32, 1, 0, 0, 0, 2, 59, 1, 0, 0, 0, 4, 61, 1, 0, 0, 0, 6, 73,
-		1, 0, 0, 0, 8, 78, 1, 0, 0, 0, 10, 115, 1, 0, 0, 0, 12, 117, 1, 0, 0, 0,
-		14, 120, 1, 0, 0, 0, 16, 141, 1, 0, 0, 0, 18, 143, 1, 0, 0, 0, 20, 158,
-		1, 0, 0, 0, 22, 178, 1, 0, 0, 0, 24, 180, 1, 0, 0, 0, 26, 184, 1, 0, 0,
-		0, 28, 186, 1, 0, 0, 0, 30, 191, 1, 0, 0, 0, 32, 33, 3, 2, 1, 0, 33, 34,
-		5, 0, 0, 1, 34, 1, 1, 0, 0, 0, 35, 36, 5, 8, 0, 0, 36, 38, 3, 6, 3, 0,
-		37, 39, 3, 18, 9, 0, 38, 37, 1, 0, 0, 0, 38, 39, 1, 0, 0, 0, 39, 40, 1,
-		0, 0, 0, 40, 41, 5, 7, 0, 0, 41, 60, 1, 0, 0, 0, 42, 43, 5, 8, 0, 0, 43,
-		44, 3, 8, 4, 0, 44, 46, 3, 4, 2, 0, 45, 47, 3, 18, 9, 0, 46, 45, 1, 0,
-		0, 0, 46, 47, 1, 0, 0, 0, 47, 48, 1, 0, 0, 0, 48, 49, 5, 7, 0, 0, 49, 60,
-		1, 0, 0, 0, 50, 51, 5, 8, 0, 0, 51, 52, 3, 8, 4, 0, 52, 54, 3, 4, 2, 0,
-		53, 55, 3, 18, 9, 0, 54, 53, 1, 0, 0, 0, 54, 55, 1, 0, 0, 0, 55, 56, 1,
-		0, 0, 0, 56, 57, 3, 30, 15, 0, 57, 58, 5, 7, 0, 0, 58, 60, 1, 0, 0, 0,
-		59, 35, 1, 0, 0, 0, 59, 42, 1, 0, 0, 0, 59, 50, 1, 0, 0, 0, 60, 3, 1, 0,
-		0, 0, 61, 62, 5, 10, 0, 0, 62, 63, 5, 38, 0, 0, 63, 5, 1, 0, 0, 0, 64,
-		69, 3, 10, 5, 0, 65, 66, 5, 3, 0, 0, 66, 68, 3, 10, 5, 0, 67, 65, 1, 0,
-		0, 0, 68, 71, 1, 0, 0, 0, 69, 67, 1, 0, 0, 0, 69, 70, 1, 0, 0, 0, 70, 74,
-		1, 0, 0, 0, 71, 69, 1, 0, 0, 0, 72, 74, 5, 41, 0, 0, 73, 64, 1, 0, 0, 0,
-		73, 72, 1, 0, 0, 0, 74, 7, 1, 0, 0, 0, 75, 76, 3, 10, 5, 0, 76, 77, 5,
-		3, 0, 0, 77, 79, 1, 0, 0, 0, 78, 75, 1, 0, 0, 0, 78, 79, 1, 0, 0, 0, 79,
-		80, 1, 0, 0, 0, 80, 83, 3, 16, 8, 0, 81, 84, 3, 10, 5, 0, 82, 84, 5, 41,
-		0, 0, 83, 81, 1, 0, 0, 0, 83, 82, 1, 0, 0, 0, 84, 85, 1, 0, 0, 0, 85, 86,
-		5, 5, 0, 0, 86, 9, 1, 0, 0, 0, 87, 92, 5, 37, 0, 0, 88, 89, 5, 37, 0, 0,
-		89, 90, 5, 6, 0, 0, 90, 92, 5, 37, 0, 0, 91, 87, 1, 0, 0, 0, 91, 88, 1,
-		0, 0, 0, 92, 94, 1, 0, 0, 0, 93, 95, 3, 12, 6, 0, 94, 93, 1, 0, 0, 0, 94,
-		95, 1, 0, 0, 0, 95, 116, 1, 0, 0, 0, 96, 97, 3, 14, 7, 0, 97, 102, 5, 4,
-		0, 0, 98, 103, 5, 37, 0, 0, 99, 100, 5, 37, 0, 0, 100, 101, 5, 6, 0, 0,
-		101, 103, 5, 37, 0, 0, 102, 98, 1, 0, 0, 0, 102, 99, 1, 0, 0, 0, 103, 108,
-		1, 0, 0, 0, 104, 105, 5, 3, 0, 0, 105, 107, 3, 28, 14, 0, 106, 104, 1,
-		0, 0, 0, 107, 110, 1, 0, 0, 0, 108, 106, 1, 0, 0, 0, 108, 109, 1, 0, 0,
-		0, 109, 111, 1, 0, 0, 0, 110, 108, 1, 0, 0, 0, 111, 113, 5, 5, 0, 0, 112,
-		114, 3, 12, 6, 0, 113, 112, 1, 0, 0, 0, 113, 114, 1, 0, 0, 0, 114, 116,
-		1, 0, 0, 0, 115, 91, 1, 0, 0, 0, 115, 96, 1, 0, 0, 0, 116, 11, 1, 0, 0,
-		0, 117, 118, 5, 13, 0, 0, 118, 119, 5, 37, 0, 0, 119, 13, 1, 0, 0, 0, 120,
-		121, 5, 37, 0, 0, 121, 15, 1, 0, 0, 0, 122, 123, 7, 0, 0, 0, 123, 128,
-		5, 4, 0, 0, 124, 129, 5, 37, 0, 0, 125, 126, 5, 37, 0, 0, 126, 127, 5,
-		6, 0, 0, 127, 129, 5, 37, 0, 0, 128, 124, 1, 0, 0, 0, 128, 125, 1, 0, 0,
-		0, 129, 130, 1, 0, 0, 0, 130, 142, 5, 5, 0, 0, 131, 136, 5, 37, 0, 0, 132,
-		133, 5, 37, 0, 0, 133, 134, 5, 6, 0, 0, 134, 136, 5, 37, 0, 0, 135, 131,
-		1, 0, 0, 0, 135, 132, 1, 0, 0, 0, 135, 136, 1, 0, 0, 0, 136, 137, 1, 0,
-		0, 0, 137, 138, 5, 30, 0, 0, 138, 139, 5, 4, 0, 0, 139, 140, 5, 41, 0,
-		0, 140, 142, 5, 5, 0, 0, 141, 122, 1, 0, 0, 0, 141, 135, 1, 0, 0, 0, 142,
-		17, 1, 0, 0, 0, 143, 144, 5, 9, 0, 0, 144, 145, 3, 20, 10, 0, 145, 19,
-		1, 0, 0, 0, 146, 147, 6, 10, -1, 0, 147, 159, 3, 22, 11, 0, 148, 151, 3,
-		24, 12, 0, 149, 151, 3, 22, 11, 0, 150, 148, 1, 0, 0, 0, 150, 149, 1, 0,
-		0, 0, 151, 152, 1, 0, 0, 0, 152, 155, 7, 1, 0, 0, 153, 156, 3, 24, 12,
-		0, 154, 156, 3, 22, 11, 0, 155, 153, 1, 0, 0, 0, 155, 154, 1, 0, 0, 0,
-		156, 159, 1, 0, 0, 0, 157, 159, 3, 24, 12, 0, 158, 146, 1, 0, 0, 0, 158,
-		150, 1, 0, 0, 0, 158, 157, 1, 0, 0, 0, 159, 165, 1, 0, 0, 0, 160, 161,
-		10, 2, 0, 0, 161, 162, 7, 1, 0, 0, 162, 164, 3, 20, 10, 3, 163, 160, 1,
-		0, 0, 0, 164, 167, 1, 0, 0, 0, 165, 163, 1, 0, 0, 0, 165, 166, 1, 0, 0,
-		0, 166, 21, 1, 0, 0, 0, 167, 165, 1, 0, 0, 0, 168, 169, 5, 37, 0, 0, 169,
-		170, 3, 26, 13, 0, 170, 171, 3, 28, 14, 0, 171, 179, 1, 0, 0, 0, 172, 173,
-		5, 37, 0, 0, 173, 174, 5, 6, 0, 0, 174, 175, 5, 37, 0, 0, 175, 176, 3,
-		26, 13, 0, 176, 177, 3, 28, 14, 0, 177, 179, 1, 0, 0, 0, 178, 168, 1, 0,
-		0, 0, 178, 172, 1, 0, 0, 0, 179, 23, 1, 0, 0, 0, 180, 181, 5, 4, 0, 0,
-		181, 182, 3, 20, 10, 0, 182, 183, 5, 5, 0, 0, 183, 25, 1, 0, 0, 0, 184,
-		185, 7, 2, 0, 0, 185, 27, 1, 0, 0, 0, 186, 187, 7, 3, 0, 0, 187, 29, 1,
-		0, 0, 0, 188, 189, 5, 11, 0, 0, 189, 192, 3, 10, 5, 0, 190, 192, 1, 0,
-		0, 0, 191, 188, 1, 0, 0, 0, 191, 190, 1, 0, 0, 0, 192, 31, 1, 0, 0, 0,
-		23, 38, 46, 54, 59, 69, 73, 78, 83, 91, 94, 102, 108, 113, 115, 128, 135,
-		141, 150, 155, 158, 165, 178, 191,
+		2, 16, 7, 16, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 3, 1, 41, 8, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 1, 49, 8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 3, 1, 57, 8, 1, 1, 1, 1, 1, 1, 1, 3, 1, 62, 8, 1, 1, 2, 1, 2,
+		1, 2, 1, 3, 1, 3, 1, 3, 5, 3, 70, 8, 3, 10, 3, 12, 3, 73, 9, 3, 1, 3, 3,
+		3, 76, 8, 3, 1, 4, 1, 4, 1, 4, 3, 4, 81, 8, 4, 1, 4, 1, 4, 1, 4, 3, 4,
+		86, 8, 4, 1, 4, 1, 4, 1, 5, 1, 5, 1, 5, 1, 5, 3, 5, 94, 8, 5, 1, 5, 3,
+		5, 97, 8, 5, 1, 5, 1, 5, 3, 5, 101, 8, 5, 3, 5, 103, 8, 5, 1, 6, 1, 6,
+		1, 6, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 3, 7, 114, 8, 7, 1, 7, 1, 7,
+		5, 7, 118, 8, 7, 10, 7, 12, 7, 121, 9, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7,
+		1, 7, 1, 7, 1, 7, 3, 7, 131, 8, 7, 1, 7, 1, 7, 5, 7, 135, 8, 7, 10, 7,
+		12, 7, 138, 9, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 5, 7, 147,
+		8, 7, 10, 7, 12, 7, 150, 9, 7, 1, 7, 1, 7, 3, 7, 154, 8, 7, 1, 8, 1, 8,
+		1, 9, 1, 9, 1, 9, 1, 9, 1, 9, 1, 9, 3, 9, 164, 8, 9, 1, 9, 1, 9, 1, 9,
+		1, 9, 1, 9, 3, 9, 171, 8, 9, 1, 9, 1, 9, 1, 9, 1, 9, 3, 9, 177, 8, 9, 1,
+		10, 1, 10, 1, 10, 1, 11, 1, 11, 1, 11, 1, 11, 3, 11, 186, 8, 11, 1, 11,
+		1, 11, 1, 11, 3, 11, 191, 8, 11, 1, 11, 3, 11, 194, 8, 11, 1, 11, 1, 11,
+		1, 11, 5, 11, 199, 8, 11, 10, 11, 12, 11, 202, 9, 11, 1, 12, 1, 12, 1,
+		12, 1, 12, 1, 12, 1, 12, 1, 12, 1, 12, 1, 12, 1, 12, 3, 12, 214, 8, 12,
+		1, 13, 1, 13, 1, 13, 1, 13, 1, 14, 1, 14, 1, 15, 1, 15, 1, 16, 1, 16, 1,
+		16, 3, 16, 227, 8, 16, 1, 16, 0, 1, 22, 17, 0, 2, 4, 6, 8, 10, 12, 14,
+		16, 18, 20, 22, 24, 26, 28, 30, 32, 0, 4, 1, 0, 30, 34, 2, 0, 12, 12, 14,
+		14, 2, 0, 15, 23, 28, 29, 1, 0, 38, 40, 242, 0, 34, 1, 0, 0, 0, 2, 61,
+		1, 0, 0, 0, 4, 63, 1, 0, 0, 0, 6, 75, 1, 0, 0, 0, 8, 80, 1, 0, 0, 0, 10,
+		102, 1, 0, 0, 0, 12, 104, 1, 0, 0, 0, 14, 153, 1, 0, 0, 0, 16, 155, 1,
+		0, 0, 0, 18, 176, 1, 0, 0, 0, 20, 178, 1, 0, 0, 0, 22, 193, 1, 0, 0, 0,
+		24, 213, 1, 0, 0, 0, 26, 215, 1, 0, 0, 0, 28, 219, 1, 0, 0, 0, 30, 221,
+		1, 0, 0, 0, 32, 226, 1, 0, 0, 0, 34, 35, 3, 2, 1, 0, 35, 36, 5, 0, 0, 1,
+		36, 1, 1, 0, 0, 0, 37, 38, 5, 8, 0, 0, 38, 40, 3, 6, 3, 0, 39, 41, 3, 20,
+		10, 0, 40, 39, 1, 0, 0, 0, 40, 41, 1, 0, 0, 0, 41, 42, 1, 0, 0, 0, 42,
+		43, 5, 7, 0, 0, 43, 62, 1, 0, 0, 0, 44, 45, 5, 8, 0, 0, 45, 46, 3, 8, 4,
+		0, 46, 48, 3, 4, 2, 0, 47, 49, 3, 20, 10, 0, 48, 47, 1, 0, 0, 0, 48, 49,
+		1, 0, 0, 0, 49, 50, 1, 0, 0, 0, 50, 51, 5, 7, 0, 0, 51, 62, 1, 0, 0, 0,
+		52, 53, 5, 8, 0, 0, 53, 54, 3, 8, 4, 0, 54, 56, 3, 4, 2, 0, 55, 57, 3,
+		20, 10, 0, 56, 55, 1, 0, 0, 0, 56, 57, 1, 0, 0, 0, 57, 58, 1, 0, 0, 0,
+		58, 59, 3, 32, 16, 0, 59, 60, 5, 7, 0, 0, 60, 62, 1, 0, 0, 0, 61, 37, 1,
+		0, 0, 0, 61, 44, 1, 0, 0, 0, 61, 52, 1, 0, 0, 0, 62, 3, 1, 0, 0, 0, 63,
+		64, 5, 10, 0, 0, 64, 65, 5, 38, 0, 0, 65, 5, 1, 0, 0, 0, 66, 71, 3, 10,
+		5, 0, 67, 68, 5, 3, 0, 0, 68, 70, 3, 10, 5, 0, 69, 67, 1, 0, 0, 0, 70,
+		73, 1, 0, 0, 0, 71, 69, 1, 0, 0, 0, 71, 72, 1, 0, 0, 0, 72, 76, 1, 0, 0,
+		0, 73, 71, 1, 0, 0, 0, 74, 76, 5, 41, 0, 0, 75, 66, 1, 0, 0, 0, 75, 74,
+		1, 0, 0, 0, 76, 7, 1, 0, 0, 0, 77, 78, 3, 10, 5, 0, 78, 79, 5, 3, 0, 0,
+		79, 81, 1, 0, 0, 0, 80, 77, 1, 0, 0, 0, 80, 81, 1, 0, 0, 0, 81, 82, 1,
+		0, 0, 0, 82, 85, 3, 18, 9, 0, 83, 86, 3, 10, 5, 0, 84, 86, 5, 41, 0, 0,
+		85, 83, 1, 0, 0, 0, 85, 84, 1, 0, 0, 0, 86, 87, 1, 0, 0, 0, 87, 88, 5,
+		5, 0, 0, 88, 9, 1, 0, 0, 0, 89, 94, 5, 37, 0, 0, 90, 91, 5, 37, 0, 0, 91,
+		92, 5, 6, 0, 0, 92, 94, 5, 37, 0, 0, 93, 89, 1, 0, 0, 0, 93, 90, 1, 0,
+		0, 0, 94, 96, 1, 0, 0, 0, 95, 97, 3, 12, 6, 0, 96, 95, 1, 0, 0, 0, 96,
+		97, 1, 0, 0, 0, 97, 103, 1, 0, 0, 0, 98, 100, 3, 14, 7, 0, 99, 101, 3,
+		12, 6, 0, 100, 99, 1, 0, 0, 0, 100, 101, 1, 0, 0, 0, 101, 103, 1, 0, 0,
+		0, 102, 93, 1, 0, 0, 0, 102, 98, 1, 0, 0, 0, 103, 11, 1, 0, 0, 0, 104,
+		105, 5, 13, 0, 0, 105, 106, 5, 37, 0, 0, 106, 13, 1, 0, 0, 0, 107, 108,
+		3, 16, 8, 0, 108, 113, 5, 4, 0, 0, 109, 114, 5, 37, 0, 0, 110, 111, 5,
+		37, 0, 0, 111, 112, 5, 6, 0, 0, 112, 114, 5, 37, 0, 0, 113, 109, 1, 0,
+		0, 0, 113, 110, 1, 0, 0, 0, 114, 119, 1, 0, 0, 0, 115, 116, 5, 3, 0, 0,
+		116, 118, 3, 30, 15, 0, 117, 115, 1, 0, 0, 0, 118, 121, 1, 0, 0, 0, 119,
+		117, 1, 0, 0, 0, 119, 120, 1, 0, 0, 0, 120, 122, 1, 0, 0, 0, 121, 119,
+		1, 0, 0, 0, 122, 123, 5, 5, 0, 0, 123, 154, 1, 0, 0, 0, 124, 125, 3, 16,
+		8, 0, 125, 130, 5, 4, 0, 0, 126, 131, 5, 37, 0, 0, 127, 128, 5, 37, 0,
+		0, 128, 129, 5, 6, 0, 0, 129, 131, 5, 37, 0, 0, 130, 126, 1, 0, 0, 0, 130,
+		127, 1, 0, 0, 0, 131, 136, 1, 0, 0, 0, 132, 133, 5, 3, 0, 0, 133, 135,
+		3, 30, 15, 0, 134, 132, 1, 0, 0, 0, 135, 138, 1, 0, 0, 0, 136, 134, 1,
+		0, 0, 0, 136, 137, 1, 0, 0, 0, 137, 139, 1, 0, 0, 0, 138, 136, 1, 0, 0,
+		0, 139, 140, 5, 5, 0, 0, 140, 154, 1, 0, 0, 0, 141, 142, 3, 16, 8, 0, 142,
+		143, 5, 4, 0, 0, 143, 148, 3, 14, 7, 0, 144, 145, 5, 3, 0, 0, 145, 147,
+		3, 30, 15, 0, 146, 144, 1, 0, 0, 0, 147, 150, 1, 0, 0, 0, 148, 146, 1,
+		0, 0, 0, 148, 149, 1, 0, 0, 0, 149, 151, 1, 0, 0, 0, 150, 148, 1, 0, 0,
+		0, 151, 152, 5, 5, 0, 0, 152, 154, 1, 0, 0, 0, 153, 107, 1, 0, 0, 0, 153,
+		124, 1, 0, 0, 0, 153, 141, 1, 0, 0, 0, 154, 15, 1, 0, 0, 0, 155, 156, 5,
+		37, 0, 0, 156, 17, 1, 0, 0, 0, 157, 158, 7, 0, 0, 0, 158, 163, 5, 4, 0,
+		0, 159, 164, 5, 37, 0, 0, 160, 161, 5, 37, 0, 0, 161, 162, 5, 6, 0, 0,
+		162, 164, 5, 37, 0, 0, 163, 159, 1, 0, 0, 0, 163, 160, 1, 0, 0, 0, 164,
+		165, 1, 0, 0, 0, 165, 177, 5, 5, 0, 0, 166, 171, 5, 37, 0, 0, 167, 168,
+		5, 37, 0, 0, 168, 169, 5, 6, 0, 0, 169, 171, 5, 37, 0, 0, 170, 166, 1,
+		0, 0, 0, 170, 167, 1, 0, 0, 0, 170, 171, 1, 0, 0, 0, 171, 172, 1, 0, 0,
+		0, 172, 173, 5, 30, 0, 0, 173, 174, 5, 4, 0, 0, 174, 175, 5, 41, 0, 0,
+		175, 177, 5, 5, 0, 0, 176, 157, 1, 0, 0, 0, 176, 170, 1, 0, 0, 0, 177,
+		19, 1, 0, 0, 0, 178, 179, 5, 9, 0, 0, 179, 180, 3, 22, 11, 0, 180, 21,
+		1, 0, 0, 0, 181, 182, 6, 11, -1, 0, 182, 194, 3, 24, 12, 0, 183, 186, 3,
+		26, 13, 0, 184, 186, 3, 24, 12, 0, 185, 183, 1, 0, 0, 0, 185, 184, 1, 0,
+		0, 0, 186, 187, 1, 0, 0, 0, 187, 190, 7, 1, 0, 0, 188, 191, 3, 26, 13,
+		0, 189, 191, 3, 24, 12, 0, 190, 188, 1, 0, 0, 0, 190, 189, 1, 0, 0, 0,
+		191, 194, 1, 0, 0, 0, 192, 194, 3, 26, 13, 0, 193, 181, 1, 0, 0, 0, 193,
+		185, 1, 0, 0, 0, 193, 192, 1, 0, 0, 0, 194, 200, 1, 0, 0, 0, 195, 196,
+		10, 2, 0, 0, 196, 197, 7, 1, 0, 0, 197, 199, 3, 22, 11, 3, 198, 195, 1,
+		0, 0, 0, 199, 202, 1, 0, 0, 0, 200, 198, 1, 0, 0, 0, 200, 201, 1, 0, 0,
+		0, 201, 23, 1, 0, 0, 0, 202, 200, 1, 0, 0, 0, 203, 204, 5, 37, 0, 0, 204,
+		205, 3, 28, 14, 0, 205, 206, 3, 30, 15, 0, 206, 214, 1, 0, 0, 0, 207, 208,
+		5, 37, 0, 0, 208, 209, 5, 6, 0, 0, 209, 210, 5, 37, 0, 0, 210, 211, 3,
+		28, 14, 0, 211, 212, 3, 30, 15, 0, 212, 214, 1, 0, 0, 0, 213, 203, 1, 0,
+		0, 0, 213, 207, 1, 0, 0, 0, 214, 25, 1, 0, 0, 0, 215, 216, 5, 4, 0, 0,
+		216, 217, 3, 22, 11, 0, 217, 218, 5, 5, 0, 0, 218, 27, 1, 0, 0, 0, 219,
+		220, 7, 2, 0, 0, 220, 29, 1, 0, 0, 0, 221, 222, 7, 3, 0, 0, 222, 31, 1,
+		0, 0, 0, 223, 224, 5, 11, 0, 0, 224, 227, 3, 10, 5, 0, 225, 227, 1, 0,
+		0, 0, 226, 223, 1, 0, 0, 0, 226, 225, 1, 0, 0, 0, 227, 33, 1, 0, 0, 0,
+		27, 40, 48, 56, 61, 71, 75, 80, 85, 93, 96, 100, 102, 113, 119, 130, 136,
+		148, 153, 163, 170, 176, 185, 190, 193, 200, 213, 226,
 	}
 	deserializer := antlr.NewATNDeserializer(nil)
 	staticData.atn = deserializer.Deserialize(staticData.serializedATN)
@@ -228,14 +244,15 @@ const (
 	SqlParserRULE_column             = 5
 	SqlParserRULE_alias              = 6
 	SqlParserRULE_function           = 7
-	SqlParserRULE_aggregationColumn  = 8
-	SqlParserRULE_whereStatement     = 9
-	SqlParserRULE_expr               = 10
-	SqlParserRULE_simpleExpr         = 11
-	SqlParserRULE_compoundExpr       = 12
-	SqlParserRULE_comparisonOperator = 13
-	SqlParserRULE_literalValue       = 14
-	SqlParserRULE_groupBy            = 15
+	SqlParserRULE_functionName       = 8
+	SqlParserRULE_aggregationColumn  = 9
+	SqlParserRULE_whereStatement     = 10
+	SqlParserRULE_expr               = 11
+	SqlParserRULE_simpleExpr         = 12
+	SqlParserRULE_compoundExpr       = 13
+	SqlParserRULE_comparisonOperator = 14
+	SqlParserRULE_literalValue       = 15
+	SqlParserRULE_groupBy            = 16
 )
 
 // ISqlQueryContext is an interface to support dynamic dispatch.
@@ -339,11 +356,11 @@ func (p *SqlParser) SqlQuery() (localctx ISqlQueryContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(32)
+		p.SetState(34)
 		p.SelectQuery()
 	}
 	{
-		p.SetState(33)
+		p.SetState(35)
 		p.Match(SqlParserEOF)
 	}
 
@@ -676,33 +693,33 @@ func (p *SqlParser) SelectQuery() (localctx ISelectQueryContext) {
 		}
 	}()
 
-	p.SetState(59)
+	p.SetState(61)
 	p.GetErrorHandler().Sync(p)
 	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 3, p.GetParserRuleContext()) {
 	case 1:
 		localctx = NewSelectSimpleContext(p, localctx)
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(35)
+			p.SetState(37)
 			p.Match(SqlParserK_SELECT)
 		}
 		{
-			p.SetState(36)
+			p.SetState(38)
 			p.ResultColumns()
 		}
-		p.SetState(38)
+		p.SetState(40)
 		p.GetErrorHandler().Sync(p)
 		_la = p.GetTokenStream().LA(1)
 
 		if _la == SqlParserK_WHERE {
 			{
-				p.SetState(37)
+				p.SetState(39)
 				p.WhereStatement()
 			}
 
 		}
 		{
-			p.SetState(40)
+			p.SetState(42)
 			p.Match(SqlParserEOQ)
 		}
 
@@ -710,30 +727,30 @@ func (p *SqlParser) SelectQuery() (localctx ISelectQueryContext) {
 		localctx = NewSelectTumblingContext(p, localctx)
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(42)
+			p.SetState(44)
 			p.Match(SqlParserK_SELECT)
 		}
 		{
-			p.SetState(43)
+			p.SetState(45)
 			p.AggregationColumns()
 		}
 		{
-			p.SetState(44)
+			p.SetState(46)
 			p.WindowTumbling()
 		}
-		p.SetState(46)
+		p.SetState(48)
 		p.GetErrorHandler().Sync(p)
 		_la = p.GetTokenStream().LA(1)
 
 		if _la == SqlParserK_WHERE {
 			{
-				p.SetState(45)
+				p.SetState(47)
 				p.WhereStatement()
 			}
 
 		}
 		{
-			p.SetState(48)
+			p.SetState(50)
 			p.Match(SqlParserEOQ)
 		}
 
@@ -741,34 +758,34 @@ func (p *SqlParser) SelectQuery() (localctx ISelectQueryContext) {
 		localctx = NewSelectTumblingGroupByContext(p, localctx)
 		p.EnterOuterAlt(localctx, 3)
 		{
-			p.SetState(50)
+			p.SetState(52)
 			p.Match(SqlParserK_SELECT)
 		}
 		{
-			p.SetState(51)
+			p.SetState(53)
 			p.AggregationColumns()
 		}
 		{
-			p.SetState(52)
+			p.SetState(54)
 			p.WindowTumbling()
 		}
-		p.SetState(54)
+		p.SetState(56)
 		p.GetErrorHandler().Sync(p)
 		_la = p.GetTokenStream().LA(1)
 
 		if _la == SqlParserK_WHERE {
 			{
-				p.SetState(53)
+				p.SetState(55)
 				p.WhereStatement()
 			}
 
 		}
 		{
-			p.SetState(56)
+			p.SetState(58)
 			p.GroupBy()
 		}
 		{
-			p.SetState(57)
+			p.SetState(59)
 			p.Match(SqlParserEOQ)
 		}
 
@@ -866,11 +883,11 @@ func (p *SqlParser) WindowTumbling() (localctx IWindowTumblingContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(61)
+		p.SetState(63)
 		p.Match(SqlParserK_WINDOW_TUMBLING)
 	}
 	{
-		p.SetState(62)
+		p.SetState(64)
 		p.Match(SqlParserNUMERIC_LITERAL)
 	}
 
@@ -1060,7 +1077,7 @@ func (p *SqlParser) ResultColumns() (localctx IResultColumnsContext) {
 		}
 	}()
 
-	p.SetState(73)
+	p.SetState(75)
 	p.GetErrorHandler().Sync(p)
 
 	switch p.GetTokenStream().LA(1) {
@@ -1068,24 +1085,24 @@ func (p *SqlParser) ResultColumns() (localctx IResultColumnsContext) {
 		localctx = NewSelectColumnsContext(p, localctx)
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(64)
+			p.SetState(66)
 			p.Column()
 		}
-		p.SetState(69)
+		p.SetState(71)
 		p.GetErrorHandler().Sync(p)
 		_la = p.GetTokenStream().LA(1)
 
 		for _la == SqlParserCOMMA {
 			{
-				p.SetState(65)
+				p.SetState(67)
 				p.Match(SqlParserCOMMA)
 			}
 			{
-				p.SetState(66)
+				p.SetState(68)
 				p.Column()
 			}
 
-			p.SetState(71)
+			p.SetState(73)
 			p.GetErrorHandler().Sync(p)
 			_la = p.GetTokenStream().LA(1)
 		}
@@ -1094,7 +1111,7 @@ func (p *SqlParser) ResultColumns() (localctx IResultColumnsContext) {
 		localctx = NewSelectStarContext(p, localctx)
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(72)
+			p.SetState(74)
 			p.Match(SqlParserSTAR)
 		}
 
@@ -1277,37 +1294,37 @@ func (p *SqlParser) AggregationColumns() (localctx IAggregationColumnsContext) {
 
 	localctx = NewSelectAggregationContext(p, localctx)
 	p.EnterOuterAlt(localctx, 1)
-	p.SetState(78)
+	p.SetState(80)
 	p.GetErrorHandler().Sync(p)
 
 	if p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 6, p.GetParserRuleContext()) == 1 {
 		{
-			p.SetState(75)
+			p.SetState(77)
 			p.Column()
 		}
 		{
-			p.SetState(76)
+			p.SetState(78)
 			p.Match(SqlParserCOMMA)
 		}
 
 	}
 	{
-		p.SetState(80)
+		p.SetState(82)
 		p.AggregationColumn()
 	}
-	p.SetState(83)
+	p.SetState(85)
 	p.GetErrorHandler().Sync(p)
 
 	switch p.GetTokenStream().LA(1) {
 	case SqlParserIDENTIFIER:
 		{
-			p.SetState(81)
+			p.SetState(83)
 			p.Column()
 		}
 
 	case SqlParserSTAR:
 		{
-			p.SetState(82)
+			p.SetState(84)
 			p.Match(SqlParserSTAR)
 		}
 
@@ -1315,7 +1332,7 @@ func (p *SqlParser) AggregationColumns() (localctx IAggregationColumnsContext) {
 		panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 	}
 	{
-		p.SetState(85)
+		p.SetState(87)
 		p.Match(SqlParserR_BRACKET)
 	}
 
@@ -1462,75 +1479,6 @@ func (s *FunctionColumnContext) Function() IFunctionContext {
 	return t.(IFunctionContext)
 }
 
-func (s *FunctionColumnContext) L_BRACKET() antlr.TerminalNode {
-	return s.GetToken(SqlParserL_BRACKET, 0)
-}
-
-func (s *FunctionColumnContext) R_BRACKET() antlr.TerminalNode {
-	return s.GetToken(SqlParserR_BRACKET, 0)
-}
-
-func (s *FunctionColumnContext) AllIDENTIFIER() []antlr.TerminalNode {
-	return s.GetTokens(SqlParserIDENTIFIER)
-}
-
-func (s *FunctionColumnContext) IDENTIFIER(i int) antlr.TerminalNode {
-	return s.GetToken(SqlParserIDENTIFIER, i)
-}
-
-func (s *FunctionColumnContext) DOT() antlr.TerminalNode {
-	return s.GetToken(SqlParserDOT, 0)
-}
-
-func (s *FunctionColumnContext) AllCOMMA() []antlr.TerminalNode {
-	return s.GetTokens(SqlParserCOMMA)
-}
-
-func (s *FunctionColumnContext) COMMA(i int) antlr.TerminalNode {
-	return s.GetToken(SqlParserCOMMA, i)
-}
-
-func (s *FunctionColumnContext) AllLiteralValue() []ILiteralValueContext {
-	children := s.GetChildren()
-	len := 0
-	for _, ctx := range children {
-		if _, ok := ctx.(ILiteralValueContext); ok {
-			len++
-		}
-	}
-
-	tst := make([]ILiteralValueContext, len)
-	i := 0
-	for _, ctx := range children {
-		if t, ok := ctx.(ILiteralValueContext); ok {
-			tst[i] = t.(ILiteralValueContext)
-			i++
-		}
-	}
-
-	return tst
-}
-
-func (s *FunctionColumnContext) LiteralValue(i int) ILiteralValueContext {
-	var t antlr.RuleContext
-	j := 0
-	for _, ctx := range s.GetChildren() {
-		if _, ok := ctx.(ILiteralValueContext); ok {
-			if j == i {
-				t = ctx.(antlr.RuleContext)
-				break
-			}
-			j++
-		}
-	}
-
-	if t == nil {
-		return nil
-	}
-
-	return t.(ILiteralValueContext)
-}
-
 func (s *FunctionColumnContext) Alias() IAliasContext {
 	var t antlr.RuleContext
 	for _, ctx := range s.GetChildren() {
@@ -1581,43 +1529,43 @@ func (p *SqlParser) Column() (localctx IColumnContext) {
 		}
 	}()
 
-	p.SetState(115)
+	p.SetState(102)
 	p.GetErrorHandler().Sync(p)
-	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 13, p.GetParserRuleContext()) {
+	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 11, p.GetParserRuleContext()) {
 	case 1:
 		localctx = NewIdentifierColumnContext(p, localctx)
 		p.EnterOuterAlt(localctx, 1)
-		p.SetState(91)
+		p.SetState(93)
 		p.GetErrorHandler().Sync(p)
 		switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 8, p.GetParserRuleContext()) {
 		case 1:
 			{
-				p.SetState(87)
+				p.SetState(89)
 				p.Match(SqlParserIDENTIFIER)
 			}
 
 		case 2:
 			{
-				p.SetState(88)
+				p.SetState(90)
 				p.Match(SqlParserIDENTIFIER)
 			}
 			{
-				p.SetState(89)
+				p.SetState(91)
 				p.Match(SqlParserDOT)
 			}
 			{
-				p.SetState(90)
+				p.SetState(92)
 				p.Match(SqlParserIDENTIFIER)
 			}
 
 		}
-		p.SetState(94)
+		p.SetState(96)
 		p.GetErrorHandler().Sync(p)
 		_la = p.GetTokenStream().LA(1)
 
 		if _la == SqlParserK_AS {
 			{
-				p.SetState(93)
+				p.SetState(95)
 				p.Alias()
 			}
 
@@ -1627,66 +1575,16 @@ func (p *SqlParser) Column() (localctx IColumnContext) {
 		localctx = NewFunctionColumnContext(p, localctx)
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(96)
+			p.SetState(98)
 			p.Function()
 		}
-		{
-			p.SetState(97)
-			p.Match(SqlParserL_BRACKET)
-		}
-		p.SetState(102)
-		p.GetErrorHandler().Sync(p)
-		switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 10, p.GetParserRuleContext()) {
-		case 1:
-			{
-				p.SetState(98)
-				p.Match(SqlParserIDENTIFIER)
-			}
-
-		case 2:
-			{
-				p.SetState(99)
-				p.Match(SqlParserIDENTIFIER)
-			}
-			{
-				p.SetState(100)
-				p.Match(SqlParserDOT)
-			}
-			{
-				p.SetState(101)
-				p.Match(SqlParserIDENTIFIER)
-			}
-
-		}
-		p.SetState(108)
-		p.GetErrorHandler().Sync(p)
-		_la = p.GetTokenStream().LA(1)
-
-		for _la == SqlParserCOMMA {
-			{
-				p.SetState(104)
-				p.Match(SqlParserCOMMA)
-			}
-			{
-				p.SetState(105)
-				p.LiteralValue()
-			}
-
-			p.SetState(110)
-			p.GetErrorHandler().Sync(p)
-			_la = p.GetTokenStream().LA(1)
-		}
-		{
-			p.SetState(111)
-			p.Match(SqlParserR_BRACKET)
-		}
-		p.SetState(113)
+		p.SetState(100)
 		p.GetErrorHandler().Sync(p)
 		_la = p.GetTokenStream().LA(1)
 
 		if _la == SqlParserK_AS {
 			{
-				p.SetState(112)
+				p.SetState(99)
 				p.Alias()
 			}
 
@@ -1786,11 +1684,11 @@ func (p *SqlParser) Alias() (localctx IAliasContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(117)
+		p.SetState(104)
 		p.Match(SqlParserK_AS)
 	}
 	{
-		p.SetState(118)
+		p.SetState(105)
 		p.Match(SqlParserIDENTIFIER)
 	}
 
@@ -1835,8 +1733,8 @@ func NewFunctionContext(parser antlr.Parser, parent antlr.ParserRuleContext, inv
 
 func (s *FunctionContext) GetParser() antlr.Parser { return s.parser }
 
-func (s *FunctionContext) IDENTIFIER() antlr.TerminalNode {
-	return s.GetToken(SqlParserIDENTIFIER, 0)
+func (s *FunctionContext) CopyFrom(ctx *FunctionContext) {
+	s.BaseParserRuleContext.CopyFrom(ctx.BaseParserRuleContext)
 }
 
 func (s *FunctionContext) GetRuleContext() antlr.RuleContext {
@@ -1847,10 +1745,230 @@ func (s *FunctionContext) ToStringTree(ruleNames []string, recog antlr.Recognize
 	return antlr.TreesStringTree(s, ruleNames, recog)
 }
 
-func (s *FunctionContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
+type RecursiveFunctionContext struct {
+	*FunctionContext
+}
+
+func NewRecursiveFunctionContext(parser antlr.Parser, ctx antlr.ParserRuleContext) *RecursiveFunctionContext {
+	var p = new(RecursiveFunctionContext)
+
+	p.FunctionContext = NewEmptyFunctionContext()
+	p.parser = parser
+	p.CopyFrom(ctx.(*FunctionContext))
+
+	return p
+}
+
+func (s *RecursiveFunctionContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *RecursiveFunctionContext) FunctionName() IFunctionNameContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IFunctionNameContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IFunctionNameContext)
+}
+
+func (s *RecursiveFunctionContext) L_BRACKET() antlr.TerminalNode {
+	return s.GetToken(SqlParserL_BRACKET, 0)
+}
+
+func (s *RecursiveFunctionContext) Function() IFunctionContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IFunctionContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IFunctionContext)
+}
+
+func (s *RecursiveFunctionContext) R_BRACKET() antlr.TerminalNode {
+	return s.GetToken(SqlParserR_BRACKET, 0)
+}
+
+func (s *RecursiveFunctionContext) AllCOMMA() []antlr.TerminalNode {
+	return s.GetTokens(SqlParserCOMMA)
+}
+
+func (s *RecursiveFunctionContext) COMMA(i int) antlr.TerminalNode {
+	return s.GetToken(SqlParserCOMMA, i)
+}
+
+func (s *RecursiveFunctionContext) AllLiteralValue() []ILiteralValueContext {
+	children := s.GetChildren()
+	len := 0
+	for _, ctx := range children {
+		if _, ok := ctx.(ILiteralValueContext); ok {
+			len++
+		}
+	}
+
+	tst := make([]ILiteralValueContext, len)
+	i := 0
+	for _, ctx := range children {
+		if t, ok := ctx.(ILiteralValueContext); ok {
+			tst[i] = t.(ILiteralValueContext)
+			i++
+		}
+	}
+
+	return tst
+}
+
+func (s *RecursiveFunctionContext) LiteralValue(i int) ILiteralValueContext {
+	var t antlr.RuleContext
+	j := 0
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(ILiteralValueContext); ok {
+			if j == i {
+				t = ctx.(antlr.RuleContext)
+				break
+			}
+			j++
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(ILiteralValueContext)
+}
+
+func (s *RecursiveFunctionContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
 	switch t := visitor.(type) {
 	case SqlVisitor:
-		return t.VisitFunction(s)
+		return t.VisitRecursiveFunction(s)
+
+	default:
+		return t.VisitChildren(s)
+	}
+}
+
+type SimpleFunctionContext struct {
+	*FunctionContext
+}
+
+func NewSimpleFunctionContext(parser antlr.Parser, ctx antlr.ParserRuleContext) *SimpleFunctionContext {
+	var p = new(SimpleFunctionContext)
+
+	p.FunctionContext = NewEmptyFunctionContext()
+	p.parser = parser
+	p.CopyFrom(ctx.(*FunctionContext))
+
+	return p
+}
+
+func (s *SimpleFunctionContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *SimpleFunctionContext) FunctionName() IFunctionNameContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IFunctionNameContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IFunctionNameContext)
+}
+
+func (s *SimpleFunctionContext) L_BRACKET() antlr.TerminalNode {
+	return s.GetToken(SqlParserL_BRACKET, 0)
+}
+
+func (s *SimpleFunctionContext) R_BRACKET() antlr.TerminalNode {
+	return s.GetToken(SqlParserR_BRACKET, 0)
+}
+
+func (s *SimpleFunctionContext) AllIDENTIFIER() []antlr.TerminalNode {
+	return s.GetTokens(SqlParserIDENTIFIER)
+}
+
+func (s *SimpleFunctionContext) IDENTIFIER(i int) antlr.TerminalNode {
+	return s.GetToken(SqlParserIDENTIFIER, i)
+}
+
+func (s *SimpleFunctionContext) DOT() antlr.TerminalNode {
+	return s.GetToken(SqlParserDOT, 0)
+}
+
+func (s *SimpleFunctionContext) AllCOMMA() []antlr.TerminalNode {
+	return s.GetTokens(SqlParserCOMMA)
+}
+
+func (s *SimpleFunctionContext) COMMA(i int) antlr.TerminalNode {
+	return s.GetToken(SqlParserCOMMA, i)
+}
+
+func (s *SimpleFunctionContext) AllLiteralValue() []ILiteralValueContext {
+	children := s.GetChildren()
+	len := 0
+	for _, ctx := range children {
+		if _, ok := ctx.(ILiteralValueContext); ok {
+			len++
+		}
+	}
+
+	tst := make([]ILiteralValueContext, len)
+	i := 0
+	for _, ctx := range children {
+		if t, ok := ctx.(ILiteralValueContext); ok {
+			tst[i] = t.(ILiteralValueContext)
+			i++
+		}
+	}
+
+	return tst
+}
+
+func (s *SimpleFunctionContext) LiteralValue(i int) ILiteralValueContext {
+	var t antlr.RuleContext
+	j := 0
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(ILiteralValueContext); ok {
+			if j == i {
+				t = ctx.(antlr.RuleContext)
+				break
+			}
+			j++
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(ILiteralValueContext)
+}
+
+func (s *SimpleFunctionContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
+	switch t := visitor.(type) {
+	case SqlVisitor:
+		return t.VisitSimpleFunction(s)
 
 	default:
 		return t.VisitChildren(s)
@@ -1863,6 +1981,252 @@ func (p *SqlParser) Function() (localctx IFunctionContext) {
 
 	localctx = NewFunctionContext(p, p.GetParserRuleContext(), p.GetState())
 	p.EnterRule(localctx, 14, SqlParserRULE_function)
+	var _la int
+
+	defer func() {
+		p.ExitRule()
+	}()
+
+	defer func() {
+		if err := recover(); err != nil {
+			if v, ok := err.(antlr.RecognitionException); ok {
+				localctx.SetException(v)
+				p.GetErrorHandler().ReportError(p, v)
+				p.GetErrorHandler().Recover(p, v)
+			} else {
+				panic(err)
+			}
+		}
+	}()
+
+	p.SetState(153)
+	p.GetErrorHandler().Sync(p)
+	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 17, p.GetParserRuleContext()) {
+	case 1:
+		localctx = NewSimpleFunctionContext(p, localctx)
+		p.EnterOuterAlt(localctx, 1)
+		{
+			p.SetState(107)
+			p.FunctionName()
+		}
+		{
+			p.SetState(108)
+			p.Match(SqlParserL_BRACKET)
+		}
+		p.SetState(113)
+		p.GetErrorHandler().Sync(p)
+		switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 12, p.GetParserRuleContext()) {
+		case 1:
+			{
+				p.SetState(109)
+				p.Match(SqlParserIDENTIFIER)
+			}
+
+		case 2:
+			{
+				p.SetState(110)
+				p.Match(SqlParserIDENTIFIER)
+			}
+			{
+				p.SetState(111)
+				p.Match(SqlParserDOT)
+			}
+			{
+				p.SetState(112)
+				p.Match(SqlParserIDENTIFIER)
+			}
+
+		}
+		p.SetState(119)
+		p.GetErrorHandler().Sync(p)
+		_la = p.GetTokenStream().LA(1)
+
+		for _la == SqlParserCOMMA {
+			{
+				p.SetState(115)
+				p.Match(SqlParserCOMMA)
+			}
+			{
+				p.SetState(116)
+				p.LiteralValue()
+			}
+
+			p.SetState(121)
+			p.GetErrorHandler().Sync(p)
+			_la = p.GetTokenStream().LA(1)
+		}
+		{
+			p.SetState(122)
+			p.Match(SqlParserR_BRACKET)
+		}
+
+	case 2:
+		localctx = NewSimpleFunctionContext(p, localctx)
+		p.EnterOuterAlt(localctx, 2)
+		{
+			p.SetState(124)
+			p.FunctionName()
+		}
+		{
+			p.SetState(125)
+			p.Match(SqlParserL_BRACKET)
+		}
+		p.SetState(130)
+		p.GetErrorHandler().Sync(p)
+		switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 14, p.GetParserRuleContext()) {
+		case 1:
+			{
+				p.SetState(126)
+				p.Match(SqlParserIDENTIFIER)
+			}
+
+		case 2:
+			{
+				p.SetState(127)
+				p.Match(SqlParserIDENTIFIER)
+			}
+			{
+				p.SetState(128)
+				p.Match(SqlParserDOT)
+			}
+			{
+				p.SetState(129)
+				p.Match(SqlParserIDENTIFIER)
+			}
+
+		}
+		p.SetState(136)
+		p.GetErrorHandler().Sync(p)
+		_la = p.GetTokenStream().LA(1)
+
+		for _la == SqlParserCOMMA {
+			{
+				p.SetState(132)
+				p.Match(SqlParserCOMMA)
+			}
+			{
+				p.SetState(133)
+				p.LiteralValue()
+			}
+
+			p.SetState(138)
+			p.GetErrorHandler().Sync(p)
+			_la = p.GetTokenStream().LA(1)
+		}
+		{
+			p.SetState(139)
+			p.Match(SqlParserR_BRACKET)
+		}
+
+	case 3:
+		localctx = NewRecursiveFunctionContext(p, localctx)
+		p.EnterOuterAlt(localctx, 3)
+		{
+			p.SetState(141)
+			p.FunctionName()
+		}
+		{
+			p.SetState(142)
+			p.Match(SqlParserL_BRACKET)
+		}
+		{
+			p.SetState(143)
+			p.Function()
+		}
+		p.SetState(148)
+		p.GetErrorHandler().Sync(p)
+		_la = p.GetTokenStream().LA(1)
+
+		for _la == SqlParserCOMMA {
+			{
+				p.SetState(144)
+				p.Match(SqlParserCOMMA)
+			}
+			{
+				p.SetState(145)
+				p.LiteralValue()
+			}
+
+			p.SetState(150)
+			p.GetErrorHandler().Sync(p)
+			_la = p.GetTokenStream().LA(1)
+		}
+		{
+			p.SetState(151)
+			p.Match(SqlParserR_BRACKET)
+		}
+
+	}
+
+	return localctx
+}
+
+// IFunctionNameContext is an interface to support dynamic dispatch.
+type IFunctionNameContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// IsFunctionNameContext differentiates from other interfaces.
+	IsFunctionNameContext()
+}
+
+type FunctionNameContext struct {
+	*antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyFunctionNameContext() *FunctionNameContext {
+	var p = new(FunctionNameContext)
+	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(nil, -1)
+	p.RuleIndex = SqlParserRULE_functionName
+	return p
+}
+
+func (*FunctionNameContext) IsFunctionNameContext() {}
+
+func NewFunctionNameContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *FunctionNameContext {
+	var p = new(FunctionNameContext)
+
+	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = SqlParserRULE_functionName
+
+	return p
+}
+
+func (s *FunctionNameContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *FunctionNameContext) IDENTIFIER() antlr.TerminalNode {
+	return s.GetToken(SqlParserIDENTIFIER, 0)
+}
+
+func (s *FunctionNameContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *FunctionNameContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *FunctionNameContext) Accept(visitor antlr.ParseTreeVisitor) interface{} {
+	switch t := visitor.(type) {
+	case SqlVisitor:
+		return t.VisitFunctionName(s)
+
+	default:
+		return t.VisitChildren(s)
+	}
+}
+
+func (p *SqlParser) FunctionName() (localctx IFunctionNameContext) {
+	this := p
+	_ = this
+
+	localctx = NewFunctionNameContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 16, SqlParserRULE_functionName)
 
 	defer func() {
 		p.ExitRule()
@@ -1882,7 +2246,7 @@ func (p *SqlParser) Function() (localctx IFunctionContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(120)
+		p.SetState(155)
 		p.Match(SqlParserIDENTIFIER)
 	}
 
@@ -2068,7 +2432,7 @@ func (p *SqlParser) AggregationColumn() (localctx IAggregationColumnContext) {
 	_ = this
 
 	localctx = NewAggregationColumnContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 16, SqlParserRULE_aggregationColumn)
+	p.EnterRule(localctx, 18, SqlParserRULE_aggregationColumn)
 	var _la int
 
 	defer func() {
@@ -2087,14 +2451,14 @@ func (p *SqlParser) AggregationColumn() (localctx IAggregationColumnContext) {
 		}
 	}()
 
-	p.SetState(141)
+	p.SetState(176)
 	p.GetErrorHandler().Sync(p)
-	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 16, p.GetParserRuleContext()) {
+	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 20, p.GetParserRuleContext()) {
 	case 1:
 		localctx = NewColumnAggregationContext(p, localctx)
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(122)
+			p.SetState(157)
 			_la = p.GetTokenStream().LA(1)
 
 			if !(((_la-30)&-(0x1f+1)) == 0 && ((1<<uint((_la-30)))&((1<<(SqlParserK_COUNT-30))|(1<<(SqlParserK_SUM-30))|(1<<(SqlParserK_MIN-30))|(1<<(SqlParserK_MAX-30))|(1<<(SqlParserK_AVG-30)))) != 0) {
@@ -2105,79 +2469,79 @@ func (p *SqlParser) AggregationColumn() (localctx IAggregationColumnContext) {
 			}
 		}
 		{
-			p.SetState(123)
+			p.SetState(158)
 			p.Match(SqlParserL_BRACKET)
 		}
-		p.SetState(128)
+		p.SetState(163)
 		p.GetErrorHandler().Sync(p)
-		switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 14, p.GetParserRuleContext()) {
+		switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 18, p.GetParserRuleContext()) {
 		case 1:
 			{
-				p.SetState(124)
+				p.SetState(159)
 				p.Match(SqlParserIDENTIFIER)
 			}
 
 		case 2:
 			{
-				p.SetState(125)
+				p.SetState(160)
 				p.Match(SqlParserIDENTIFIER)
 			}
 			{
-				p.SetState(126)
+				p.SetState(161)
 				p.Match(SqlParserDOT)
 			}
 			{
-				p.SetState(127)
+				p.SetState(162)
 				p.Match(SqlParserIDENTIFIER)
 			}
 
 		}
 		{
-			p.SetState(130)
+			p.SetState(165)
 			p.Match(SqlParserR_BRACKET)
 		}
 
 	case 2:
 		localctx = NewColumnCountAggregationContext(p, localctx)
 		p.EnterOuterAlt(localctx, 2)
-		p.SetState(135)
+		p.SetState(170)
 		p.GetErrorHandler().Sync(p)
 
-		if p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 15, p.GetParserRuleContext()) == 1 {
+		if p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 19, p.GetParserRuleContext()) == 1 {
 			{
-				p.SetState(131)
+				p.SetState(166)
 				p.Match(SqlParserIDENTIFIER)
 			}
 
-		} else if p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 15, p.GetParserRuleContext()) == 2 {
+		} else if p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 19, p.GetParserRuleContext()) == 2 {
 			{
-				p.SetState(132)
+				p.SetState(167)
 				p.Match(SqlParserIDENTIFIER)
 			}
 			{
-				p.SetState(133)
+				p.SetState(168)
 				p.Match(SqlParserDOT)
 			}
 			{
-				p.SetState(134)
+				p.SetState(169)
 				p.Match(SqlParserIDENTIFIER)
 			}
 
 		}
 		{
-			p.SetState(137)
+			p.SetState(172)
 			p.Match(SqlParserK_COUNT)
 		}
 		{
-			p.SetState(138)
+			p.SetState(173)
 			p.Match(SqlParserL_BRACKET)
 		}
 		{
-			p.SetState(139)
+			p.SetState(174)
 			p.Match(SqlParserSTAR)
 		}
 		{
-			p.SetState(140)
+			p.SetState(175)
 			p.Match(SqlParserR_BRACKET)
 		}
 
@@ -2289,7 +2653,7 @@ func (p *SqlParser) WhereStatement() (localctx IWhereStatementContext) {
 	_ = this
 
 	localctx = NewWhereStatementContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 18, SqlParserRULE_whereStatement)
+	p.EnterRule(localctx, 20, SqlParserRULE_whereStatement)
 
 	defer func() {
 		p.ExitRule()
@@ -2310,11 +2674,11 @@ func (p *SqlParser) WhereStatement() (localctx IWhereStatementContext) {
 	localctx = NewWhereStmtContext(p, localctx)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(143)
+		p.SetState(178)
 		p.Match(SqlParserK_WHERE)
 	}
 	{
-		p.SetState(144)
+		p.SetState(179)
 		p.expr(0)
 	}
 
@@ -2667,8 +3031,8 @@ func (p *SqlParser) expr(_p int) (localctx IExprContext) {
 	localctx = NewExprContext(p, p.GetParserRuleContext(), _parentState)
 	var _prevctx IExprContext = localctx
 	var _ antlr.ParserRuleContext = _prevctx // TODO: To prevent unused variable warning.
-	_startState := 20
-	p.EnterRecursionRule(localctx, 20, SqlParserRULE_expr, _p)
+	_startState := 22
+	p.EnterRecursionRule(localctx, 22, SqlParserRULE_expr, _p)
 	var _la int
 
 	defer func() {
@@ -2690,16 +3054,16 @@ func (p *SqlParser) expr(_p int) (localctx IExprContext) {
 	var _alt int
 
 	p.EnterOuterAlt(localctx, 1)
-	p.SetState(158)
+	p.SetState(193)
 	p.GetErrorHandler().Sync(p)
-	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 19, p.GetParserRuleContext()) {
+	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 23, p.GetParserRuleContext()) {
 	case 1:
 		localctx = NewSimpleConditionContext(p, localctx)
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
 
 		{
-			p.SetState(147)
+			p.SetState(182)
 			p.SimpleExpr()
 		}
 
@@ -2707,19 +3071,19 @@ func (p *SqlParser) expr(_p int) (localctx IExprContext) {
 		localctx = NewCompoundRecursiveConditionContext(p, localctx)
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
-		p.SetState(150)
+		p.SetState(185)
 		p.GetErrorHandler().Sync(p)
 
 		switch p.GetTokenStream().LA(1) {
 		case SqlParserL_BRACKET:
 			{
-				p.SetState(148)
+				p.SetState(183)
 				p.CompoundExpr()
 			}
 
 		case SqlParserIDENTIFIER:
 			{
-				p.SetState(149)
+				p.SetState(184)
 				p.SimpleExpr()
 			}
 
@@ -2727,7 +3091,7 @@ func (p *SqlParser) expr(_p int) (localctx IExprContext) {
 			panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 		}
 		{
-			p.SetState(152)
+			p.SetState(187)
 			_la = p.GetTokenStream().LA(1)
 
 			if !(_la == SqlParserK_AND || _la == SqlParserK_OR) {
@@ -2737,19 +3101,19 @@ func (p *SqlParser) expr(_p int) (localctx IExprContext) {
 				p.Consume()
 			}
 		}
-		p.SetState(155)
+		p.SetState(190)
 		p.GetErrorHandler().Sync(p)
 
 		switch p.GetTokenStream().LA(1) {
 		case SqlParserL_BRACKET:
 			{
-				p.SetState(153)
+				p.SetState(188)
 				p.CompoundExpr()
 			}
 
 		case SqlParserIDENTIFIER:
 			{
-				p.SetState(154)
+				p.SetState(189)
 				p.SimpleExpr()
 			}
 
@@ -2762,15 +3126,15 @@ func (p *SqlParser) expr(_p int) (localctx IExprContext) {
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
 		{
-			p.SetState(157)
+			p.SetState(192)
 			p.CompoundExpr()
 		}
 
 	}
 	p.GetParserRuleContext().SetStop(p.GetTokenStream().LT(-1))
-	p.SetState(165)
+	p.SetState(200)
 	p.GetErrorHandler().Sync(p)
-	_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 20, p.GetParserRuleContext())
+	_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 24, p.GetParserRuleContext())
 
 	for _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
 		if _alt == 1 {
@@ -2780,13 +3144,13 @@ func (p *SqlParser) expr(_p int) (localctx IExprContext) {
 			_prevctx = localctx
 			localctx = NewSimpleRecursiveConditionContext(p, NewExprContext(p, _parentctx, _parentState))
 			p.PushNewRecursionContext(localctx, _startState, SqlParserRULE_expr)
-			p.SetState(160)
+			p.SetState(195)
 
 			if !(p.Precpred(p.GetParserRuleContext(), 2)) {
 				panic(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 2)", ""))
 			}
 			{
-				p.SetState(161)
+				p.SetState(196)
 				_la = p.GetTokenStream().LA(1)
 
 				if !(_la == SqlParserK_AND || _la == SqlParserK_OR) {
@@ -2797,14 +3161,14 @@ func (p *SqlParser) expr(_p int) (localctx IExprContext) {
 				}
 			}
 			{
-				p.SetState(162)
+				p.SetState(197)
 				p.expr(3)
 			}
 
 		}
-		p.SetState(167)
+		p.SetState(202)
 		p.GetErrorHandler().Sync(p)
-		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 20, p.GetParserRuleContext())
+		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 24, p.GetParserRuleContext())
 	}
 
 	return localctx
@@ -3001,7 +3365,7 @@ func (p *SqlParser) SimpleExpr() (localctx ISimpleExprContext) {
 	_ = this
 
 	localctx = NewSimpleExprContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 22, SqlParserRULE_simpleExpr)
+	p.EnterRule(localctx, 24, SqlParserRULE_simpleExpr)
 
 	defer func() {
 		p.ExitRule()
@@ -3019,22 +3383,22 @@ func (p *SqlParser) SimpleExpr() (localctx ISimpleExprContext) {
 		}
 	}()
 
-	p.SetState(178)
+	p.SetState(213)
 	p.GetErrorHandler().Sync(p)
-	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 21, p.GetParserRuleContext()) {
+	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 25, p.GetParserRuleContext()) {
 	case 1:
 		localctx = NewSimpleExpressionContext(p, localctx)
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(168)
+			p.SetState(203)
 			p.Match(SqlParserIDENTIFIER)
 		}
 		{
-			p.SetState(169)
+			p.SetState(204)
 			p.ComparisonOperator()
 		}
 		{
-			p.SetState(170)
+			p.SetState(205)
 			p.LiteralValue()
 		}
 
@@ -3042,23 +3406,23 @@ func (p *SqlParser) SimpleExpr() (localctx ISimpleExprContext) {
 		localctx = NewNestedExpressionContext(p, localctx)
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(172)
+			p.SetState(207)
 			p.Match(SqlParserIDENTIFIER)
 		}
 		{
-			p.SetState(173)
+			p.SetState(208)
 			p.Match(SqlParserDOT)
 		}
 		{
-			p.SetState(174)
+			p.SetState(209)
 			p.Match(SqlParserIDENTIFIER)
 		}
 		{
-			p.SetState(175)
+			p.SetState(210)
 			p.ComparisonOperator()
 		}
 		{
-			p.SetState(176)
+			p.SetState(211)
 			p.LiteralValue()
 		}
 
@@ -3174,7 +3538,7 @@ func (p *SqlParser) CompoundExpr() (localctx ICompoundExprContext) {
 	_ = this
 
 	localctx = NewCompoundExprContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 24, SqlParserRULE_compoundExpr)
+	p.EnterRule(localctx, 26, SqlParserRULE_compoundExpr)
 
 	defer func() {
 		p.ExitRule()
@@ -3195,15 +3559,15 @@ func (p *SqlParser) CompoundExpr() (localctx ICompoundExprContext) {
 	localctx = NewCompoundExpressionContext(p, localctx)
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(180)
+		p.SetState(215)
 		p.Match(SqlParserL_BRACKET)
 	}
 	{
-		p.SetState(181)
+		p.SetState(216)
 		p.expr(0)
 	}
 	{
-		p.SetState(182)
+		p.SetState(217)
 		p.Match(SqlParserR_BRACKET)
 	}
 
@@ -3315,7 +3679,7 @@ func (p *SqlParser) ComparisonOperator() (localctx IComparisonOperatorContext) {
 	_ = this
 
 	localctx = NewComparisonOperatorContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 26, SqlParserRULE_comparisonOperator)
+	p.EnterRule(localctx, 28, SqlParserRULE_comparisonOperator)
 	var _la int
 
 	defer func() {
@@ -3336,7 +3700,7 @@ func (p *SqlParser) ComparisonOperator() (localctx IComparisonOperatorContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(184)
+		p.SetState(219)
 		_la = p.GetTokenStream().LA(1)
 
 		if !(((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<SqlParserK_IS)|(1<<SqlParserK_LIKE)|(1<<SqlParserK_NOT_LIKE)|(1<<SqlParserK_EQUAL)|(1<<SqlParserK_GREATER)|(1<<SqlParserK_LESS)|(1<<SqlParserK_LESS_EQUAL)|(1<<SqlParserK_GREATER_EQUAL)|(1<<SqlParserK_NOT_EQUAL)|(1<<SqlParserK_NOT_IN)|(1<<SqlParserK_IN))) != 0) {
@@ -3423,7 +3787,7 @@ func (p *SqlParser) LiteralValue() (localctx ILiteralValueContext) {
 	_ = this
 
 	localctx = NewLiteralValueContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 28, SqlParserRULE_literalValue)
+	p.EnterRule(localctx, 30, SqlParserRULE_literalValue)
 	var _la int
 
 	defer func() {
@@ -3444,7 +3808,7 @@ func (p *SqlParser) LiteralValue() (localctx ILiteralValueContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(186)
+		p.SetState(221)
 		_la = p.GetTokenStream().LA(1)
 
 		if !(((_la-38)&-(0x1f+1)) == 0 && ((1<<uint((_la-38)))&((1<<(SqlParserNUMERIC_LITERAL-38))|(1<<(SqlParserSTRING_LITERAL-38))|(1<<(SqlParserBOOLEAN_LITERAL-38)))) != 0) {
@@ -3539,7 +3903,7 @@ func (p *SqlParser) GroupBy() (localctx IGroupByContext) {
 	_ = this
 
 	localctx = NewGroupByContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 30, SqlParserRULE_groupBy)
+	p.EnterRule(localctx, 32, SqlParserRULE_groupBy)
 
 	defer func() {
 		p.ExitRule()
@@ -3557,18 +3921,18 @@ func (p *SqlParser) GroupBy() (localctx IGroupByContext) {
 		}
 	}()
 
-	p.SetState(191)
+	p.SetState(226)
 	p.GetErrorHandler().Sync(p)
 
 	switch p.GetTokenStream().LA(1) {
 	case SqlParserK_GROUP_BY:
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(188)
+			p.SetState(223)
 			p.Match(SqlParserK_GROUP_BY)
 		}
 		{
-			p.SetState(189)
+			p.SetState(224)
 			p.Column()
 		}
 
@@ -3584,7 +3948,7 @@ func (p *SqlParser) GroupBy() (localctx IGroupByContext) {
 
 func (p *SqlParser) Sempred(localctx antlr.RuleContext, ruleIndex, predIndex int) bool {
 	switch ruleIndex {
-	case 10:
+	case 11:
 		var t *ExprContext = nil
 		if localctx != nil {
 			t = localctx.(*ExprContext)

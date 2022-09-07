@@ -25,8 +25,7 @@ func main() {
 		out := make(chan plog.LogRecordSlice)
 		outErr := make(chan error)
 		visitor := parser.NewSqlStreamVisitor(query, in, out, outErr, zap.NewNop())
-		//test := plog.NewLogRecordSlice()
-		//generateTestLogs().At(0).CopyTo(test.AppendEmpty())
+
 		in <- parser.GenerateTestLogs()
 
 		select {

@@ -41,8 +41,14 @@ type SqlVisitor interface {
 	// Visit a parse tree produced by SqlParser#alias.
 	VisitAlias(ctx *AliasContext) interface{}
 
-	// Visit a parse tree produced by SqlParser#function.
-	VisitFunction(ctx *FunctionContext) interface{}
+	// Visit a parse tree produced by SqlParser#simpleFunction.
+	VisitSimpleFunction(ctx *SimpleFunctionContext) interface{}
+
+	// Visit a parse tree produced by SqlParser#recursiveFunction.
+	VisitRecursiveFunction(ctx *RecursiveFunctionContext) interface{}
+
+	// Visit a parse tree produced by SqlParser#functionName.
+	VisitFunctionName(ctx *FunctionNameContext) interface{}
 
 	// Visit a parse tree produced by SqlParser#columnAggregation.
 	VisitColumnAggregation(ctx *ColumnAggregationContext) interface{}

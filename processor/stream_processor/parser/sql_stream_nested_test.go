@@ -6,6 +6,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.uber.org/zap"
+	"reflect"
 	"testing"
 )
 
@@ -145,12 +146,12 @@ func TestWhereNestedCompound(t *testing.T) {
 		},
 		{
 			name:     "nested 8",
-			query:    `SELECT * WHERE provider.type = 'middle' and price < 30 and is_alive=true;`,
+			query:    `SELECT * WHERE provider.type = 'middle' and price < 30 and is_alive='true';`,
 			expected: 5,
 		},
 		{
 			name:     "nested 9",
-			query:    `SELECT * WHERE provider.type = 'middle' and price < 30 and is_alive=true;`,
+			query:    `SELECT * WHERE provider.type = 'middle' and price < 30 and is_alive='true';`,
 			expected: 5,
 		},
 		{
@@ -170,12 +171,12 @@ func TestWhereNestedCompound(t *testing.T) {
 		},
 		{
 			name:     "nested 13",
-			query:    `SELECT * WHERE (provider.type = 'middle' and price < 10 and is_alive=true);`,
+			query:    `SELECT * WHERE (provider.type = 'middle' and price < 10 and is_alive='true');`,
 			expected: 2,
 		},
 		{
 			name:     "nested 14",
-			query:    `SELECT * WHERE (provider.type = 'middle' and price < 10 and is_alive=true) or (provider.type = 'small' and price < 10 and is_alive=false);`,
+			query:    `SELECT * WHERE (provider.type = 'middle' and price < 10 and is_alive='true') or (provider.type = 'small' and price < 10 and is_alive='false');`,
 			expected: 4,
 		},
 		{
@@ -215,14 +216,67 @@ func TestWhereNestedCompound(t *testing.T) {
 
 func TestSelectNested(t *testing.T) {
 	tests := []struct {
-		name     string
-		query    string
-		expected int
+		name, query string
+
+		expected       int
+		expectedNested func() pcommon.Value
 	}{
 		{
-			name:     "nested 1",
+			name:     "nested 2 fields",
+			query:    `SELECT provider.source, provider.type where provider.number = 2;`,
+			expected: 1,
+			expectedNested: func() pcommon.Value {
+				val := pcommon.NewValueMap()
+				val.MapVal().Insert("source", pcommon.NewValueString("Source 2"))
+				val.MapVal().Insert("type", pcommon.NewValueString("big"))
+				return val
+			},
+		},
+		{
+			name:     "nested 3 fields",
+			query:    `SELECT provider.source, provider.type, provider.number where provider.number = 2;`,
+			expected: 1,
+			expectedNested: func() pcommon.Value {
+				val := pcommon.NewValueMap()
+				val.MapVal().Insert("source", pcommon.NewValueString("Source 2"))
+				val.MapVal().Insert("type", pcommon.NewValueString("big"))
+				val.MapVal().Insert("number", pcommon.NewValueDouble(2))
+				return val
+			},
+		},
+		{
+			name:     "nested all fields",
+			query:    `SELECT provider where provider.number = 2;`,
+			expected: 1,
+			expectedNested: func() pcommon.Value {
+				val := pcommon.NewValueMap()
+				val.MapVal().Insert("source", pcommon.NewValueString("Source 2"))
+				val.MapVal().Insert("type", pcommon.NewValueString("big"))
+				val.MapVal().Insert("number", pcommon.NewValueDouble(2))
+				return val
+			},
+		},
+		{
+			name:     "nested all unnecessary fields",
+			query:    `SELECT provider.source, provider.type, provider.number, provider.source, name where provider.number = 2;`,
+			expected: 1,
+			expectedNested: func() pcommon.Value {
+				val := pcommon.NewValueMap()
+				val.MapVal().Insert("source", pcommon.NewValueString("Source 2"))
+				val.MapVal().Insert("type", pcommon.NewValueString("big"))
+				val.MapVal().Insert("number", pcommon.NewValueDouble(2))
+				return val
+			},
+		},
+		{
+			name:     "nested without where",
 			query:    `SELECT provider.source;`,
 			expected: 100,
+			expectedNested: func() pcommon.Value {
+				val := pcommon.NewValueMap()
+				val.MapVal().Insert("source", pcommon.NewValueString("Source 0"))
+				return val
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -236,8 +290,75 @@ func TestSelectNested(t *testing.T) {
 			in <- GenerateTestLogs()
 
 			ls := <-out
+			res, ok := ls.At(0).Attributes().Get("provider")
+			assert.True(t, ok)
+			assert.True(t, reflect.DeepEqual(tt.expectedNested(), res))
 
-			assert.Equal(t, tt.expected, ls.Len())
+		})
+	}
+
+}
+
+func TestSelectNestedWIthAliases(t *testing.T) {
+	tests := []struct {
+		name, query, key string
+		expected         int
+		expectedNested   func() pcommon.Map
+	}{
+		{
+			name:     "nested 2 with alias",
+			query:    `SELECT provider.source as NewSource, provider.type as NewType where provider.number = 2;`,
+			expected: 1,
+			expectedNested: func() pcommon.Map {
+				val := pcommon.NewMap()
+				val.Insert("NewSource", pcommon.NewValueString("Source 2"))
+				val.Insert("NewType", pcommon.NewValueString("big"))
+				return val
+			},
+		},
+		{
+			name:     "nested 2 with alias and nested",
+			query:    `SELECT provider.source as NewSource, provider.type as NewType, provider.number where provider.number = 2;`,
+			expected: 1,
+			expectedNested: func() pcommon.Map {
+				val := pcommon.NewMap()
+				val.Insert("NewSource", pcommon.NewValueString("Source 2"))
+				val.Insert("NewType", pcommon.NewValueString("big"))
+				mapValue := pcommon.NewValueMap()
+				mapValue.MapVal().Insert("number", pcommon.NewValueDouble(2))
+				val.Insert("provider", mapValue)
+				return val
+			},
+		},
+		{
+			name:     "nested 2 with alias and nested ans simple",
+			query:    `SELECT provider.source as NewSource, provider.type as NewType, price, provider.number where provider.number = 2;`,
+			expected: 1,
+			expectedNested: func() pcommon.Map {
+				val := pcommon.NewMap()
+				val.Insert("NewSource", pcommon.NewValueString("Source 2"))
+				val.Insert("NewType", pcommon.NewValueString("big"))
+				val.Insert("price", pcommon.NewValueInt(2))
+				mapValue := pcommon.NewValueMap()
+				mapValue.MapVal().Insert("number", pcommon.NewValueDouble(2))
+				val.Insert("provider", mapValue)
+				return val
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			in := make(chan plog.LogRecordSlice)
+			out := make(chan plog.LogRecordSlice)
+			outErr := make(chan error)
+			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			defer visitor.Stop()
+			in <- GenerateTestLogs()
+
+			ls := <-out
+			res := ls.At(0).Attributes()
+			assert.True(t, reflect.DeepEqual(tt.expectedNested(), res))
 
 		})
 	}

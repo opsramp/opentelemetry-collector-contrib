@@ -52,7 +52,15 @@ func (v *BaseSqlVisitor) VisitAlias(ctx *AliasContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseSqlVisitor) VisitFunction(ctx *FunctionContext) interface{} {
+func (v *BaseSqlVisitor) VisitSimpleFunction(ctx *SimpleFunctionContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseSqlVisitor) VisitRecursiveFunction(ctx *RecursiveFunctionContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseSqlVisitor) VisitFunctionName(ctx *FunctionNameContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

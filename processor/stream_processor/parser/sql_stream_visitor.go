@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
@@ -28,6 +29,9 @@ type SqlStreamVisitor struct {
 	// this is logs to emin
 	resultLogRecords    plog.LogRecordSlice
 	currentResultRecord plog.LogRecord
+
+	//this is temp value for functions
+	tempValue pcommon.Value
 
 	groupByLogRecords map[string]plog.LogRecordSlice
 
@@ -301,24 +305,6 @@ func (v *SqlStreamVisitor) applySelectColumns(ctx *SelectColumnsContext) error {
 	return nil
 }
 
-//adjustResultColumns this is called if where statement exists
-func (v *SqlStreamVisitor) adjustResultColumns(ctx *SelectColumnsContext) error {
-
-	// Remove attributes which are not listed in value columns statement
-	// We can't use RemoveIf as it takes only values
-	removed := make([]string, 0, v.currentOrigRecord.Attributes().Len())
-
-	v.currentOrigRecord.Attributes().RemoveIf(func(k string, value pcommon.Value) bool {
-		return fieldExists(k, value, ctx.AllColumn())
-	})
-
-	for _, removedKey := range removed {
-		v.currentOrigRecord.Attributes().Remove(removedKey)
-	}
-
-	return nil
-}
-
 func (v *SqlStreamVisitor) VisitSelectAggregation(ctx *SelectAggregationContext) interface{} {
 	return ctx.AggregationColumn().Accept(v)
 }
@@ -451,7 +437,13 @@ func (v *SqlStreamVisitor) VisitIdentifierColumn(ctx *IdentifierColumnContext) i
 		v.currentResultRecord.Attributes().Insert(fieldName, nestedVal)
 		return nil
 	}
-	newMapVal := pcommon.NewValueMap()
+
+	var newMapVal pcommon.Value
+	newMapVal, ok = v.currentResultRecord.Attributes().Get(fieldName)
+	if !ok {
+		newMapVal = pcommon.NewValueMap()
+	}
+
 	newMapVal.MapVal().Insert(nestedFieldName, nestedVal)
 	v.currentResultRecord.Attributes().Insert(fieldName, newMapVal)
 
@@ -459,9 +451,67 @@ func (v *SqlStreamVisitor) VisitIdentifierColumn(ctx *IdentifierColumnContext) i
 }
 
 func (v *SqlStreamVisitor) VisitFunctionColumn(ctx *FunctionColumnContext) interface{} {
-	//first we check that fields listed in select (including nested) exist in log record
+
+	var simpleFuncCtx *SimpleFunctionContext
+	res := ctx.Function().Accept(v)
+
+	simpleFuncCtx, ok := ctx.GetChild(0).(*SimpleFunctionContext)
+	if !ok {
+		//we need to find needed attributes from child context
+		for _, childRecCtx := range ctx.Function().GetChildren() {
+			switch childRecCtx.(type) {
+			case *SimpleFunctionContext:
+				simpleFuncCtx = childRecCtx.(*SimpleFunctionContext)
+			case *RecursiveFunctionContext:
+				simpleFuncCtx = findSimpleFuncCtx(childRecCtx.(*RecursiveFunctionContext))
+			default:
+				continue
+			}
+		}
+	}
+
+	if len(simpleFuncCtx.AllIDENTIFIER()) == 1 {
+		fieldName := simpleFuncCtx.IDENTIFIER(0).GetText()
+		if ctx.Alias() != nil {
+			fieldName = ctx.Alias().GetStop().GetText()
+		}
+		v.currentResultRecord.Attributes().Insert(fieldName, v.tempValue)
+		return nil
+	}
+
+	if ctx.Alias() != nil {
+		fieldName := ctx.Alias().GetStop().GetText()
+		v.currentResultRecord.Attributes().Insert(fieldName, v.tempValue)
+	}
+
+	nestedFieldName := simpleFuncCtx.IDENTIFIER(1).GetText()
+	newMapVal := pcommon.NewValueMap()
+	newMapVal.MapVal().Insert(nestedFieldName, v.tempValue)
+
+	v.currentResultRecord.Attributes().Insert(nestedFieldName, newMapVal)
+
+	return res
+}
+
+func findSimpleFuncCtx(ctx *RecursiveFunctionContext) *SimpleFunctionContext {
+	for _, childCtx := range ctx.GetChildren() {
+		switch childCtx.(type) {
+		case *RecursiveFunctionContext:
+			return findSimpleFuncCtx(childCtx.(*RecursiveFunctionContext))
+		case *SimpleFunctionContext:
+			return childCtx.(*SimpleFunctionContext)
+		default:
+			continue
+		}
+	}
+
+	return nil
+}
+
+func (v *SqlStreamVisitor) VisitSimpleFunction(ctx *SimpleFunctionContext) interface{} {
+
 	fieldName := ctx.IDENTIFIER(0).GetText()
-	functionMame := ctx.Function().GetText()
+	functionMame := ctx.FunctionName().GetText()
 	args := ctx.AllLiteralValue()
 
 	value, ok := v.currentOrigRecord.Attributes().Get(fieldName)
@@ -472,17 +522,14 @@ func (v *SqlStreamVisitor) VisitFunctionColumn(ctx *FunctionColumnContext) inter
 	//this is simple field
 	if len(ctx.AllIDENTIFIER()) == 1 {
 
-		if ctx.Alias() != nil {
-			fieldName = ctx.Alias().GetStop().GetText()
-		}
 		newValue, err := v.applyFunction(value, functionMame, args...)
 		if err != nil {
 			return err
 		}
 
-		v.currentResultRecord.Attributes().Insert(fieldName, newValue)
-
-		return nil
+		//v.currentResultRecord.Attributes().Insert(fieldName, newValue)
+		v.tempValue = newValue
+		return newValue
 	}
 
 	// here we process nested field
@@ -491,22 +538,45 @@ func (v *SqlStreamVisitor) VisitFunctionColumn(ctx *FunctionColumnContext) inter
 	if err != nil {
 		return err
 	}
-	if ctx.Alias() != nil {
-		fieldName = ctx.Alias().GetStop().GetText()
-		v.currentResultRecord.Attributes().Insert(fieldName, nestedVal)
-		return nil
-	}
+	newValue, err := v.applyFunction(value, functionMame, args...)
+
 	newMapVal := pcommon.NewValueMap()
 	newMapVal.MapVal().Insert(nestedFieldName, nestedVal)
-	v.currentResultRecord.Attributes().Insert(fieldName, newMapVal)
-
-	return nil
+	//v.currentResultRecord.Attributes().Insert(fieldName, newValue)
+	v.tempValue = newValue
+	return newValue
 }
+
+func (v *SqlStreamVisitor) VisitRecursiveFunction(ctx *RecursiveFunctionContext) interface{} {
+
+	res := ctx.Function().Accept(v)
+	fmt.Println(res.(pcommon.Value).AsString())
+	switch res.(type) {
+	case error:
+		return res
+	}
+	newValue, err := v.applyFunction(v.tempValue, ctx.FunctionName().GetText(), ctx.AllLiteralValue()...)
+	if err != nil {
+		return nil
+	}
+	v.tempValue = newValue
+
+	return res
+}
+
 func (v *SqlStreamVisitor) applyFunction(value pcommon.Value, functionName string, args ...ILiteralValueContext) (pcommon.Value, error) {
 	switch functionName {
-	case "upper":
-	case "lower":
-	case "substr":
+	case upper:
+		return pcommon.NewValueString(strings.ToUpper(value.AsString())), nil
+	case lower:
+		return pcommon.NewValueString(strings.ToLower(value.AsString())), nil
+	case substr:
+		if len(args) != 2 {
+			return pcommon.NewValueEmpty(), fmt.Errorf("substr accept two arguments")
+		}
+		res, err := substring(value, args[0].GetText(), args[1].GetText())
+		return res, err
+
 	default:
 		return pcommon.NewValueEmpty(), fmt.Errorf("function %q isn't available", functionName)
 
@@ -665,6 +735,9 @@ func (v *SqlStreamVisitor) VisitAlias(ctx *AliasContext) interface{} {
 }
 
 func (v *SqlStreamVisitor) VisitFunction(ctx *FunctionContext) interface{} {
+	return nil
+}
 
+func (v *SqlStreamVisitor) VisitFunctionName(ctx *FunctionNameContext) interface{} {
 	return nil
 }

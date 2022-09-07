@@ -28,8 +28,8 @@ aggregationColumns
 
 
 column
-  : (IDENTIFIER | IDENTIFIER DOT IDENTIFIER) alias?                                                       #identifierColumn
-  | function L_BRACKET (IDENTIFIER | IDENTIFIER DOT IDENTIFIER) (COMMA literalValue)* R_BRACKET alias?    #functionColumn
+  : (IDENTIFIER | IDENTIFIER DOT IDENTIFIER) alias?   #identifierColumn
+  | function alias?                                   #functionColumn
   ;
 
 alias
@@ -37,10 +37,14 @@ alias
   ;
 
 function
-  : IDENTIFIER
+  :  functionName L_BRACKET ( IDENTIFIER | IDENTIFIER DOT IDENTIFIER) (COMMA literalValue)* R_BRACKET         #simpleFunction
+  |  functionName L_BRACKET ( IDENTIFIER | IDENTIFIER DOT IDENTIFIER) (COMMA literalValue)* R_BRACKET         #simpleFunction
+  |  functionName L_BRACKET function  (COMMA literalValue)* R_BRACKET                                         #recursiveFunction
   ;
 
-
+functionName
+  : IDENTIFIER
+  ;
 
 aggregationColumn
   : (K_MIN | K_MAX | K_COUNT | K_AVG | K_SUM) L_BRACKET ( IDENTIFIER | IDENTIFIER DOT IDENTIFIER) R_BRACKET          # columnAggregation
@@ -51,7 +55,6 @@ aggregationColumn
 whereStatement
   : K_WHERE expr                        #whereStmt
   ;
-
 
 expr
  : simpleExpr                                                                    #simpleCondition

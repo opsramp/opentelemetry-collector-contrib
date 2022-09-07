@@ -26,8 +26,22 @@ func TestScalarFunctions(t *testing.T) {
 			expectedCount: 1,
 		},
 		{
-			name:          "upper",
+			name:          "substr",
 			query:         `SELECT substr(name,2,3) WHERE name = 'Test name 50';`,
+			expectedAttr:  []string{"name"},
+			appliedFunc:   strings.ToLower,
+			expectedCount: 1,
+		},
+		{
+			name:          "recursive 1",
+			query:         `SELECT upper(lower(name)) WHERE name = 'Test name 50';`,
+			expectedAttr:  []string{"name"},
+			appliedFunc:   strings.ToLower,
+			expectedCount: 1,
+		},
+		{
+			name:          "recursive 2",
+			query:         `SELECT upper(lower(upper(substr(name,2,3)))) WHERE name = 'Test name 50';`,
 			expectedAttr:  []string{"name"},
 			appliedFunc:   strings.ToLower,
 			expectedCount: 1,
