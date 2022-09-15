@@ -107,13 +107,13 @@ func compareBool(comparisonToken int, fieldVal, comparisonVal bool) bool {
 	return false
 }
 
-func sum(ls plog.LogRecordSlice, fieldName string) (float64, error) {
+func sum(ls plog.LogRecordSlice, ctx *ColumnAggregationContext) (float64, error) {
 	var sum float64
 	for i := 0; i < ls.Len(); i++ {
 		curRec := ls.At(i)
-		val, ok := curRec.Attributes().Get(fieldName)
-		if !ok {
-			return 0, fmt.Errorf("field %q missed", fieldName)
+		_, val, err := getAttributeValueForAggregation(ctx, curRec.Attributes())
+		if err != nil {
+			return 0, err
 		}
 		convertedVal, err := strconv.ParseFloat(val.AsString(), 64)
 		if err != nil {
@@ -125,19 +125,19 @@ func sum(ls plog.LogRecordSlice, fieldName string) (float64, error) {
 	return sum, nil
 }
 
-func min(ls plog.LogRecordSlice, fieldName string) (float64, error) {
+func min(ls plog.LogRecordSlice, ctx *ColumnAggregationContext) (float64, error) {
 	var conErr error
 	ls.Sort(func(a, b plog.LogRecord) bool {
-		leftVal, ok := a.Attributes().Get(fieldName)
-		if !ok {
-			conErr = fmt.Errorf("field %q missed", fieldName)
+		_, leftVal, err := getAttributeValueForAggregation(ctx, a.Attributes())
+		if err != nil {
+			conErr = err
 		}
 		convertedLeft := leftVal.DoubleVal()
 
-		rightVal, ok := b.Attributes().Get(fieldName)
+		_, rightVal, err := getAttributeValueForAggregation(ctx, b.Attributes())
 
-		if !ok {
-			conErr = fmt.Errorf("field %q missed", fieldName)
+		if err != nil {
+			conErr = err
 		}
 
 		convertedRight := rightVal.DoubleVal()
@@ -146,30 +146,29 @@ func min(ls plog.LogRecordSlice, fieldName string) (float64, error) {
 	})
 
 	if ls.Len() > 0 {
-		res, _ := ls.At(0).Attributes().Get(fieldName)
+		_, res, err := getAttributeValueForAggregation(ctx, ls.At(0).Attributes())
 		convertedRes, _ := strconv.ParseFloat(res.AsString(), 64)
-		return convertedRes, nil
+		return convertedRes, err
 	}
 
 	return 0, conErr
 }
 
-func max(ls plog.LogRecordSlice, fieldName string) (float64, error) {
+func max(ls plog.LogRecordSlice, ctx *ColumnAggregationContext) (float64, error) {
 	var conErr error
 	ls.Sort(func(a, b plog.LogRecord) bool {
-		leftVal, ok := a.Attributes().Get(fieldName)
-		if !ok {
-			conErr = fmt.Errorf("field %q missed", fieldName)
+		_, leftVal, err := getAttributeValueForAggregation(ctx, a.Attributes())
+		if err != nil {
+			conErr = err
 		}
 		convertedLeft, err := strconv.ParseFloat(leftVal.AsString(), 64)
 		if err != nil {
 			conErr = err
 		}
 
-		rightVal, ok := b.Attributes().Get(fieldName)
-
-		if !ok {
-			conErr = fmt.Errorf("field %q missed", fieldName)
+		_, rightVal, err := getAttributeValueForAggregation(ctx, b.Attributes())
+		if err != nil {
+			conErr = err
 		}
 
 		convertedRight, err := strconv.ParseFloat(rightVal.AsString(), 64)
@@ -181,21 +180,21 @@ func max(ls plog.LogRecordSlice, fieldName string) (float64, error) {
 	})
 
 	if ls.Len() > 0 {
-		res, _ := ls.At(0).Attributes().Get(fieldName)
+		_, res, err := getAttributeValueForAggregation(ctx, ls.At(0).Attributes())
 		convertedRes, _ := strconv.ParseFloat(res.AsString(), 64)
-		return convertedRes, nil
+		return convertedRes, err
 	}
 
 	return 0.0, conErr
 }
 
-func avg(ls plog.LogRecordSlice, fieldName string) (float64, error) {
+func avg(ls plog.LogRecordSlice, ctx *ColumnAggregationContext) (float64, error) {
 	var sum float64
 	for i := 0; i < ls.Len(); i++ {
 		curRec := ls.At(i)
-		val, ok := curRec.Attributes().Get(fieldName)
-		if !ok {
-			return 0, fmt.Errorf("field %q missed", fieldName)
+		_, val, err := getAttributeValueForAggregation(ctx, curRec.Attributes())
+		if err != nil {
+			return 0, err
 		}
 		convertedVal, err := strconv.ParseFloat(val.AsString(), 64)
 		if err != nil {
@@ -274,13 +273,50 @@ func fieldExists(key string, value pcommon.Value, allColumns []interface{}) bool
 	return !nestedFound
 }
 
-// check if field exists in attr
-func fieldExistsInAttr(fieldName string, attr pcommon.Map) error {
-	_, ok := attr.Get(fieldName)
-	if !ok {
-		return fmt.Errorf("field %q missed", fieldName)
+func getAttributeValueForAggregation(ctx *ColumnAggregationContext, attr pcommon.Map) (string, pcommon.Value, error) {
+	if len(ctx.AllIDENTIFIER()) > 1 {
+		value, err := nestedFieldExistsInAttr(ctx.IDENTIFIER(0).GetText(), ctx.IDENTIFIER(1).GetText(), attr)
+		return ctx.IDENTIFIER(0).GetText() + "," + ctx.IDENTIFIER(1).GetText(), value, err
 	}
-	return nil
+	value, err := fieldExistsInAttr(ctx.IDENTIFIER(0).GetText(), attr)
+	return ctx.IDENTIFIER(0).GetText(), value, err
+
+}
+
+func insertValueTOAttributes(ctx *ColumnAggregationContext, attr pcommon.Map, value float64) {
+	key := ctx.IDENTIFIER(0).GetText()
+
+	if len(ctx.AllIDENTIFIER()) > 1 {
+		nested := pcommon.NewValueMap()
+		nested.MapVal().Insert(ctx.IDENTIFIER(1).GetText(), pcommon.NewValueDouble(value))
+		attr.Insert(key, nested)
+		return
+	}
+	attr.Insert(key, pcommon.NewValueDouble(value))
+}
+
+func getAttributeValue(column IColumnContext, attr pcommon.Map) (string, pcommon.Value, error) {
+	switch col := column.(type) {
+	case *IdentifierColumnContext:
+		if len(col.AllIDENTIFIER()) > 1 {
+			value, err := nestedFieldExistsInAttr(col.IDENTIFIER(0).GetText(), col.IDENTIFIER(1).GetText(), attr)
+			return col.IDENTIFIER(0).GetText() + "," + col.IDENTIFIER(1).GetText(), value, err
+		}
+		value, err := fieldExistsInAttr(col.IDENTIFIER(0).GetText(), attr)
+		return col.IDENTIFIER(0).GetText(), value, err
+	default:
+		return "", pcommon.NewValueEmpty(), fmt.Errorf("unknown column type")
+	}
+
+}
+
+// check if field exists in attr
+func fieldExistsInAttr(fieldName string, attr pcommon.Map) (pcommon.Value, error) {
+	value, ok := attr.Get(fieldName)
+	if !ok {
+		return pcommon.NewValueEmpty(), fmt.Errorf("field %q missed", fieldName)
+	}
+	return value, nil
 }
 
 // check is nested field exists

@@ -23,7 +23,7 @@ resultColumns
  ;
 
 aggregationColumns
- : (column COMMA)? aggregationColumn (column | STAR) R_BRACKET    #selectAggregation
+ : (column COMMA)? aggregationColumn (COMMA aggregationColumn)*         #selectAggregation
  ;
 
 
@@ -47,7 +47,7 @@ functionName
   ;
 
 aggregationColumn
-  : (K_MIN | K_MAX | K_COUNT | K_AVG | K_SUM) L_BRACKET ( IDENTIFIER | IDENTIFIER DOT IDENTIFIER) R_BRACKET          # columnAggregation
+  : (K_MIN | K_MAX | K_COUNT | K_AVG | K_SUM) L_BRACKET ( IDENTIFIER | IDENTIFIER DOT IDENTIFIER) R_BRACKET alias?   # columnAggregation
   | (IDENTIFIER | IDENTIFIER DOT IDENTIFIER)? K_COUNT L_BRACKET STAR R_BRACKET                                       # columnCountAggregation
   ;
 

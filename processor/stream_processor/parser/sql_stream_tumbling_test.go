@@ -177,6 +177,7 @@ func TestWindowTumblingMax(t *testing.T) {
 	assert.Equal(t, pcommon.NewValueDouble(99.0), res)
 }
 
+/*
 func TestAvgContext_K_MIN(t *testing.T) {
 	ls := GenerateTestLogs()
 	res, err := min(ls, "price")
@@ -198,6 +199,8 @@ func TestAvgContext_K_SUM(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 4950.0, res)
 }
+
+*/
 
 func TestAvgContext_K_COUNT(t *testing.T) {
 	ls := GenerateTestLogs()

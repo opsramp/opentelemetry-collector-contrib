@@ -30,7 +30,8 @@ type SqlStreamVisitor struct {
 	resultLogRecords    plog.LogRecordSlice
 	currentResultRecord plog.LogRecord
 
-	groupByLogRecords map[string]plog.LogRecordSlice
+	groupByTempLogRecords map[string]plog.LogRecordSlice
+	groupByCollector      map[string]plog.LogRecordSlice
 
 	in        <-chan plog.LogRecordSlice
 	out       chan<- plog.LogRecordSlice
@@ -41,14 +42,13 @@ type SqlStreamVisitor struct {
 func NewSqlStreamVisitor(query string, in <-chan plog.LogRecordSlice, out chan<- plog.LogRecordSlice, outErr chan<- error, logger *zap.Logger) *SqlStreamVisitor {
 
 	visitor := &SqlStreamVisitor{
-		ParseTreeVisitor:  &SqlStreamVisitor{},
-		query:             query,
-		logger:            logger,
-		groupByLogRecords: map[string]plog.LogRecordSlice{},
-		in:                in,
-		out:               out,
-		outErr:            outErr,
-		shutdownC:         make(chan struct{}, 1),
+		ParseTreeVisitor: &SqlStreamVisitor{},
+		query:            query,
+		logger:           logger,
+		in:               in,
+		out:              out,
+		outErr:           outErr,
+		shutdownC:        make(chan struct{}, 1),
 	}
 
 	isTumbling, val := IsTumblingQuery(query)
@@ -99,8 +99,11 @@ func (v *SqlStreamVisitor) startWindowTumblingLoop() {
 	go func() {
 		for {
 			select {
-			case ls := <-v.in:
-				ls.MoveAndAppendTo(v.origLogRecords)
+			case v.origLogRecords = <-v.in:
+				if err := v.runQuery(); err != nil {
+					v.outErr <- err
+					break
+				}
 			case <-v.shutdownC:
 				v.logger.Debug("sql engine shutting down")
 				return
@@ -211,22 +214,78 @@ func (v *SqlStreamVisitor) VisitSelectTumblingGroupBy(ctx *SelectTumblingGroupBy
 
 func (v *SqlStreamVisitor) VisitGroupBy(ctx *GroupByContext) interface{} {
 
-	//v.groupByLogRecords = make(map[string]plog.LogRecordSlice)
+	//ctx.Column().I
+	v.groupByTempLogRecords = make(map[string]plog.LogRecordSlice)
+
 	for i := 0; i < v.origLogRecords.Len(); i++ {
 		record := v.origLogRecords.At(i)
-		groupByField, ok := record.Attributes().Get(ctx.Column().GetText())
-		if !ok {
-			return fmt.Errorf("group by field %q missed", ctx.Column().GetText())
+		_, value, err := getAttributeValue(ctx.Column(), record.Attributes())
+		if err != nil {
+			return err
 		}
-		_, ok = v.groupByLogRecords[groupByField.AsString()]
+
+		_, ok := v.groupByTempLogRecords[value.AsString()]
 		if !ok {
-			v.groupByLogRecords[groupByField.AsString()] = plog.NewLogRecordSlice()
+			v.groupByTempLogRecords[value.AsString()] = plog.NewLogRecordSlice()
 		}
-		appendedRec := v.groupByLogRecords[groupByField.AsString()].AppendEmpty()
+		appendedRec := v.groupByTempLogRecords[value.AsString()].AppendEmpty()
 		record.CopyTo(appendedRec)
+	}
+	return nil
+}
+
+func (v *SqlStreamVisitor) VisitColumnAggregation(ctx *ColumnAggregationContext) interface{} {
+	//apply aggregation and send to channel
+
+	dest := plog.NewLogRecordSlice()
+
+	if v.groupByTempLogRecords != nil {
+		for _, recSlice := range v.groupByTempLogRecords {
+			res, err := v.getSimpleAggregatedValue(ctx, recSlice)
+			if err != nil {
+				return err
+			}
+
+			//for each grouped slice we emit final record
+			newRec := dest.AppendEmpty()
+			insertValueTOAttributes(ctx, newRec.Attributes(), res)
+
+		}
+		v.origLogRecords = dest
+		return nil
 	}
 
 	return nil
+}
+
+func (v *SqlStreamVisitor) getCountAggregatedValue(ctx *ColumnAggregationContext, fieldName string, ls plog.LogRecordSlice) (plog.LogRecord, error) {
+
+	resLs := plog.NewLogRecordSlice()
+	aggrRecord := resLs.AppendEmpty()
+	var res float64
+	var err error
+
+	if ctx.K_AVG() != nil {
+		res, err = avg(ls, ctx)
+	}
+	if ctx.K_SUM() != nil {
+		res, err = sum(ls, ctx)
+	}
+	if ctx.K_COUNT() != nil {
+		res = float64(count(ls))
+	}
+	if ctx.K_MAX() != nil {
+		res, err = max(ls, ctx)
+	}
+	if ctx.K_MIN() != nil {
+		res, err = min(ls, ctx)
+	}
+	if err != nil {
+		return plog.LogRecord{}, err
+	}
+
+	aggrRecord.Attributes().Insert(fieldName, pcommon.NewValueDouble(res))
+	return aggrRecord, nil
 }
 
 // VisitSelectColumns is called in case of missed where statement and removes missed attributes
@@ -303,35 +362,13 @@ func (v *SqlStreamVisitor) applySelectColumns(ctx *SelectColumnsContext) error {
 }
 
 func (v *SqlStreamVisitor) VisitSelectAggregation(ctx *SelectAggregationContext) interface{} {
-	return ctx.AggregationColumn().Accept(v)
-}
-
-func (v *SqlStreamVisitor) VisitColumnAggregation(ctx *ColumnAggregationContext) interface{} {
-	/*dest := plog.NewLogRecordSlice()
-
-	if v.groupByLogRecords != nil {
-		for key, recSlice := range v.groupByLogRecords {
-			res, err := v.getSimpleAggregatedValue(ctx, ctx.().GetText(), recSlice)
-			if err != nil {
-				return err
-			}
-
-			res.Attributes().Insert(ctx.Column().GetText(), pcommon.NewValueString(key))
-			res.CopyTo(dest.AppendEmpty())
+	for _, col := range ctx.AllAggregationColumn() {
+		res := col.Accept(v)
+		switch res.(type) {
+		case error:
+			return res
 		}
-		v.origLogRecords = dest
-		return nil
 	}
-
-	res, err := v.getSimpleAggregatedValue(ctx, ctx.Column().GetText(), v.origLogRecords)
-	if err != nil {
-		return err
-	}
-	res.CopyTo(dest.AppendEmpty())
-	v.origLogRecords = dest
-
-	*/
-
 	return nil
 }
 
@@ -340,64 +377,31 @@ func (v *SqlStreamVisitor) VisitColumnCountAggregation(ctx *ColumnCountAggregati
 	panic("implement me")
 }
 
-func (v *SqlStreamVisitor) getSimpleAggregatedValue(ctx *ColumnAggregationContext, fieldName string, ls plog.LogRecordSlice) (plog.LogRecord, error) {
+func (v *SqlStreamVisitor) getSimpleAggregatedValue(ctx *ColumnAggregationContext, ls plog.LogRecordSlice) (float64, error) {
 
-	resLs := plog.NewLogRecordSlice()
-	aggrRecord := resLs.AppendEmpty()
 	var res float64
 	var err error
 
 	if ctx.K_AVG() != nil {
-		res, err = avg(ls, fieldName)
+		res, err = avg(ls, ctx)
 	}
 	if ctx.K_SUM() != nil {
-		res, err = sum(ls, fieldName)
+		res, err = sum(ls, ctx)
 	}
 	if ctx.K_COUNT() != nil {
 		res = float64(count(ls))
 	}
 	if ctx.K_MAX() != nil {
-		res, err = max(ls, fieldName)
+		res, err = max(ls, ctx)
 	}
 	if ctx.K_MIN() != nil {
-		res, err = min(ls, fieldName)
+		res, err = min(ls, ctx)
 	}
 	if err != nil {
-		return plog.LogRecord{}, err
+		return 0, err
 	}
 
-	aggrRecord.Attributes().Insert(fieldName, pcommon.NewValueDouble(res))
-	return aggrRecord, nil
-}
-
-func (v *SqlStreamVisitor) getCountAggregatedValue(ctx *ColumnAggregationContext, fieldName string, ls plog.LogRecordSlice) (plog.LogRecord, error) {
-
-	resLs := plog.NewLogRecordSlice()
-	aggrRecord := resLs.AppendEmpty()
-	var res float64
-	var err error
-
-	if ctx.K_AVG() != nil {
-		res, err = avg(ls, fieldName)
-	}
-	if ctx.K_SUM() != nil {
-		res, err = sum(ls, fieldName)
-	}
-	if ctx.K_COUNT() != nil {
-		res = float64(count(ls))
-	}
-	if ctx.K_MAX() != nil {
-		res, err = max(ls, fieldName)
-	}
-	if ctx.K_MIN() != nil {
-		res, err = min(ls, fieldName)
-	}
-	if err != nil {
-		return plog.LogRecord{}, err
-	}
-
-	aggrRecord.Attributes().Insert(fieldName, pcommon.NewValueDouble(res))
-	return aggrRecord, nil
+	return res, nil
 }
 
 func (v *SqlStreamVisitor) VisitSelectStar(ctx *SelectStarContext) interface{} {
@@ -559,7 +563,6 @@ func (v *SqlStreamVisitor) applyFunction(value pcommon.Value, functionName strin
 		return pcommon.NewValueEmpty(), fmt.Errorf("function %q isn't available", functionName)
 
 	}
-	return pcommon.NewValueEmpty(), nil
 }
 
 func (v *SqlStreamVisitor) VisitSimpleCondition(ctx *SimpleConditionContext) interface{} {
@@ -638,18 +641,6 @@ func (v *SqlStreamVisitor) VisitWindowTumbling(ctx *WindowTumblingContext) inter
 }
 func (v *SqlStreamVisitor) VisitCompoundRecursiveCondition(ctx *CompoundRecursiveConditionContext) interface{} {
 	var left, right interface{}
-
-	/*if ctx.CompoundExpr(0) != nil {
-		fmt.Println("left: ", ctx.CompoundExpr(0).GetText())
-	}
-	if ctx.CompoundExpr(1) != nil {
-		fmt.Println("right: ", ctx.CompoundExpr(1).GetText())
-	}
-	if ctx.SimpleExpr(0) != nil {
-		fmt.Println("simple: ", ctx.SimpleExpr(0).GetText())
-	}
-
-	*/
 
 	if ctx.CompoundExpr(0) != nil {
 		left = ctx.CompoundExpr(0).Accept(v)
