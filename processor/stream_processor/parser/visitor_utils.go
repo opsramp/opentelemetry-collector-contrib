@@ -107,7 +107,65 @@ func compareBool(comparisonToken int, fieldVal, comparisonVal bool) bool {
 	return false
 }
 
-func sum(ls plog.LogRecordSlice, ctx *ColumnAggregationContext) (float64, error) {
+func getFieldAggregatedValue(ctx *AggregationColumnContext, ls plog.LogRecordSlice, rec plog.LogRecord) error {
+
+	var res float64
+	var err error
+
+	if ctx.K_AVG() != nil {
+		res, err = avg(ls, ctx)
+	}
+	if ctx.K_SUM() != nil {
+		res, err = sum(ls, ctx)
+	}
+	if ctx.K_COUNT() != nil {
+		res = float64(count(ls))
+	}
+	if ctx.K_MAX() != nil {
+		res, err = max(ls, ctx)
+	}
+	if ctx.K_MIN() != nil {
+		res, err = min(ls, ctx)
+	}
+	if err != nil {
+		return err
+	}
+	return insertNewFieldToRecord(ctx, rec.Attributes(), res)
+}
+
+func insertNewFieldToRecord(ctx *AggregationColumnContext, attr pcommon.Map, value float64) error {
+	if ctx.Alias() != nil {
+		attr.Insert(ctx.Alias().GetStop().GetText(), pcommon.NewValueDouble(value))
+		return nil
+	}
+
+	fieldName := ctx.IDENTIFIER(0).GetText()
+	if len(ctx.AllIDENTIFIER()) > 1 {
+		nested, ok := attr.Get(fieldName)
+
+		if ok && nested.Type() != pcommon.ValueTypeMap {
+			return fmt.Errorf("field %q already exists and isn't nested", fieldName)
+		}
+
+		if !ok {
+			nested = pcommon.NewValueMap()
+			nested.MapVal().Insert(ctx.IDENTIFIER(1).GetText(), pcommon.NewValueDouble(value))
+		}
+
+		attr.Insert(fieldName, nested)
+		return nil
+	}
+
+	_, ok := attr.Get(fieldName)
+	if ok {
+		return fmt.Errorf("field %q is duplicated. Use an alias", fieldName)
+	}
+	attr.Insert(fieldName, pcommon.NewValueDouble(value))
+
+	return nil
+}
+
+func sum(ls plog.LogRecordSlice, ctx *AggregationColumnContext) (float64, error) {
 	var sum float64
 	for i := 0; i < ls.Len(); i++ {
 		curRec := ls.At(i)
@@ -119,13 +177,13 @@ func sum(ls plog.LogRecordSlice, ctx *ColumnAggregationContext) (float64, error)
 		if err != nil {
 			return 0.0, err
 		}
-		sum = sum + convertedVal
+		sum += convertedVal
 	}
 
 	return sum, nil
 }
 
-func min(ls plog.LogRecordSlice, ctx *ColumnAggregationContext) (float64, error) {
+func min(ls plog.LogRecordSlice, ctx *AggregationColumnContext) (float64, error) {
 	var conErr error
 	ls.Sort(func(a, b plog.LogRecord) bool {
 		_, leftVal, err := getAttributeValueForAggregation(ctx, a.Attributes())
@@ -154,7 +212,7 @@ func min(ls plog.LogRecordSlice, ctx *ColumnAggregationContext) (float64, error)
 	return 0, conErr
 }
 
-func max(ls plog.LogRecordSlice, ctx *ColumnAggregationContext) (float64, error) {
+func max(ls plog.LogRecordSlice, ctx *AggregationColumnContext) (float64, error) {
 	var conErr error
 	ls.Sort(func(a, b plog.LogRecord) bool {
 		_, leftVal, err := getAttributeValueForAggregation(ctx, a.Attributes())
@@ -188,7 +246,7 @@ func max(ls plog.LogRecordSlice, ctx *ColumnAggregationContext) (float64, error)
 	return 0.0, conErr
 }
 
-func avg(ls plog.LogRecordSlice, ctx *ColumnAggregationContext) (float64, error) {
+func avg(ls plog.LogRecordSlice, ctx *AggregationColumnContext) (float64, error) {
 	var sum float64
 	for i := 0; i < ls.Len(); i++ {
 		curRec := ls.At(i)
@@ -200,7 +258,7 @@ func avg(ls plog.LogRecordSlice, ctx *ColumnAggregationContext) (float64, error)
 		if err != nil {
 			return 0.0, err
 		}
-		sum = sum + convertedVal
+		sum += convertedVal
 	}
 	return sum / float64(ls.Len()), nil
 }
@@ -273,7 +331,7 @@ func fieldExists(key string, value pcommon.Value, allColumns []interface{}) bool
 	return !nestedFound
 }
 
-func getAttributeValueForAggregation(ctx *ColumnAggregationContext, attr pcommon.Map) (string, pcommon.Value, error) {
+func getAttributeValueForAggregation(ctx *AggregationColumnContext, attr pcommon.Map) (string, pcommon.Value, error) {
 	if len(ctx.AllIDENTIFIER()) > 1 {
 		value, err := nestedFieldExistsInAttr(ctx.IDENTIFIER(0).GetText(), ctx.IDENTIFIER(1).GetText(), attr)
 		return ctx.IDENTIFIER(0).GetText() + "," + ctx.IDENTIFIER(1).GetText(), value, err
@@ -283,16 +341,12 @@ func getAttributeValueForAggregation(ctx *ColumnAggregationContext, attr pcommon
 
 }
 
-func insertValueTOAttributes(ctx *ColumnAggregationContext, attr pcommon.Map, value float64) {
+func getColumnAggregationCtxKey(ctx *AggregationColumnContext) string {
 	key := ctx.IDENTIFIER(0).GetText()
-
 	if len(ctx.AllIDENTIFIER()) > 1 {
-		nested := pcommon.NewValueMap()
-		nested.MapVal().Insert(ctx.IDENTIFIER(1).GetText(), pcommon.NewValueDouble(value))
-		attr.Insert(key, nested)
-		return
+		return key + "." + ctx.IDENTIFIER(1).GetText()
 	}
-	attr.Insert(key, pcommon.NewValueDouble(value))
+	return key
 }
 
 func getAttributeValue(column IColumnContext, attr pcommon.Map) (string, pcommon.Value, error) {

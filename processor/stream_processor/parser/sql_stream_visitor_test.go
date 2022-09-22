@@ -53,7 +53,7 @@ func TestResultColumnsSelectColumns(t *testing.T) {
 			in := make(chan plog.LogRecordSlice)
 			out := make(chan plog.LogRecordSlice)
 			outErr := make(chan error)
-			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			visitor := NewSQLStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
 			in <- GenerateTestLogs()
 			var ls plog.LogRecordSlice
@@ -103,7 +103,7 @@ func TestResultColumnsSelectColumnsAttributes(t *testing.T) {
 			in := make(chan plog.LogRecordSlice)
 			out := make(chan plog.LogRecordSlice)
 			outErr := make(chan error)
-			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			visitor := NewSQLStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
 			in <- GenerateTestLogs()
 
@@ -147,7 +147,7 @@ func TestWhereCondition(t *testing.T) {
 			in := make(chan plog.LogRecordSlice)
 			out := make(chan plog.LogRecordSlice)
 			outErr := make(chan error)
-			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			visitor := NewSQLStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
 			in <- GenerateTestLogs()
 			var err error
@@ -237,7 +237,7 @@ func TestSimpleCondition(t *testing.T) {
 			in := make(chan plog.LogRecordSlice)
 			out := make(chan plog.LogRecordSlice)
 			outErr := make(chan error)
-			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			visitor := NewSQLStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
 			in <- GenerateTestLogs()
 			ls := <-out
@@ -305,7 +305,7 @@ func TestRecursiveCondition(t *testing.T) {
 			in := make(chan plog.LogRecordSlice)
 			out := make(chan plog.LogRecordSlice)
 			outErr := make(chan error)
-			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			visitor := NewSQLStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
 			in <- GenerateTestLogs()
 			ls := <-out
@@ -367,7 +367,7 @@ func TestCompoundCondition(t *testing.T) {
 			in := make(chan plog.LogRecordSlice)
 			out := make(chan plog.LogRecordSlice)
 			outErr := make(chan error)
-			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			visitor := NewSQLStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
 			in <- GenerateTestLogs()
 			ls := <-out
@@ -434,7 +434,7 @@ func TestComplexCompoundCondition(t *testing.T) {
 			in := make(chan plog.LogRecordSlice)
 			out := make(chan plog.LogRecordSlice)
 			outErr := make(chan error)
-			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			visitor := NewSQLStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
 			in <- GenerateTestLogs()
 			ls := <-out

@@ -36,7 +36,15 @@ func (v *BaseSqlVisitor) VisitSelectStar(ctx *SelectStarContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseSqlVisitor) VisitSelectAggregation(ctx *SelectAggregationContext) interface{} {
+func (v *BaseSqlVisitor) VisitSelectAggregations(ctx *SelectAggregationsContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseSqlVisitor) VisitSelectGroupByAggregations(ctx *SelectGroupByAggregationsContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseSqlVisitor) VisitAggregationColumn(ctx *AggregationColumnContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -61,14 +69,6 @@ func (v *BaseSqlVisitor) VisitRecursiveFunction(ctx *RecursiveFunctionContext) i
 }
 
 func (v *BaseSqlVisitor) VisitFunctionName(ctx *FunctionNameContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseSqlVisitor) VisitColumnAggregation(ctx *ColumnAggregationContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseSqlVisitor) VisitColumnCountAggregation(ctx *ColumnCountAggregationContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

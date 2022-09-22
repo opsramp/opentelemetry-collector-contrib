@@ -54,7 +54,7 @@ func TestScalarFunctions(t *testing.T) {
 			in := make(chan plog.LogRecordSlice)
 			out := make(chan plog.LogRecordSlice)
 			outErr := make(chan error)
-			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			visitor := NewSQLStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
 			in <- GenerateTestLogs()
 			ls := <-out
@@ -105,7 +105,7 @@ func TestRecursiveScalarFunctions(t *testing.T) {
 			in := make(chan plog.LogRecordSlice)
 			out := make(chan plog.LogRecordSlice)
 			outErr := make(chan error)
-			visitor := NewSqlStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			visitor := NewSQLStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
 			defer visitor.Stop()
 			in <- GenerateTestLogs()
 			ls := <-out

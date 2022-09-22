@@ -24,7 +24,7 @@ func newSqlStreamProcessor(next consumer.Logs, logger *zap.Logger, cfg *Config) 
 	in := make(chan plog.LogRecordSlice)
 	out := make(chan plog.LogRecordSlice)
 	outErr := make(chan error)
-	processor := parser.NewSqlStreamVisitor(cfg.Query, in, out, outErr, logger)
+	processor := parser.NewSQLStreamVisitor(cfg.Query, in, out, outErr, logger)
 
 	return &sqlStreamProcessor{
 		logger:       logger,

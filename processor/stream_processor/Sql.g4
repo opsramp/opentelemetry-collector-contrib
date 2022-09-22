@@ -7,9 +7,9 @@ sqlQuery
   : selectQuery EOF;
 
 selectQuery
-  : K_SELECT resultColumns (whereStatement)? EOQ                                  #selectSimple
-  | K_SELECT aggregationColumns windowTumbling (whereStatement)? EOQ              #selectTumbling
-  | K_SELECT aggregationColumns windowTumbling (whereStatement)? groupBy EOQ      #selectTumblingGroupBy
+  : K_SELECT resultColumns (whereStatement)? EOQ                                     #selectSimple
+  | K_SELECT aggregationColumns windowTumbling (whereStatement)? EOQ                 #selectTumbling
+  | K_SELECT groupByAggregationColumns windowTumbling (whereStatement)? groupBy EOQ  #selectTumblingGroupBy
   ;
 
 windowTumbling
@@ -22,15 +22,26 @@ resultColumns
  | STAR                   # selectStar
  ;
 
+
 aggregationColumns
- : (column COMMA)? aggregationColumn (COMMA aggregationColumn)*         #selectAggregation
+ :   aggregationColumn (COMMA aggregationColumn)+                     #selectAggregations
  ;
 
+groupByAggregationColumns
+ :  (column COMMA)? aggregationColumn (COMMA aggregationColumn)+      #selectGroupByAggregations
+ ;
+
+
+aggregationColumn
+  :  (K_MIN | K_MAX | K_COUNT | K_AVG | K_SUM) L_BRACKET ( IDENTIFIER | IDENTIFIER DOT IDENTIFIER) R_BRACKET alias?
+  ;
 
 column
   : (IDENTIFIER | IDENTIFIER DOT IDENTIFIER) alias?   #identifierColumn
   | function alias?                                   #functionColumn
   ;
+
+
 
 alias
   : K_AS IDENTIFIER
@@ -44,11 +55,6 @@ function
 
 functionName
   : IDENTIFIER
-  ;
-
-aggregationColumn
-  : (K_MIN | K_MAX | K_COUNT | K_AVG | K_SUM) L_BRACKET ( IDENTIFIER | IDENTIFIER DOT IDENTIFIER) R_BRACKET alias?   # columnAggregation
-  | (IDENTIFIER | IDENTIFIER DOT IDENTIFIER)? K_COUNT L_BRACKET STAR R_BRACKET                                       # columnCountAggregation
   ;
 
 
