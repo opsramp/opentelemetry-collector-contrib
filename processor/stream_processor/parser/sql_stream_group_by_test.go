@@ -15,7 +15,7 @@ func TestWindowTumblingGroupBy(t *testing.T) {
 	in := make(chan plog.LogRecordSlice)
 	out := make(chan plog.LogRecordSlice)
 	outErr := make(chan error)
-	query := "select name, sum(price), avg(price) as AVGPrice window tumbling 30 group by name;"
+	query := "select name as TEST, sum(price), avg(price) as AVGPrice window tumbling 30 group by name ;"
 
 	visitor := NewSQLStreamVisitor(query, in, out, outErr, zap.NewNop())
 	defer visitor.Stop()

@@ -24,11 +24,11 @@ resultColumns
 
 
 aggregationColumns
- :   aggregationColumn (COMMA aggregationColumn)+                     #selectAggregations
+ :   aggregationColumn (COMMA aggregationColumn)*                     #selectAggregations
  ;
 
 groupByAggregationColumns
- :  (column COMMA)? aggregationColumn (COMMA aggregationColumn)+      #selectGroupByAggregations
+ :  (column | aggregationColumn) (COMMA (aggregationColumn | column))*  #selectGroupByAggregations
  ;
 
 

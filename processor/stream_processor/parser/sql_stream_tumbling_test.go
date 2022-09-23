@@ -101,7 +101,7 @@ func TestWindowTumblingAvg(t *testing.T) {
 	in := make(chan plog.LogRecordSlice)
 	out := make(chan plog.LogRecordSlice)
 	outErr := make(chan error)
-	query := "select avg(price) window tumbling 30 ;"
+	query := "select avg(price), sum(price) as SumPrice window tumbling 3 ;"
 	var ls plog.LogRecordSlice
 
 	visitor := NewSQLStreamVisitor(query, in, out, outErr, zap.NewNop())
@@ -266,6 +266,7 @@ func generateGroupByTestLogs() plog.LogRecordSlice {
 		record := sc.LogRecords().AppendEmpty()
 		name := strconv.Itoa(i)
 		record.Attributes().InsertString("name", fmt.Sprint("Test name ", string(name[0])))
+		record.Attributes().InsertString("lname", fmt.Sprint("Last name ", string(name[0])))
 		record.Attributes().InsertBool("is_alive", i%2 == 0)
 		record.Attributes().InsertInt("price", int64(i))
 	}

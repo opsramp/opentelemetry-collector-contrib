@@ -107,7 +107,7 @@ func compareBool(comparisonToken int, fieldVal, comparisonVal bool) bool {
 	return false
 }
 
-func getFieldAggregatedValue(ctx *AggregationColumnContext, ls plog.LogRecordSlice, rec plog.LogRecord) error {
+func getFieldAggregatedValue(ctx *AggregationColumnContext, ls plog.LogRecordSlice) (float64, error) {
 
 	var res float64
 	var err error
@@ -127,13 +127,42 @@ func getFieldAggregatedValue(ctx *AggregationColumnContext, ls plog.LogRecordSli
 	if ctx.K_MIN() != nil {
 		res, err = min(ls, ctx)
 	}
-	if err != nil {
-		return err
-	}
-	return insertNewFieldToRecord(ctx, rec.Attributes(), res)
+
+	return res, err
 }
 
-func insertNewFieldToRecord(ctx *AggregationColumnContext, attr pcommon.Map, value float64) error {
+func insertIdentifierColumnToRecord(ctx *IdentifierColumnContext, attr pcommon.Map, value string) error {
+	if ctx.Alias() != nil {
+		attr.Insert(ctx.Alias().GetStop().GetText(), pcommon.NewValueString(value))
+		return nil
+	}
+
+	fieldName := ctx.IDENTIFIER(0).GetText()
+	if len(ctx.AllIDENTIFIER()) > 1 {
+		nested, ok := attr.Get(fieldName)
+
+		if ok && nested.Type() != pcommon.ValueTypeMap {
+			return fmt.Errorf("field %q already exists and isn't nested", fieldName)
+		}
+
+		if !ok {
+			nested = pcommon.NewValueMap()
+			nested.MapVal().Insert(ctx.IDENTIFIER(1).GetText(), pcommon.NewValueString(value))
+		}
+
+		attr.Insert(fieldName, nested)
+		return nil
+	}
+
+	_, ok := attr.Get(fieldName)
+	if ok {
+		return fmt.Errorf("field %q is duplicated. Use an alias", fieldName)
+	}
+	attr.Insert(fieldName, pcommon.NewValueString(value))
+
+	return nil
+}
+func insertAggregationColumnToRecord(ctx *AggregationColumnContext, attr pcommon.Map, value float64) error {
 	if ctx.Alias() != nil {
 		attr.Insert(ctx.Alias().GetStop().GetText(), pcommon.NewValueDouble(value))
 		return nil
@@ -341,14 +370,6 @@ func getAttributeValueForAggregation(ctx *AggregationColumnContext, attr pcommon
 
 }
 
-func getColumnAggregationCtxKey(ctx *AggregationColumnContext) string {
-	key := ctx.IDENTIFIER(0).GetText()
-	if len(ctx.AllIDENTIFIER()) > 1 {
-		return key + "." + ctx.IDENTIFIER(1).GetText()
-	}
-	return key
-}
-
 func getAttributeValue(column IColumnContext, attr pcommon.Map) (string, pcommon.Value, error) {
 	switch col := column.(type) {
 	case *IdentifierColumnContext:
@@ -458,5 +479,91 @@ func findSimpleFuncCtx(ctx *RecursiveFunctionContext) *SimpleFunctionContext {
 		}
 	}
 
+	return nil
+}
+
+func getGroupByFieldFromAggregationCtx(ctx *SelectGroupByAggregationsContext) (string, error) {
+	for _, node := range ctx.GetParent().GetChildren() {
+		groupByCtx, ok := node.(*GroupByContext)
+		if !ok {
+			continue
+		}
+		idCol, ok := groupByCtx.Column().(*IdentifierColumnContext)
+		if !ok {
+			return ",", fmt.Errorf("unknown group by clause field type")
+		}
+		return getFieldNameFromIDColumnCtx(idCol), nil
+	}
+
+	return "", fmt.Errorf("group by field missed")
+
+}
+
+func getFieldNameFromIDColumnCtx(col *IdentifierColumnContext) string {
+	fieldName := col.IDENTIFIER(0).GetText()
+	if len(col.AllIDENTIFIER()) > 1 {
+		return fieldName + "." + col.IDENTIFIER(1).GetText()
+	}
+	return fieldName
+}
+
+func calculateGroupByAggregations(ctx *SelectGroupByAggregationsContext, key string, rec plog.LogRecord, ls plog.LogRecordSlice) error {
+	for _, aggregation := range ctx.AllAggregationColumn() {
+
+		col, ok := aggregation.(*AggregationColumnContext)
+		if !ok {
+			return fmt.Errorf("unknown aggragation column type")
+		}
+		res, err := getFieldAggregatedValue(col, ls)
+		if err != nil {
+			return err
+		}
+		if err = insertAggregationColumnToRecord(col, rec.Attributes(), res); err != nil {
+			return err
+		}
+	}
+
+	if len(ctx.AllColumn()) == 0 {
+		return nil
+	}
+
+	for _, nonAgrCol := range ctx.AllColumn() {
+		groupByFieldName, err := getGroupByFieldFromAggregationCtx(ctx)
+		if err != nil {
+			return err
+		}
+
+		selectField, ok := nonAgrCol.(*IdentifierColumnContext)
+		if !ok {
+			return fmt.Errorf("field %q in select list is inknown type", nonAgrCol.GetText())
+		}
+
+		selectFieldName := getFieldNameFromIDColumnCtx(selectField)
+		if strings.Compare(groupByFieldName, selectFieldName) != 0 {
+			return fmt.Errorf("you must use the same field for group by %q clause and select list", groupByFieldName)
+		}
+
+		if err := insertIdentifierColumnToRecord(selectField, rec.Attributes(), key); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func calculateAggregations(ctx *SelectAggregationsContext, rec plog.LogRecord, ls plog.LogRecordSlice) error {
+	for _, aggregation := range ctx.AllAggregationColumn() {
+		col, ok := aggregation.(*AggregationColumnContext)
+		if !ok {
+			return fmt.Errorf("unknown aggragation column type")
+		}
+		res, err := getFieldAggregatedValue(col, ls)
+		if err != nil {
+			return err
+		}
+		if err = insertAggregationColumnToRecord(col, rec.Attributes(), res); err != nil {
+			return err
+		}
+	}
 	return nil
 }

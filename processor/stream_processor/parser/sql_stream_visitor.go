@@ -12,9 +12,9 @@ import (
 )
 
 // check that type implements SqlVisitor
-var _ SqlVisitor = (*SqlStreamVisitor)(nil)
+var _ SqlVisitor = (*SQLStreamVisitor)(nil)
 
-type SqlStreamVisitor struct {
+type SQLStreamVisitor struct {
 	antlr.ParseTreeVisitor
 	logger *zap.Logger
 
@@ -37,10 +37,10 @@ type SqlStreamVisitor struct {
 	shutdownC chan struct{}
 }
 
-func NewSQLStreamVisitor(query string, in <-chan plog.LogRecordSlice, out chan<- plog.LogRecordSlice, outErr chan<- error, logger *zap.Logger) *SqlStreamVisitor {
+func NewSQLStreamVisitor(query string, in <-chan plog.LogRecordSlice, out chan<- plog.LogRecordSlice, outErr chan<- error, logger *zap.Logger) *SQLStreamVisitor {
 
-	visitor := &SqlStreamVisitor{
-		ParseTreeVisitor: &SqlStreamVisitor{},
+	visitor := &SQLStreamVisitor{
+		ParseTreeVisitor: &SQLStreamVisitor{},
 		query:            query,
 		logger:           logger,
 		in:               in,
@@ -60,11 +60,11 @@ func NewSQLStreamVisitor(query string, in <-chan plog.LogRecordSlice, out chan<-
 	return visitor
 }
 
-func (v *SqlStreamVisitor) Stop() {
+func (v *SQLStreamVisitor) Stop() {
 	close(v.shutdownC)
 }
 
-func (v *SqlStreamVisitor) startSimpleWorkerLoop() {
+func (v *SQLStreamVisitor) startSimpleWorkerLoop() {
 
 	for {
 		select {
@@ -89,7 +89,7 @@ func (v *SqlStreamVisitor) startSimpleWorkerLoop() {
 	}
 }
 
-func (v *SqlStreamVisitor) startWindowTumblingLoop() {
+func (v *SQLStreamVisitor) startWindowTumblingLoop() {
 	v.origLogRecords = plog.NewLogRecordSlice()
 	ticker := time.NewTicker(v.tumblingPeriod)
 
@@ -126,7 +126,7 @@ func (v *SqlStreamVisitor) startWindowTumblingLoop() {
 	}()
 }
 
-func (v *SqlStreamVisitor) runQuery() error {
+func (v *SQLStreamVisitor) runQuery() error {
 	is := antlr.NewInputStream(v.query)
 	lexer := NewSqlLexer(is)
 	stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
@@ -140,11 +140,11 @@ func (v *SqlStreamVisitor) runQuery() error {
 	return nil
 }
 
-func (v *SqlStreamVisitor) GetResult() (plog.LogRecordSlice, error) {
+func (v *SQLStreamVisitor) GetResult() (plog.LogRecordSlice, error) {
 	return v.origLogRecords, nil
 }
 
-func (v *SqlStreamVisitor) Visit(tree antlr.ParseTree) interface{} {
+func (v *SQLStreamVisitor) Visit(tree antlr.ParseTree) interface{} {
 
 	switch t := tree.(type) {
 	case *antlr.ErrorNodeImpl:
@@ -156,11 +156,11 @@ func (v *SqlStreamVisitor) Visit(tree antlr.ParseTree) interface{} {
 	return nil
 }
 
-func (v *SqlStreamVisitor) VisitSqlQuery(ctx *SqlQueryContext) interface{} {
+func (v *SQLStreamVisitor) VisitSqlQuery(ctx *SqlQueryContext) interface{} {
 	return ctx.SelectQuery().Accept(v)
 }
 
-func (v *SqlStreamVisitor) VisitSelectSimple(ctx *SelectSimpleContext) interface{} {
+func (v *SQLStreamVisitor) VisitSelectSimple(ctx *SelectSimpleContext) interface{} {
 	if ctx.WhereStatement() == nil {
 		return ctx.ResultColumns().Accept(v)
 	}
@@ -174,8 +174,7 @@ func (v *SqlStreamVisitor) VisitSelectSimple(ctx *SelectSimpleContext) interface
 	return nil
 }
 
-func (v *SqlStreamVisitor) VisitSelectTumbling(ctx *SelectTumblingContext) interface{} {
-
+func (v *SQLStreamVisitor) VisitSelectTumbling(ctx *SelectTumblingContext) interface{} {
 	if ctx.WhereStatement() != nil {
 		switch res := ctx.WhereStatement().Accept(v).(type) {
 		case error:
@@ -188,7 +187,7 @@ func (v *SqlStreamVisitor) VisitSelectTumbling(ctx *SelectTumblingContext) inter
 	return ctx.AggregationColumns().Accept(v)
 }
 
-func (v *SqlStreamVisitor) VisitSelectTumblingGroupBy(ctx *SelectTumblingGroupByContext) interface{} {
+func (v *SQLStreamVisitor) VisitSelectTumblingGroupBy(ctx *SelectTumblingGroupByContext) interface{} {
 	if ctx.WhereStatement() != nil {
 		switch res := ctx.WhereStatement().Accept(v).(type) {
 		case error:
@@ -206,7 +205,7 @@ func (v *SqlStreamVisitor) VisitSelectTumblingGroupBy(ctx *SelectTumblingGroupBy
 	return ctx.GroupByAggregationColumns().Accept(v)
 }
 
-func (v *SqlStreamVisitor) VisitGroupBy(ctx *GroupByContext) interface{} {
+func (v *SQLStreamVisitor) VisitGroupBy(ctx *GroupByContext) interface{} {
 
 	v.groupByTempLogRecords = make(map[string]plog.LogRecordSlice)
 
@@ -227,46 +226,38 @@ func (v *SqlStreamVisitor) VisitGroupBy(ctx *GroupByContext) interface{} {
 	return nil
 }
 
-func (v *SqlStreamVisitor) VisitSelectGroupByAggregations(ctx *SelectGroupByAggregationsContext) interface{} {
+func (v *SQLStreamVisitor) VisitSelectGroupByAggregations(ctx *SelectGroupByAggregationsContext) interface{} {
 	resLS := plog.NewLogRecordSlice()
 
 	for k, ls := range v.groupByTempLogRecords {
 		newRec := resLS.AppendEmpty()
-		v.calculateAggregation(ctx, k, newRec, ls)
+		if err := calculateGroupByAggregations(ctx, k, newRec, ls); err != nil {
+			return err
+		}
 
 	}
 	v.resultLogRecords = resLS
 	return nil
 }
 
-func (v *SqlStreamVisitor) calculateAggregation(ctx *SelectGroupByAggregationsContext, key string, rec plog.LogRecord, ls plog.LogRecordSlice) error {
-	for _, aggregation := range ctx.AllAggregationColumn() {
+func (v *SQLStreamVisitor) VisitSelectAggregations(ctx *SelectAggregationsContext) interface{} {
 
-		col, ok := aggregation.(*AggregationColumnContext)
-		if !ok {
-			return fmt.Errorf("unknown column type")
-		}
-		if err := getFieldAggregatedValue(col, ls, rec); err != nil {
-			return err
-		}
-
+	resLS := plog.NewLogRecordSlice()
+	newRec := resLS.AppendEmpty()
+	if err := calculateAggregations(ctx, newRec, v.origLogRecords); err != nil {
+		return err
 	}
-
+	v.resultLogRecords = resLS
 	return nil
 }
 
-func (v *SqlStreamVisitor) VisitSelectAggregations(ctx *SelectAggregationsContext) interface{} {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (v *SqlStreamVisitor) VisitAggregationColumn(ctx *AggregationColumnContext) interface{} {
-	//TODO implement me
+func (v *SQLStreamVisitor) VisitAggregationColumn(ctx *AggregationColumnContext) interface{} {
+	// TODO implement me
 	panic("implement me")
 }
 
 // VisitSelectColumns is called in case of missed where statement and removes missed attributes
-func (v *SqlStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interface{} {
+func (v *SQLStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interface{} {
 	var err error
 	for i := 0; i < v.origLogRecords.Len(); i++ {
 		v.currentOrigRecord = v.origLogRecords.At(i)
@@ -287,7 +278,7 @@ func (v *SqlStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interfa
 
 }
 
-func (v *SqlStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
+func (v *SQLStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
 	var err error
 	//if WHERE statement missed
 	if ctx.Expr() == nil {
@@ -321,7 +312,7 @@ func (v *SqlStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
 	return err
 }
 
-func (v *SqlStreamVisitor) applySelectColumns(ctx *SelectColumnsContext) error {
+func (v *SQLStreamVisitor) applySelectColumns(ctx *SelectColumnsContext) error {
 	//if * in select list
 	if ctx == nil {
 		v.currentOrigRecord.MoveTo(v.resultLogRecords.AppendEmpty())
@@ -338,20 +329,20 @@ func (v *SqlStreamVisitor) applySelectColumns(ctx *SelectColumnsContext) error {
 	return nil
 }
 
-func (v *SqlStreamVisitor) VisitSelectStar(ctx *SelectStarContext) interface{} {
+func (v *SQLStreamVisitor) VisitSelectStar(ctx *SelectStarContext) interface{} {
 	v.origLogRecords.CopyTo(v.resultLogRecords)
 	return nil
 }
 
-func (v *SqlStreamVisitor) VisitIdentifierColumn(ctx *IdentifierColumnContext) interface{} {
-	//first we check that fields listed in select (including nested) exist in log record
+func (v *SQLStreamVisitor) VisitIdentifierColumn(ctx *IdentifierColumnContext) interface{} {
+	// first we check that fields listed in select (including nested) exist in log record
 	fieldName := ctx.IDENTIFIER(0).GetText()
 	value, ok := v.currentOrigRecord.Attributes().Get(fieldName)
 	if !ok {
 		return fmt.Errorf("field %q missed", fieldName)
 	}
 
-	//this is simple field
+	// this is simple field
 	if len(ctx.AllIDENTIFIER()) == 1 {
 		if ctx.Alias() != nil {
 			fieldName = ctx.Alias().GetStop().GetText()
@@ -385,7 +376,7 @@ func (v *SqlStreamVisitor) VisitIdentifierColumn(ctx *IdentifierColumnContext) i
 	return nil
 }
 
-func (v *SqlStreamVisitor) VisitFunctionColumn(ctx *FunctionColumnContext) interface{} {
+func (v *SQLStreamVisitor) VisitFunctionColumn(ctx *FunctionColumnContext) interface{} {
 
 	var simpleFuncCtx *SimpleFunctionContext
 	res := ctx.Function().Accept(v)
@@ -423,7 +414,7 @@ func (v *SqlStreamVisitor) VisitFunctionColumn(ctx *FunctionColumnContext) inter
 	return res
 }
 
-func (v *SqlStreamVisitor) VisitSimpleFunction(ctx *SimpleFunctionContext) interface{} {
+func (v *SQLStreamVisitor) VisitSimpleFunction(ctx *SimpleFunctionContext) interface{} {
 
 	fieldName := ctx.IDENTIFIER(0).GetText()
 	functionMame := ctx.FunctionName().GetText()
@@ -460,7 +451,7 @@ func (v *SqlStreamVisitor) VisitSimpleFunction(ctx *SimpleFunctionContext) inter
 	return newValue
 }
 
-func (v *SqlStreamVisitor) VisitRecursiveFunction(ctx *RecursiveFunctionContext) interface{} {
+func (v *SQLStreamVisitor) VisitRecursiveFunction(ctx *RecursiveFunctionContext) interface{} {
 
 	res := ctx.Function().Accept(v)
 
@@ -480,7 +471,7 @@ func (v *SqlStreamVisitor) VisitRecursiveFunction(ctx *RecursiveFunctionContext)
 	return tmpValue
 }
 
-func (v *SqlStreamVisitor) applyFunction(value pcommon.Value, functionName string, args ...ILiteralValueContext) (pcommon.Value, error) {
+func (v *SQLStreamVisitor) applyFunction(value pcommon.Value, functionName string, args ...ILiteralValueContext) (pcommon.Value, error) {
 	switch functionName {
 	case upper:
 		return pcommon.NewValueString(strings.ToUpper(value.AsString())), nil
@@ -499,11 +490,11 @@ func (v *SqlStreamVisitor) applyFunction(value pcommon.Value, functionName strin
 	}
 }
 
-func (v *SqlStreamVisitor) VisitSimpleCondition(ctx *SimpleConditionContext) interface{} {
+func (v *SQLStreamVisitor) VisitSimpleCondition(ctx *SimpleConditionContext) interface{} {
 	return ctx.SimpleExpr().Accept(v)
 }
 
-func (v *SqlStreamVisitor) VisitSimpleExpression(ctx *SimpleExpressionContext) interface{} {
+func (v *SQLStreamVisitor) VisitSimpleExpression(ctx *SimpleExpressionContext) interface{} {
 	fieldValue, ok := v.currentOrigRecord.Attributes().Get(ctx.IDENTIFIER().GetText())
 	if !ok {
 		return fmt.Errorf("field %q missed in log record", ctx.IDENTIFIER().GetText())
@@ -517,7 +508,7 @@ func (v *SqlStreamVisitor) VisitSimpleExpression(ctx *SimpleExpressionContext) i
 
 }
 
-func (v *SqlStreamVisitor) VisitNestedExpression(ctx *NestedExpressionContext) interface{} {
+func (v *SQLStreamVisitor) VisitNestedExpression(ctx *NestedExpressionContext) interface{} {
 	fieldName := ctx.IDENTIFIER(0).GetText()
 	fieldValue, ok := v.currentOrigRecord.Attributes().Get(fieldName)
 	if !ok {
@@ -542,7 +533,7 @@ func (v *SqlStreamVisitor) VisitNestedExpression(ctx *NestedExpressionContext) i
 
 }
 
-func (v *SqlStreamVisitor) VisitSimpleRecursiveCondition(ctx *SimpleRecursiveConditionContext) interface{} {
+func (v *SQLStreamVisitor) VisitSimpleRecursiveCondition(ctx *SimpleRecursiveConditionContext) interface{} {
 
 	left := ctx.Expr(0).Accept(v)
 	switch left := ctx.Expr(0).Accept(v).(type) {
@@ -570,10 +561,10 @@ func (v *SqlStreamVisitor) VisitSimpleRecursiveCondition(ctx *SimpleRecursiveCon
 	return false
 }
 
-func (v *SqlStreamVisitor) VisitWindowTumbling(ctx *WindowTumblingContext) interface{} {
+func (v *SQLStreamVisitor) VisitWindowTumbling(ctx *WindowTumblingContext) interface{} {
 	return nil
 }
-func (v *SqlStreamVisitor) VisitCompoundRecursiveCondition(ctx *CompoundRecursiveConditionContext) interface{} {
+func (v *SQLStreamVisitor) VisitCompoundRecursiveCondition(ctx *CompoundRecursiveConditionContext) interface{} {
 	var left, right interface{}
 
 	if ctx.CompoundExpr(0) != nil {
@@ -617,30 +608,30 @@ func (v *SqlStreamVisitor) VisitCompoundRecursiveCondition(ctx *CompoundRecursiv
 	return false
 }
 
-func (v *SqlStreamVisitor) VisitSimpleCompoundCondition(ctx *SimpleCompoundConditionContext) interface{} {
+func (v *SQLStreamVisitor) VisitSimpleCompoundCondition(ctx *SimpleCompoundConditionContext) interface{} {
 	return ctx.CompoundExpr().Accept(v)
 }
 
-func (v *SqlStreamVisitor) VisitCompoundExpression(ctx *CompoundExpressionContext) interface{} {
+func (v *SQLStreamVisitor) VisitCompoundExpression(ctx *CompoundExpressionContext) interface{} {
 	return ctx.Expr().Accept(v)
 }
 
-func (v *SqlStreamVisitor) VisitComparisonOperator(ctx *ComparisonOperatorContext) interface{} {
+func (v *SQLStreamVisitor) VisitComparisonOperator(ctx *ComparisonOperatorContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *SqlStreamVisitor) VisitLiteralValue(ctx *LiteralValueContext) interface{} {
+func (v *SQLStreamVisitor) VisitLiteralValue(ctx *LiteralValueContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *SqlStreamVisitor) VisitAlias(ctx *AliasContext) interface{} {
+func (v *SQLStreamVisitor) VisitAlias(ctx *AliasContext) interface{} {
 	return nil
 }
 
-func (v *SqlStreamVisitor) VisitFunction(ctx *FunctionContext) interface{} {
+func (v *SQLStreamVisitor) VisitFunction(ctx *FunctionContext) interface{} {
 	return nil
 }
 
-func (v *SqlStreamVisitor) VisitFunctionName(ctx *FunctionNameContext) interface{} {
+func (v *SQLStreamVisitor) VisitFunctionName(ctx *FunctionNameContext) interface{} {
 	return nil
 }

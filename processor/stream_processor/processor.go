@@ -17,7 +17,7 @@ type sqlStreamProcessor struct {
 	nextConsumer consumer.Logs
 	in, out      chan plog.LogRecordSlice
 	outErr       chan error
-	processor    *parser.SqlStreamVisitor
+	processor    *parser.SQLStreamVisitor
 }
 
 func newSqlStreamProcessor(next consumer.Logs, logger *zap.Logger, cfg *Config) *sqlStreamProcessor {
