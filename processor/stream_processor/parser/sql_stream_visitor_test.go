@@ -215,19 +215,19 @@ func TestSimpleCondition(t *testing.T) {
 		},
 		{
 			name:          "equal true ",
-			query:         `SELECT name, is_alive WHERE is_alive = true;`,
+			query:         `SELECT name, is_alive WHERE is_alive = 'true';`,
 			expectedAttr:  []string{"name, price"},
 			expectedCount: 50,
 		},
 		{
 			name:          "not equal true ",
-			query:         `SELECT name, is_alive WHERE is_alive != true;`,
+			query:         `SELECT name, is_alive WHERE is_alive != 'true';`,
 			expectedAttr:  []string{"name, is_alive"},
 			expectedCount: 50,
 		},
 		{
 			name:          "equal false ",
-			query:         `SELECT name, is_alive WHERE is_alive = false;`,
+			query:         `SELECT name, is_alive WHERE is_alive = 'false';`,
 			expectedAttr:  []string{"name, is_alive"},
 			expectedCount: 50,
 		},
@@ -415,17 +415,17 @@ func TestComplexCompoundCondition(t *testing.T) {
 		},
 		{
 			name:          "3 and",
-			query:         `SELECT * WHERE name like '2' and price < 3 and is_alive = true ;`,
+			query:         `SELECT * WHERE name like '2' and price < 3 and is_alive = 'true' ;`,
 			expectedCount: 1,
 		},
 		{
 			name:          "3 and",
-			query:         `SELECT * WHERE name like '2' and price < 3 and is_alive != true ;`,
+			query:         `SELECT * WHERE name like '2' and price < 3 and is_alive != 'true' ;`,
 			expectedCount: 0,
 		},
 		{
 			name:          "3 and",
-			query:         `SELECT * WHERE (name like '2' and price < 3 and is_alive = true) ;`,
+			query:         `SELECT * WHERE (name like '2' and price < 3 and is_alive = 'true') ;`,
 			expectedCount: 1,
 		},
 	}

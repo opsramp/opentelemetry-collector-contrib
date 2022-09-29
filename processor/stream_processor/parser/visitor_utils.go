@@ -2,10 +2,11 @@ package parser
 
 import (
 	"fmt"
-	"go.opentelemetry.io/collector/pdata/pcommon"
-	"go.opentelemetry.io/collector/pdata/plog"
 	"strconv"
 	"strings"
+
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/plog"
 )
 
 const (
@@ -219,7 +220,6 @@ func min(ls plog.LogRecordSlice, ctx *AggregationColumnContext) (float64, error)
 		if err != nil {
 			conErr = err
 		}
-		convertedLeft := leftVal.DoubleVal()
 
 		_, rightVal, err := getAttributeValueForAggregation(ctx, b.Attributes())
 
@@ -227,9 +227,7 @@ func min(ls plog.LogRecordSlice, ctx *AggregationColumnContext) (float64, error)
 			conErr = err
 		}
 
-		convertedRight := rightVal.DoubleVal()
-
-		return convertedLeft < convertedRight
+		return leftVal.DoubleVal() < rightVal.DoubleVal()
 	})
 
 	if ls.Len() > 0 {
@@ -248,26 +246,17 @@ func max(ls plog.LogRecordSlice, ctx *AggregationColumnContext) (float64, error)
 		if err != nil {
 			conErr = err
 		}
-		convertedLeft, err := strconv.ParseFloat(leftVal.AsString(), 64)
-		if err != nil {
-			conErr = err
-		}
 
 		_, rightVal, err := getAttributeValueForAggregation(ctx, b.Attributes())
 		if err != nil {
 			conErr = err
 		}
 
-		convertedRight, err := strconv.ParseFloat(rightVal.AsString(), 64)
-		if err != nil {
-			conErr = err
-		}
-
-		return convertedLeft > convertedRight
+		return leftVal.DoubleVal() > rightVal.DoubleVal()
 	})
 
 	if ls.Len() > 0 {
-		_, res, err := getAttributeValueForAggregation(ctx, ls.At(0).Attributes())
+		_, res, err := getAttributeValueForAggregation(ctx, ls.At(ls.Len()-1).Attributes())
 		convertedRes, _ := strconv.ParseFloat(res.AsString(), 64)
 		return convertedRes, err
 	}
@@ -401,7 +390,7 @@ func nestedFieldExistsInAttr(fieldName, nestedFieldName string, attr pcommon.Map
 		return pcommon.NewValueEmpty(), fmt.Errorf("field %q missed", fieldName)
 	}
 
-	//if this nested field
+	// if this nested field
 	if value.Type() != pcommon.ValueTypeMap {
 		return pcommon.NewValueEmpty(), fmt.Errorf("field %q isn't nested", fieldName)
 	}
@@ -417,6 +406,30 @@ func nestedFieldExistsInAttr(fieldName, nestedFieldName string, attr pcommon.Map
 func getSelectColumnsFromWhereCtx(ctx *WhereStmtContext) *SelectColumnsContext {
 	for _, resCtx := range ctx.GetParent().GetChildren() {
 		resColumnCtx, ok := resCtx.(*SelectColumnsContext)
+		if !ok {
+			continue
+		}
+		return resColumnCtx
+	}
+
+	return nil
+}
+
+func getSelectAggregationsFromWhereCtx(ctx *WhereStmtContext) *SelectAggregationsContext {
+	for _, resCtx := range ctx.GetParent().GetChildren() {
+		resColumnCtx, ok := resCtx.(*SelectAggregationsContext)
+		if !ok {
+			continue
+		}
+		return resColumnCtx
+	}
+
+	return nil
+}
+
+func getSelectStarCtx(ctx *WhereStmtContext) *SelectStarContext {
+	for _, resCtx := range ctx.GetParent().GetChildren() {
+		resColumnCtx, ok := resCtx.(*SelectStarContext)
 		if !ok {
 			continue
 		}

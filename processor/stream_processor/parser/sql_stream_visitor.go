@@ -23,11 +23,11 @@ type SQLStreamVisitor struct {
 	tumblingPeriod time.Duration
 
 	// this is what we've got
-	origLogRecords    plog.LogRecordSlice
-	currentOrigRecord plog.LogRecord
+	originalRecords       plog.LogRecordSlice
+	currentOriginalRecord plog.LogRecord
 
 	// this is logs to emit
-	resultLogRecords      plog.LogRecordSlice
+	resultRecords         plog.LogRecordSlice
 	currentResultRecord   plog.LogRecord
 	groupByTempLogRecords map[string]plog.LogRecordSlice
 
@@ -68,18 +68,17 @@ func (v *SQLStreamVisitor) startSimpleWorkerLoop() {
 
 	for {
 		select {
-		case v.origLogRecords = <-v.in:
-			v.resultLogRecords = plog.NewLogRecordSlice()
+		case v.originalRecords = <-v.in:
 			if err := v.runQuery(); err != nil {
 				v.outErr <- err
 				break
 			}
-			v.out <- v.resultLogRecords
-			v.origLogRecords = plog.NewLogRecordSlice()
+			v.out <- v.resultRecords
+			v.originalRecords = plog.NewLogRecordSlice()
 
 		case <-v.shutdownC:
-			if v.resultLogRecords.Len() > 0 {
-				v.out <- v.resultLogRecords
+			if v.resultRecords.Len() > 0 {
+				v.out <- v.resultRecords
 			}
 			v.logger.Debug("sql engine shutting down")
 			return
@@ -90,14 +89,14 @@ func (v *SQLStreamVisitor) startSimpleWorkerLoop() {
 }
 
 func (v *SQLStreamVisitor) startWindowTumblingLoop() {
-	v.origLogRecords = plog.NewLogRecordSlice()
+	v.originalRecords = plog.NewLogRecordSlice()
 	ticker := time.NewTicker(v.tumblingPeriod)
 
 	go func() {
 		for {
 			select {
 			case newRec := <-v.in:
-				newRec.CopyTo(v.origLogRecords)
+				newRec.CopyTo(v.originalRecords)
 			case <-v.shutdownC:
 				v.logger.Debug("sql engine shutting down")
 				return
@@ -109,13 +108,13 @@ func (v *SQLStreamVisitor) startWindowTumblingLoop() {
 		for {
 			select {
 			case <-ticker.C:
-				if v.origLogRecords.Len() > 0 {
+				if v.originalRecords.Len() > 0 {
 					if err := v.runQuery(); err != nil {
 						v.outErr <- err
 						break
 					}
-					v.out <- v.resultLogRecords
-					v.origLogRecords = plog.NewLogRecordSlice()
+					v.out <- v.resultRecords
+					v.originalRecords = plog.NewLogRecordSlice()
 				}
 			case <-v.shutdownC:
 				v.logger.Debug("sql engine shutting down")
@@ -127,6 +126,7 @@ func (v *SQLStreamVisitor) startWindowTumblingLoop() {
 }
 
 func (v *SQLStreamVisitor) runQuery() error {
+	v.resultRecords = plog.NewLogRecordSlice()
 	is := antlr.NewInputStream(v.query)
 	lexer := NewSqlLexer(is)
 	stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
@@ -141,7 +141,7 @@ func (v *SQLStreamVisitor) runQuery() error {
 }
 
 func (v *SQLStreamVisitor) GetResult() (plog.LogRecordSlice, error) {
-	return v.origLogRecords, nil
+	return v.originalRecords, nil
 }
 
 func (v *SQLStreamVisitor) Visit(tree antlr.ParseTree) interface{} {
@@ -209,8 +209,8 @@ func (v *SQLStreamVisitor) VisitGroupBy(ctx *GroupByContext) interface{} {
 
 	v.groupByTempLogRecords = make(map[string]plog.LogRecordSlice)
 
-	for i := 0; i < v.origLogRecords.Len(); i++ {
-		record := v.origLogRecords.At(i)
+	for i := 0; i < v.originalRecords.Len(); i++ {
+		record := v.originalRecords.At(i)
 		_, value, err := getAttributeValue(ctx.Column(), record.Attributes())
 		if err != nil {
 			return err
@@ -236,7 +236,7 @@ func (v *SQLStreamVisitor) VisitSelectGroupByAggregations(ctx *SelectGroupByAggr
 		}
 
 	}
-	v.resultLogRecords = resLS
+	v.resultRecords = resLS
 	return nil
 }
 
@@ -244,100 +244,17 @@ func (v *SQLStreamVisitor) VisitSelectAggregations(ctx *SelectAggregationsContex
 
 	resLS := plog.NewLogRecordSlice()
 	newRec := resLS.AppendEmpty()
-	if err := calculateAggregations(ctx, newRec, v.origLogRecords); err != nil {
+	if err := calculateAggregations(ctx, newRec, v.originalRecords); err != nil {
 		return err
 	}
-	v.resultLogRecords = resLS
+	v.resultRecords = resLS
 	return nil
 }
 
 func (v *SQLStreamVisitor) VisitAggregationColumn(ctx *AggregationColumnContext) interface{} {
-	// TODO implement me
-	panic("implement me")
-}
-
-// VisitSelectColumns is called in case of missed where statement and removes missed attributes
-func (v *SQLStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interface{} {
-	var err error
-	for i := 0; i < v.origLogRecords.Len(); i++ {
-		v.currentOrigRecord = v.origLogRecords.At(i)
-		v.currentResultRecord = plog.NewLogRecord()
-
-		for _, col := range ctx.AllColumn() {
-			switch res := col.Accept(v).(type) {
-			case error:
-				err = res
-			}
-		}
-
-		v.currentResultRecord.MoveTo(v.resultLogRecords.AppendEmpty())
-
-	}
-
-	return err
-
-}
-
-func (v *SQLStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
-	var err error
-	//if WHERE statement missed
-	if ctx.Expr() == nil {
-		return nil
-	}
-	resColumnCtx := getSelectColumnsFromWhereCtx(ctx)
-
-	v.origLogRecords.RemoveIf(func(record plog.LogRecord) bool {
-		v.currentOrigRecord = record
-		v.currentResultRecord = plog.NewLogRecord()
-
-		switch res := ctx.Expr().Accept(v).(type) {
-		case error:
-			err = res
-			return false
-
-		case bool:
-			if !res {
-				return true
-			}
-
-			if errRes := v.applySelectColumns(resColumnCtx); errRes != nil {
-				err = errRes
-			}
-
-			return false
-		}
-		return false
-	})
-
-	return err
-}
-
-func (v *SQLStreamVisitor) applySelectColumns(ctx *SelectColumnsContext) error {
-	//if * in select list
-	if ctx == nil {
-		v.currentOrigRecord.MoveTo(v.resultLogRecords.AppendEmpty())
-		return nil
-	}
-
-	for _, col := range ctx.AllColumn() {
-		switch res := col.Accept(v).(type) {
-		case error:
-			return res
-		}
-	}
-	v.currentResultRecord.MoveTo(v.resultLogRecords.AppendEmpty())
-	return nil
-}
-
-func (v *SQLStreamVisitor) VisitSelectStar(ctx *SelectStarContext) interface{} {
-	v.origLogRecords.CopyTo(v.resultLogRecords)
-	return nil
-}
-
-func (v *SQLStreamVisitor) VisitIdentifierColumn(ctx *IdentifierColumnContext) interface{} {
 	// first we check that fields listed in select (including nested) exist in log record
 	fieldName := ctx.IDENTIFIER(0).GetText()
-	value, ok := v.currentOrigRecord.Attributes().Get(fieldName)
+	value, ok := v.currentOriginalRecord.Attributes().Get(fieldName)
 	if !ok {
 		return fmt.Errorf("field %q missed", fieldName)
 	}
@@ -354,7 +271,148 @@ func (v *SQLStreamVisitor) VisitIdentifierColumn(ctx *IdentifierColumnContext) i
 
 	// here we process nested field
 	nestedFieldName := ctx.IDENTIFIER(1).GetText()
-	nestedVal, err := nestedFieldExistsInAttr(fieldName, nestedFieldName, v.currentOrigRecord.Attributes())
+	nestedVal, err := nestedFieldExistsInAttr(fieldName, nestedFieldName, v.currentOriginalRecord.Attributes())
+	if err != nil {
+		return err
+	}
+	if ctx.Alias() != nil {
+		fieldName = ctx.Alias().GetStop().GetText()
+		v.currentResultRecord.Attributes().Insert(fieldName, nestedVal)
+		return nil
+	}
+
+	var newMapVal pcommon.Value
+	newMapVal, ok = v.currentResultRecord.Attributes().Get(fieldName)
+	if !ok {
+		newMapVal = pcommon.NewValueMap()
+	}
+
+	newMapVal.MapVal().Insert(nestedFieldName, nestedVal)
+	v.currentResultRecord.Attributes().Insert(fieldName, newMapVal)
+
+	return nil
+}
+
+// VisitSelectColumns is called in case of missed where statement and removes missed attributes
+func (v *SQLStreamVisitor) VisitSelectColumns(ctx *SelectColumnsContext) interface{} {
+	var err error
+	for i := 0; i < v.originalRecords.Len(); i++ {
+		v.currentOriginalRecord = v.originalRecords.At(i)
+		v.currentResultRecord = plog.NewLogRecord()
+
+		for _, col := range ctx.AllColumn() {
+			switch res := col.Accept(v).(type) {
+			case error:
+				err = res
+			}
+		}
+
+		v.currentResultRecord.MoveTo(v.resultRecords.AppendEmpty())
+
+	}
+
+	return err
+
+}
+
+func (v *SQLStreamVisitor) VisitWhereStmt(ctx *WhereStmtContext) interface{} {
+	var err error
+	// if WHERE statement missed
+	if ctx.Expr() == nil {
+		return nil
+	}
+	selectColCtx := getSelectColumnsFromWhereCtx(ctx)
+	selectAggrColCtx := getSelectAggregationsFromWhereCtx(ctx)
+	selectStarCtx := getSelectStarCtx(ctx)
+
+	v.originalRecords.RemoveIf(func(record plog.LogRecord) bool {
+		v.currentOriginalRecord = record
+		v.currentResultRecord = plog.NewLogRecord()
+
+		switch res := ctx.Expr().Accept(v).(type) {
+		case error:
+			err = res
+			return false
+
+		case bool:
+			if !res {
+				return true
+			}
+
+			// select * case
+			if selectStarCtx != nil {
+				v.currentOriginalRecord.MoveTo(v.resultRecords.AppendEmpty())
+				return false
+			}
+
+			// align result records according listed in select fields
+			if selectColCtx != nil {
+				err = v.applySelectColumns(selectColCtx)
+			}
+
+			// the same for  aggregation case ##selectTumbling #selectTumblingGroupBy
+			if selectAggrColCtx != nil {
+				err = v.applySelectAggregationColumns(selectAggrColCtx)
+			}
+
+			v.currentResultRecord.MoveTo(v.resultRecords.AppendEmpty())
+			return false
+		}
+
+		return false
+	})
+
+	return err
+}
+
+func (v *SQLStreamVisitor) applySelectColumns(ctx *SelectColumnsContext) error {
+	for _, col := range ctx.AllColumn() {
+		switch res := col.Accept(v).(type) {
+		case error:
+			return res
+		}
+	}
+
+	return nil
+}
+
+func (v *SQLStreamVisitor) applySelectAggregationColumns(ctx *SelectAggregationsContext) error {
+	for _, col := range ctx.AllAggregationColumn() {
+		switch res := col.Accept(v).(type) {
+		case error:
+			return res
+		}
+	}
+
+	return nil
+}
+
+func (v *SQLStreamVisitor) VisitSelectStar(ctx *SelectStarContext) interface{} {
+	v.originalRecords.CopyTo(v.resultRecords)
+	return nil
+}
+
+func (v *SQLStreamVisitor) VisitIdentifierColumn(ctx *IdentifierColumnContext) interface{} {
+	// first we check that fields listed in select (including nested) exist in log record
+	fieldName := ctx.IDENTIFIER(0).GetText()
+	value, ok := v.currentOriginalRecord.Attributes().Get(fieldName)
+	if !ok {
+		return fmt.Errorf("field %q missed", fieldName)
+	}
+
+	// this is simple field
+	if len(ctx.AllIDENTIFIER()) == 1 {
+		if ctx.Alias() != nil {
+			fieldName = ctx.Alias().GetStop().GetText()
+		}
+		v.currentResultRecord.Attributes().Insert(fieldName, value)
+
+		return nil
+	}
+
+	// here we process nested field
+	nestedFieldName := ctx.IDENTIFIER(1).GetText()
+	nestedVal, err := nestedFieldExistsInAttr(fieldName, nestedFieldName, v.currentOriginalRecord.Attributes())
 	if err != nil {
 		return err
 	}
@@ -420,12 +478,12 @@ func (v *SQLStreamVisitor) VisitSimpleFunction(ctx *SimpleFunctionContext) inter
 	functionMame := ctx.FunctionName().GetText()
 	args := ctx.AllLiteralValue()
 
-	value, ok := v.currentOrigRecord.Attributes().Get(fieldName)
+	value, ok := v.currentOriginalRecord.Attributes().Get(fieldName)
 	if !ok {
 		return fmt.Errorf("field %q missed", fieldName)
 	}
 
-	//this is simple field
+	// this is simple field
 	if len(ctx.AllIDENTIFIER()) == 1 {
 
 		newValue, err := v.applyFunction(value, functionMame, args...)
@@ -433,13 +491,13 @@ func (v *SQLStreamVisitor) VisitSimpleFunction(ctx *SimpleFunctionContext) inter
 			return err
 		}
 
-		//v.currentResultRecord.Attributes().Insert(fieldName, newValue)
+		// v.currentResultRecord.Attributes().Insert(fieldName, newValue)
 		return newValue
 	}
 
 	// here we process nested field
 	nestedFieldName := ctx.IDENTIFIER(1).GetText()
-	nestedVal, err := nestedFieldExistsInAttr(fieldName, nestedFieldName, v.currentOrigRecord.Attributes())
+	nestedVal, err := nestedFieldExistsInAttr(fieldName, nestedFieldName, v.currentOriginalRecord.Attributes())
 	if err != nil {
 		return err
 	}
@@ -495,7 +553,7 @@ func (v *SQLStreamVisitor) VisitSimpleCondition(ctx *SimpleConditionContext) int
 }
 
 func (v *SQLStreamVisitor) VisitSimpleExpression(ctx *SimpleExpressionContext) interface{} {
-	fieldValue, ok := v.currentOrigRecord.Attributes().Get(ctx.IDENTIFIER().GetText())
+	fieldValue, ok := v.currentOriginalRecord.Attributes().Get(ctx.IDENTIFIER().GetText())
 	if !ok {
 		return fmt.Errorf("field %q missed in log record", ctx.IDENTIFIER().GetText())
 	}
@@ -510,7 +568,7 @@ func (v *SQLStreamVisitor) VisitSimpleExpression(ctx *SimpleExpressionContext) i
 
 func (v *SQLStreamVisitor) VisitNestedExpression(ctx *NestedExpressionContext) interface{} {
 	fieldName := ctx.IDENTIFIER(0).GetText()
-	fieldValue, ok := v.currentOrigRecord.Attributes().Get(fieldName)
+	fieldValue, ok := v.currentOriginalRecord.Attributes().Get(fieldName)
 	if !ok {
 		return fmt.Errorf("field %q missed in log record", fieldValue.AsString())
 	}

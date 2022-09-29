@@ -2,13 +2,14 @@ package parser
 
 import (
 	"fmt"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.uber.org/zap"
-	"sync"
-	"testing"
-	"time"
 )
 
 func TestWindowTumblingGroupBy(t *testing.T) {

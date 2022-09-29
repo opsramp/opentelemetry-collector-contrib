@@ -50,18 +50,47 @@ func TestIsWindowTumbling(t *testing.T) {
 	}
 }
 
-func TestWindowTumblingLoop(t *testing.T) {
+func TestWindowTumblingLoopOneField(t *testing.T) {
 	tests := []struct {
-		name     string
-		query    string
-		expected int
-		res      float64
+		name, query string
+		expected    int
+		expectedRes float64
 	}{
 		{
-			name:     "1 ms",
-			query:    "select max(price) window tumbling 50 where price > 4;",
-			expected: 1,
-			res:      99.0,
+			name:        "max",
+			query:       "select  max(price) window tumbling 50 where price > 4;",
+			expected:    1,
+			expectedRes: 99.0,
+		},
+		{
+			name:        "min",
+			query:       "select  min(price) window tumbling 50 where price > 4;",
+			expected:    1,
+			expectedRes: 5.0,
+		},
+		{
+			name:        "min 2",
+			query:       "select  min(price) window tumbling 50 where price > 95;",
+			expected:    1,
+			expectedRes: 96.0,
+		},
+		{
+			name:        "min 2",
+			query:       "select  count(price) window tumbling 50 where price > 95;",
+			expected:    1,
+			expectedRes: 4.0,
+		},
+		{
+			name:        "sum",
+			query:       "select  sum(price) window tumbling 50 where price > 95;",
+			expected:    1,
+			expectedRes: 390.0,
+		},
+		{
+			name:        "sum",
+			query:       "select  avg(price) window tumbling 50 where price < 10;",
+			expected:    1,
+			expectedRes: 4.5,
 		},
 	}
 	for _, tt := range tests {
@@ -81,10 +110,7 @@ func TestWindowTumblingLoop(t *testing.T) {
 					break
 				}
 			}()
-			in <- GenerateTestLogs()
-			<-time.After(1 * time.Millisecond)
-			in <- GenerateTestLogs()
-			<-time.After(1 * time.Millisecond)
+
 			in <- GenerateTestLogs()
 			<-time.After(1 * time.Millisecond)
 			wg.Wait()
@@ -92,7 +118,82 @@ func TestWindowTumblingLoop(t *testing.T) {
 			assert.Equal(t, tt.expected, ls.Len())
 			val, ok := ls.At(0).Attributes().Get("price")
 			assert.True(t, ok)
-			assert.Equal(t, tt.res, val.DoubleVal())
+			assert.Equal(t, tt.expectedRes, val.DoubleVal())
+		})
+	}
+}
+
+func TestWindowTumblingLoopTwoField(t *testing.T) {
+	tests := []struct {
+		name, query                                                       string
+		expected                                                          int
+		expectedSum, expectedAvg, expectedCount, expectedMax, expectedMin float64
+	}{
+		{
+			name:          "1",
+			query:         "select  max(price), min(price) as min_price, avg(price) as avg_price, sum(price) as sum_price, count(price) as count_price window tumbling 50 where price > 95;",
+			expected:      1,
+			expectedSum:   390.0,
+			expectedMin:   96.0,
+			expectedMax:   99.0,
+			expectedCount: 4.0,
+			expectedAvg:   97.5,
+		},
+		{
+			name:          "2",
+			query:         "select  max(price), min(price) as min_price, avg(price) as avg_price, sum(price) as sum_price, count(price) as count_price window tumbling 50 where price < 6;",
+			expected:      1,
+			expectedSum:   15.0,
+			expectedMin:   0.0,
+			expectedMax:   5.0,
+			expectedCount: 6.0,
+			expectedAvg:   2.5,
+		},
+		{
+			name:          "2",
+			query:         "select  max(price), min(price) as min_price, avg(price) as avg_price, sum(price) as sum_price, count(price) as count_price window tumbling 50 where price > 6 and price < 11;",
+			expected:      1,
+			expectedSum:   34.0,
+			expectedMin:   7.0,
+			expectedMax:   10.0,
+			expectedCount: 4.0,
+			expectedAvg:   8.5,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := make(chan plog.LogRecordSlice)
+			out := make(chan plog.LogRecordSlice)
+			outErr := make(chan error)
+			var wg sync.WaitGroup
+			wg.Add(1)
+			visitor := NewSQLStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			defer visitor.Stop()
+
+			in <- GenerateTestLogs()
+			ls := <-out
+
+			assert.Equal(t, tt.expected, ls.Len())
+
+			val, ok := ls.At(0).Attributes().Get("price")
+			assert.True(t, ok)
+			assert.Equal(t, tt.expectedMax, val.DoubleVal())
+
+			val, ok = ls.At(0).Attributes().Get("min_price")
+			assert.True(t, ok)
+			assert.Equal(t, tt.expectedMin, val.DoubleVal())
+
+			val, ok = ls.At(0).Attributes().Get("count_price")
+			assert.True(t, ok)
+			assert.Equal(t, tt.expectedCount, val.DoubleVal())
+
+			val, ok = ls.At(0).Attributes().Get("sum_price")
+			assert.True(t, ok)
+			assert.Equal(t, tt.expectedSum, val.DoubleVal())
+
+			val, ok = ls.At(0).Attributes().Get("avg_price")
+			assert.True(t, ok)
+			assert.Equal(t, tt.expectedAvg, val.DoubleVal())
 		})
 	}
 }
@@ -180,24 +281,24 @@ func TestWindowTumblingMax(t *testing.T) {
 /*
 func TestAvgContext_K_MIN(t *testing.T) {
 	ls := GenerateTestLogs()
-	res, err := min(ls, "price")
+	expectedRes, err := min(ls, "price")
 	assert.Nil(t, err)
-	assert.Equal(t, 0.0, res)
+	assert.Equal(t, 0.0, expectedRes)
 
 }
 
 func TestAvgContext_K_MAX(t *testing.T) {
 	ls := GenerateTestLogs()
-	res, err := max(ls, "price")
+	expectedRes, err := max(ls, "price")
 	assert.Nil(t, err)
-	assert.Equal(t, 99.0, res)
+	assert.Equal(t, 99.0, expectedRes)
 }
 
 func TestAvgContext_K_SUM(t *testing.T) {
 	ls := GenerateTestLogs()
-	res, err := sum(ls, "price")
+	expectedRes, err := sum(ls, "price")
 	assert.Nil(t, err)
-	assert.Equal(t, 4950.0, res)
+	assert.Equal(t, 4950.0, expectedRes)
 }
 
 */

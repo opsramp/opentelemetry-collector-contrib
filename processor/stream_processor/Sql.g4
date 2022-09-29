@@ -24,7 +24,7 @@ resultColumns
 
 
 aggregationColumns
- :   aggregationColumn (COMMA aggregationColumn)*                     #selectAggregations
+ :   aggregationColumn (COMMA aggregationColumn)*                       #selectAggregations
  ;
 
 groupByAggregationColumns
@@ -93,7 +93,6 @@ literalValue
 
 groupBy
  : K_GROUP_BY  column
- |
  ;
 
 
