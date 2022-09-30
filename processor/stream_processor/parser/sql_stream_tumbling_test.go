@@ -123,7 +123,7 @@ func TestWindowTumblingLoopOneField(t *testing.T) {
 	}
 }
 
-func TestWindowTumblingLoopTwoField(t *testing.T) {
+func TestWindowTumblingAllAggregations(t *testing.T) {
 	tests := []struct {
 		name, query                                                       string
 		expected                                                          int
@@ -150,7 +150,7 @@ func TestWindowTumblingLoopTwoField(t *testing.T) {
 			expectedAvg:   2.5,
 		},
 		{
-			name:          "2",
+			name:          "3",
 			query:         "select  max(price), min(price) as min_price, avg(price) as avg_price, sum(price) as sum_price, count(price) as count_price window tumbling 50 where price > 6 and price < 11;",
 			expected:      1,
 			expectedSum:   34.0,
@@ -174,6 +174,7 @@ func TestWindowTumblingLoopTwoField(t *testing.T) {
 			ls := <-out
 
 			assert.Equal(t, tt.expected, ls.Len())
+			assert.Equal(t, ls.At(0).Attributes().Len(), 5)
 
 			val, ok := ls.At(0).Attributes().Get("price")
 			assert.True(t, ok)
@@ -192,6 +193,64 @@ func TestWindowTumblingLoopTwoField(t *testing.T) {
 			assert.Equal(t, tt.expectedSum, val.DoubleVal())
 
 			val, ok = ls.At(0).Attributes().Get("avg_price")
+			assert.True(t, ok)
+			assert.Equal(t, tt.expectedAvg, val.DoubleVal())
+		})
+	}
+}
+
+func TestWindowTumblingNestedAggregations(t *testing.T) {
+	tests := []struct {
+		name, query                                                       string
+		expected                                                          int
+		expectedSum, expectedAvg, expectedCount, expectedMax, expectedMin float64
+	}{
+
+		{
+			name:          "1",
+			query:         "select  max(provider.number), min(provider.number) as min_provider_number, avg(provider.number) as avg_provider_number, sum(provider.number) as sum_provider_number, count(provider.number) as count_provider_number window tumbling 50 where price > 6 and price < 11;",
+			expected:      1,
+			expectedSum:   34.0,
+			expectedMin:   7.0,
+			expectedMax:   10.0,
+			expectedCount: 4.0,
+			expectedAvg:   8.5,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := make(chan plog.LogRecordSlice)
+			out := make(chan plog.LogRecordSlice)
+			outErr := make(chan error)
+			var wg sync.WaitGroup
+			wg.Add(1)
+			visitor := NewSQLStreamVisitor(tt.query, in, out, outErr, zap.NewNop())
+			defer visitor.Stop()
+
+			in <- GenerateTestLogs()
+			ls := <-out
+
+			assert.Equal(t, tt.expected, ls.Len())
+
+			val, ok := ls.At(0).Attributes().Get("provider")
+			assert.True(t, ok)
+			val, ok = val.MapVal().Get("number")
+			assert.True(t, ok)
+			assert.Equal(t, tt.expectedMax, val.DoubleVal())
+
+			val, ok = ls.At(0).Attributes().Get("min_provider_number")
+			assert.True(t, ok)
+			assert.Equal(t, tt.expectedMin, val.DoubleVal())
+
+			val, ok = ls.At(0).Attributes().Get("count_provider_number")
+			assert.True(t, ok)
+			assert.Equal(t, tt.expectedCount, val.DoubleVal())
+
+			val, ok = ls.At(0).Attributes().Get("sum_provider_number")
+			assert.True(t, ok)
+			assert.Equal(t, tt.expectedSum, val.DoubleVal())
+
+			val, ok = ls.At(0).Attributes().Get("avg_provider_number")
 			assert.True(t, ok)
 			assert.Equal(t, tt.expectedAvg, val.DoubleVal())
 		})

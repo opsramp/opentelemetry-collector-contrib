@@ -227,7 +227,15 @@ func min(ls plog.LogRecordSlice, ctx *AggregationColumnContext) (float64, error)
 			conErr = err
 		}
 
-		return leftVal.DoubleVal() < rightVal.DoubleVal()
+		switch leftVal.Type() {
+		case pcommon.ValueTypeInt:
+			return leftVal.IntVal() < rightVal.IntVal()
+		case pcommon.ValueTypeDouble:
+			return leftVal.DoubleVal() < rightVal.DoubleVal()
+
+		}
+
+		return false
 	})
 
 	if ls.Len() > 0 {
@@ -241,7 +249,7 @@ func min(ls plog.LogRecordSlice, ctx *AggregationColumnContext) (float64, error)
 
 func max(ls plog.LogRecordSlice, ctx *AggregationColumnContext) (float64, error) {
 	var conErr error
-	ls.Sort(func(a, b plog.LogRecord) bool {
+	sorted := ls.Sort(func(a, b plog.LogRecord) bool {
 		_, leftVal, err := getAttributeValueForAggregation(ctx, a.Attributes())
 		if err != nil {
 			conErr = err
@@ -252,11 +260,19 @@ func max(ls plog.LogRecordSlice, ctx *AggregationColumnContext) (float64, error)
 			conErr = err
 		}
 
-		return leftVal.DoubleVal() > rightVal.DoubleVal()
+		switch leftVal.Type() {
+		case pcommon.ValueTypeInt:
+			return leftVal.IntVal() > rightVal.IntVal()
+		case pcommon.ValueTypeDouble:
+			return leftVal.DoubleVal() > rightVal.DoubleVal()
+
+		}
+
+		return false
 	})
 
-	if ls.Len() > 0 {
-		_, res, err := getAttributeValueForAggregation(ctx, ls.At(ls.Len()-1).Attributes())
+	if sorted.Len() > 0 {
+		_, res, err := getAttributeValueForAggregation(ctx, sorted.At(0).Attributes())
 		convertedRes, _ := strconv.ParseFloat(res.AsString(), 64)
 		return convertedRes, err
 	}
