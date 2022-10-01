@@ -78,7 +78,7 @@ func NewLogEmitter(opts ...LogEmitterOption) *LogEmitter {
 				SugaredLogger: zap.NewNop().Sugar(),
 			},
 		},
-		logChan:       make(chan []*entry.Entry),
+		logChan:       make(chan []*entry.Entry, 1000),
 		maxBatchSize:  defaultMaxBatchSize,
 		batch:         make([]*entry.Entry, 0, defaultMaxBatchSize),
 		flushInterval: defaultFlushInterval,
@@ -153,12 +153,13 @@ func (e *LogEmitter) flusher(ctx context.Context) {
 
 	for {
 		select {
-		case <-ticker.C:
+		case <-ctx.Done():
+			return
+		default:
+
 			if oldBatch := e.makeNewBatch(); len(oldBatch) > 0 {
 				e.flush(ctx, oldBatch)
 			}
-		case <-ctx.Done():
-			return
 		}
 	}
 }

@@ -2,8 +2,9 @@ package batchmemlimitprocessor
 
 import (
 	"context"
-	"runtime"
+	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.opentelemetry.io/collector/component"
@@ -13,6 +14,10 @@ import (
 )
 
 var sizer = plog.NewProtoMarshaler().(plog.Sizer)
+
+var (
+	logsCount int64
+)
 
 type batchMemoryLimitProcessor struct {
 	logger *zap.Logger
@@ -37,7 +42,7 @@ func newBatchMemoryLimiterProcessor(next consumer.Logs, logger *zap.Logger, cfg 
 
 		batch:     newBatchLogs(next),
 		timeout:   cfg.Timeout,
-		newItem:   make(chan plog.Logs, runtime.NumCPU()),
+		newItem:   make(chan plog.Logs, 10000),
 		shutdownC: make(chan struct{}, 1),
 	}
 }
@@ -50,6 +55,21 @@ func (mp *batchMemoryLimitProcessor) Capabilities() consumer.Capabilities {
 func (mp *batchMemoryLimitProcessor) Start(context.Context, component.Host) error {
 	mp.goroutines.Add(1)
 	go mp.startProcessingCycle()
+	
+	go func() {
+
+		t := time.NewTicker(1 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-t.C:
+				fmt.Println("batchmem size: ", logsCount * 135)
+				atomic.CompareAndSwapInt64(&logsCount, logsCount, 0)
+			}
+		}
+
+	}()
+
 	return nil
 }
 
@@ -64,6 +84,9 @@ func (mp *batchMemoryLimitProcessor) Shutdown(context.Context) error {
 
 // ConsumeLogs implements LogsProcessor
 func (mp *batchMemoryLimitProcessor) ConsumeLogs(ctx context.Context, ld plog.Logs) error {
+
+	atomic.AddInt64(&logsCount, int64(ld.LogRecordCount()))
+
 	mp.newItem <- ld
 	return nil
 }
@@ -84,16 +107,16 @@ func (mp *batchMemoryLimitProcessor) startProcessingCycle() {
 				}
 			}
 			// This is the close of the channel
-			if mp.batch.getLogCount() > 0 {
-				mp.sendItems()
-			}
+			// if mp.batch.getLogCount() > 0 {
+			mp.sendItems()
+			// }
 			return
 		case item := <-mp.newItem:
 			mp.processItem(item)
 		case <-mp.timer.C:
-			if mp.batch.getLogCount() > 0 {
-				mp.sendItems()
-			}
+			// if mp.batch.getLogCount() > 0 {
+			mp.sendItems()
+			// }
 			mp.resetTimer()
 		}
 	}
@@ -156,23 +179,29 @@ func (bl *batchLogs) add(ld plog.Logs, sendBatchSize int, sendMemorySize int) (b
 
 	var err error
 	sent := false
-	newLogsCount := ld.LogRecordCount()
-	if newLogsCount == 0 {
-		return sent, nil
-	}
-	newLogsSize := bl.sizer.LogsSize(ld)
-	if newLogsSize == 0 {
-		return sent, nil
+	// newLogsCount := ld.LogRecordCount()
+	// if newLogsCount == 0 {
+	// 	return sent, nil
+	// }
+	// newLogsSize := bl.sizer.LogsSize(ld)
+	// if newLogsSize == 0 {
+	// 	return sent, nil
+	// }
+
+	// if bl.logCount+newLogsCount >= sendBatchSize || bl.logSize+newLogsSize >= sendMemorySize {
+	// 	sent = true
+	// 	err = bl.sendAndClear()
+	// }
+
+	// bl.logCount += newLogsCount
+	// bl.logSize += newLogsSize
+	//ld.ResourceLogs().MoveAndAppendTo(bl.logData.ResourceLogs())
+
+	for i := 0; i < ld.ResourceLogs().Len(); i++ {
+		ld.ResourceLogs().At(i).MoveTo(bl.logData.ResourceLogs().AppendEmpty())
 	}
 
-	if bl.logCount+newLogsCount >= sendBatchSize || bl.logSize+newLogsSize >= sendMemorySize {
-		sent = true
-		err = bl.sendAndClear()
-	}
-
-	bl.logCount += newLogsCount
-	bl.logSize += newLogsSize
-	ld.ResourceLogs().MoveAndAppendTo(bl.logData.ResourceLogs())
+	//ld.ResourceLogs().MoveAndAppendTo(bl.logData.ResourceLogs())
 
 	return sent, err
 }

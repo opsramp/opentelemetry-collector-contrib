@@ -60,6 +60,7 @@ func (i *Identifier) Identify(e *entry.Entry) error {
 	}
 
 	env := GetExprEnv(e)
+
 	defer PutExprEnv(env)
 
 	for k, v := range i.resource {

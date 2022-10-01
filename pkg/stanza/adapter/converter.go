@@ -31,6 +31,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/entry"
+	//"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer"
 )
 
 // Converter converts a batch of entry.Entry into plog.Logs aggregating translated
@@ -122,13 +123,13 @@ func WithWorkerCount(workerCount int) ConverterOption {
 
 func NewConverter(opts ...ConverterOption) *Converter {
 	c := &Converter{
-		workerChan:      make(chan []*entry.Entry),
+		workerChan:      make(chan []*entry.Entry, 1000),
 		workerCount:     int(math.Max(1, float64(runtime.NumCPU()/4))),
-		aggregationChan: make(chan []workerItem),
-		pLogsChan:       make(chan plog.Logs),
+		aggregationChan: make(chan []workerItem, 1000),
+		pLogsChan:       make(chan plog.Logs, 1000),
 		stopChan:        make(chan struct{}),
 		logger:          zap.NewNop(),
-		flushChan:       make(chan plog.Logs),
+		flushChan:       make(chan plog.Logs, 1000),
 	}
 
 	for _, opt := range opts {

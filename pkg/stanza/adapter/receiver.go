@@ -28,6 +28,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/pipeline"
+	//"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer"
 )
 
 type receiver struct {
@@ -136,6 +137,9 @@ func (r *receiver) consumerLoop(ctx context.Context) {
 			if cErr != nil {
 				r.logger.Error("ConsumeLogs() failed", zap.Error(cErr))
 			}
+			//fileconsumer.LogsCountMutex.Lock()
+			//fileconsumer.LogsCount+=pLogs.LogRecordCount()*135
+			//fileconsumer.LogsCountMutex.Unlock()
 			r.obsrecv.EndLogsOp(obsrecvCtx, "stanza", pLogs.LogRecordCount(), cErr)
 		}
 	}

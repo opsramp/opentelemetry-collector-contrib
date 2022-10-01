@@ -63,6 +63,19 @@ func (m *Manager) Start(persister operator.Persister) error {
 			"exclude", m.finder.Exclude)
 	}
 
+	go func(){
+		t := time.NewTicker(time.Second * 1)
+		for {
+			select {
+			case <- t.C:
+				LogsCountMutex.Lock()
+				fmt.Println(LogsCount)
+				LogsCount = 0
+				LogsCountMutex.Unlock()
+			}
+		}
+	}()
+
 	// Start polling goroutine
 	m.startPoller(ctx)
 
@@ -88,14 +101,14 @@ func (m *Manager) startPoller(ctx context.Context) {
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
-		globTicker := time.NewTicker(m.pollInterval)
-		defer globTicker.Stop()
+		//globTicker := time.NewTicker(m.pollInterval)
+		//defer globTicker.Stop()
 
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-globTicker.C:
+			default:
 			}
 
 			m.poll(ctx)

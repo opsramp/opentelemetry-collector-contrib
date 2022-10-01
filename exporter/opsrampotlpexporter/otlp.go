@@ -23,8 +23,10 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"runtime"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/collector/config"
@@ -63,6 +65,12 @@ type exporter struct {
 	// Default user-agent header.
 	userAgent   string
 	accessToken string
+
+	//rate of ingestion metric (introducing to test rate of ingestion)
+	LogsCount      uint64
+	LogsCountMutex sync.RWMutex
+
+	TotalLogsCount uint64
 }
 
 // Crete new exporter and start it. The exporter will begin connecting but
@@ -149,6 +157,42 @@ func (e *exporter) start(ctx context.Context, host component.Host) (err error) {
 	e.metadata.Set("Authorization", fmt.Sprintf("Bearer %s", e.accessToken))
 	e.callOptions = []grpc.CallOption{
 		grpc.WaitForReady(e.config.GRPCClientSettings.WaitForReady),
+		grpc.MaxCallSendMsgSize(500000000),
+	}
+
+	if e.config.DumpMetrics {
+		// removing previous file if it exists
+		if e.config.MetricsFilePath == "" {
+			host.ReportFatalError(fmt.Errorf("metrics file path empty"))
+		}
+		os.Remove(e.config.MetricsFilePath)
+
+		go func() {
+			t := time.NewTicker(e.config.MetricsPoolTime)
+			defer t.Stop()
+
+			var err error
+			f, err := os.OpenFile(e.config.MetricsFilePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			if err != nil {
+				panic(err)
+			}
+			defer f.Close()
+
+			for {
+				select {
+				case <-t.C:
+					e.LogsCountMutex.RLock()
+					//if e.LogsCount > 0 {
+					_, err = fmt.Fprintf(f, "%v logs processed per %v\n", e.LogsCount, e.config.MetricsPoolTime.String())
+					e.LogsCount = 0
+					//}
+					e.LogsCountMutex.RUnlock()
+					if err != nil {
+						host.ReportFatalError(err)
+					}
+				}
+			}
+		}()
 	}
 
 	return
@@ -171,6 +215,7 @@ func (e *exporter) pushMetrics(ctx context.Context, md pmetric.Metrics) error {
 }
 
 func (e *exporter) pushLogs(ctx context.Context, ld plog.Logs) error {
+
 	if e.config.Masking != nil {
 		e.applyMasking(ld)
 	}
@@ -180,23 +225,36 @@ func (e *exporter) pushLogs(ctx context.Context, ld plog.Logs) error {
 
 	req := plogotlp.NewRequestFromLogs(ld)
 
-	_, err := e.logExporter.Export(e.enhanceContext(ctx), req, e.callOptions...)
+	if e.config.DumpMetrics {
+		e.LogsCountMutex.Lock()
+		e.LogsCount += uint64(req.Logs().LogRecordCount() * 135)
+		e.LogsCountMutex.Unlock()
+	}
+
+	//b, err := req.MarshalJSON()
+	//if err == nil {
+	//	fmt.Println("json of logs:", string(b))
+	//}
+
+	e.TotalLogsCount += uint64(ld.LogRecordCount())
+	// _, err := e.logExporter.Export(e.enhanceContext(ctx), req, e.callOptions...)
+	// fmt.Println("total logs sent:", e.TotalLogsCount)
 
 	// trying to get new access token in case of expiration
-	if err != nil {
-		st := status.Convert(err)
-		if st.Code() == codes.Unauthenticated {
-			if err := e.updateExpiredToken(); err != nil {
-				return fmt.Errorf("couldn't retreive new token instead of expired: %w", err)
-			}
-
-			_, err = e.logExporter.Export(e.enhanceContext(ctx), req, e.callOptions...)
-			if err != nil {
-				return err
-			}
-		}
-		return processError(err)
-	}
+	// if err != nil {
+	// 	st := status.Convert(err)
+	// 	if st.Code() == codes.Unauthenticated {
+	// 		if err := e.updateExpiredToken(); err != nil {
+	// 			return fmt.Errorf("couldn't retreive new token instead of expired: %w", err)
+	// 		}
+	
+	// 		_, err = e.logExporter.Export(e.enhanceContext(ctx), req, e.callOptions...)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 	}
+	// 	return processError(err)
+	// }
 	return nil
 }
 

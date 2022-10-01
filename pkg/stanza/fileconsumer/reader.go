@@ -20,8 +20,14 @@ import (
 	"os"
 
 	"go.uber.org/zap"
+	"sync"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
+)
+
+var(
+	LogsCount      int
+	LogsCountMutex sync.RWMutex
 )
 
 type readerConfig struct {
@@ -78,12 +84,20 @@ func (r *Reader) ReadToEnd(ctx context.Context) {
 			break
 		}
 
-		token, err := r.splitter.Encoding.Decode(scanner.Bytes())
-		if err != nil {
-			r.Errorw("decode: %w", zap.Error(err))
-		} else {
-			r.emit(ctx, r.fileAttributes, token)
-		}
+		//token, err := r.splitter.Encoding.Decode(scanner.Bytes())
+		//if err != nil {
+		//	r.Errorw("decode: %w", zap.Error(err))
+		//} else {
+		//	r.emit(ctx, r.fileAttributes, token)
+		//}
+
+
+
+		r.emit(ctx, r.fileAttributes, scanner.Bytes())
+		LogsCountMutex.Lock()
+		LogsCount += len(scanner.Bytes())
+		LogsCountMutex.Unlock()
+
 
 		r.Offset = scanner.Pos()
 	}
