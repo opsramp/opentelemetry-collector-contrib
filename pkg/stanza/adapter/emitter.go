@@ -78,7 +78,7 @@ func NewLogEmitter(opts ...LogEmitterOption) *LogEmitter {
 				SugaredLogger: zap.NewNop().Sugar(),
 			},
 		},
-		logChan:       make(chan []*entry.Entry),
+		logChan:       make(chan []*entry.Entry, defaultMaxBatchSize),
 		maxBatchSize:  defaultMaxBatchSize,
 		batch:         make([]*entry.Entry, 0, defaultMaxBatchSize),
 		flushInterval: defaultFlushInterval,

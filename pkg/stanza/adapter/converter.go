@@ -124,11 +124,11 @@ func NewConverter(opts ...ConverterOption) *Converter {
 	c := &Converter{
 		workerChan:      make(chan []*entry.Entry),
 		workerCount:     int(math.Max(1, float64(runtime.NumCPU()/4))),
-		aggregationChan: make(chan []workerItem),
-		pLogsChan:       make(chan plog.Logs),
+		aggregationChan: make(chan []workerItem, 100),
+		pLogsChan:       make(chan plog.Logs, 100),
 		stopChan:        make(chan struct{}),
 		logger:          zap.NewNop(),
-		flushChan:       make(chan plog.Logs),
+		flushChan:       make(chan plog.Logs, 100),
 	}
 
 	for _, opt := range opts {

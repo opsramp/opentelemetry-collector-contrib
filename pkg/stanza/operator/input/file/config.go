@@ -16,6 +16,7 @@ package file // import "github.com/open-telemetry/opentelemetry-collector-contri
 
 import (
 	"go.uber.org/zap"
+	"unsafe"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
@@ -69,7 +70,7 @@ func (c Config) Build(logger *zap.SugaredLogger) (operator.Operator, error) {
 	}
 
 	var toBody toBodyFunc = func(token []byte) interface{} {
-		return string(token)
+		return unsafeByteToString(token)
 	}
 	if helper.IsNop(c.Config.Splitter.EncodingConfig.Encoding) {
 		toBody = func(token []byte) interface{} {
@@ -89,4 +90,8 @@ func (c Config) Build(logger *zap.SugaredLogger) (operator.Operator, error) {
 	}
 
 	return input, nil
+}
+
+func unsafeByteToString(b []byte ) string {
+	return *(*string)(unsafe.Pointer(&b))
 }
