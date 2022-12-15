@@ -177,6 +177,9 @@ func (e *exporter) pushLogs(ctx context.Context, ld plog.Logs) error {
 	if e.config.ExpirationSkip != 0 {
 		e.skipExpired(ld)
 	}
+	if ld.ResourceLogs().Len() <= 0 {
+		return nil
+	}
 
 	req := plogotlp.NewRequestFromLogs(ld)
 
