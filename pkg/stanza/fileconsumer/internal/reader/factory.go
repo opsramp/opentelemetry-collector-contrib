@@ -47,7 +47,7 @@ func (f *Factory) NewFingerprint(file *os.File) (*fingerprint.Fingerprint, error
 }
 
 func (f *Factory) NewReader(file *os.File, fp *fingerprint.Fingerprint) (*Reader, error) {
-	attributes, err := f.Attributes.Resolve(file.Name())
+	attributes, err := f.Attributes.Resolve(file)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ func (f *Factory) NewReaderFromMetadata(file *os.File, m *Metadata) (r *Reader, 
 		r.processFunc = r.headerReader.Process
 	}
 
-	attributes, err := f.Attributes.Resolve(file.Name())
+	attributes, err := f.Attributes.Resolve(file)
 	if err != nil {
 		return nil, err
 	}
