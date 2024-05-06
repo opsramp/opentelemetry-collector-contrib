@@ -41,6 +41,8 @@ type Criteria struct {
 	// than the specified age.
 	ExcludeOlderThan time.Duration    `mapstructure:"exclude_older_than"`
 	OrderingCriteria OrderingCriteria `mapstructure:"ordering_criteria,omitempty"`
+
+	RefreshInterval time.Duration `mapstructure:"refresh_interval,omitempty"`
 }
 
 type OrderingCriteria struct {
@@ -57,6 +59,9 @@ type Sort struct {
 	// Timestamp only
 	Layout   string `mapstructure:"layout,omitempty"`
 	Location string `mapstructure:"location,omitempty"`
+
+	// mtime only
+	MaxTime time.Duration `mapstructure:"max_time,omitempty"`
 }
 
 func New(c Criteria) (*Matcher, error) {
@@ -71,9 +76,15 @@ func New(c Criteria) (*Matcher, error) {
 		return nil, fmt.Errorf("exclude: %w", err)
 	}
 
+	if c.RefreshInterval.Seconds() == 0 {
+		c.RefreshInterval = time.Minute
+	}
+
 	m := &Matcher{
-		include: c.Include,
-		exclude: c.Exclude,
+		include:         c.Include,
+		exclude:         c.Exclude,
+		refreshInterval: c.RefreshInterval,
+		cache:           newCache(),
 	}
 
 	if c.ExcludeOlderThan != 0 {
@@ -132,7 +143,8 @@ func New(c Criteria) (*Matcher, error) {
 			if !mtimeSortTypeFeatureGate.IsEnabled() {
 				return nil, fmt.Errorf("the %q feature gate must be enabled to use %q sort type", mtimeSortTypeFeatureGate.ID(), sortTypeMtime)
 			}
-			m.filterOpts = append(m.filterOpts, filter.SortMtime())
+			m.maxAge = sc.MaxTime
+			m.filterOpts = append(m.filterOpts, filter.SortMtime(sc.MaxTime))
 		default:
 			return nil, fmt.Errorf("'sort_type' must be specified")
 		}
@@ -152,21 +164,56 @@ func orderingCriteriaNeedsRegex(sorts []Sort) bool {
 	return false
 }
 
+// cache stores the matched files and last updated time. No mutex is used since all calls are sequential
+type cache struct {
+	lastUpdatedTime time.Time
+
+	files []string
+}
+
+func newCache() *cache {
+	return &cache{}
+}
+
+func (c *cache) getFiles() []string {
+	return c.files
+}
+
+func (c *cache) update(files []string) {
+	c.files = files
+	c.lastUpdatedTime = time.Now()
+}
+
+func (c *cache) getLastUpdatedTime() time.Time {
+	return c.lastUpdatedTime
+}
+
 type Matcher struct {
 	include    []string
 	exclude    []string
 	regex      *regexp.Regexp
 	topN       int
 	filterOpts []filter.Option
+
+	refreshInterval time.Duration
+	maxAge          time.Duration
+	cache           *cache
 }
 
 // MatchFiles gets a list of paths given an array of glob patterns to include and exclude
 func (m Matcher) MatchFiles() ([]string, error) {
-	var errs error
-	files, err := finder.FindFiles(m.include, m.exclude)
+	var err, errs error
+
+	files := m.cache.getFiles()
+	if time.Since(m.cache.getLastUpdatedTime()) < m.refreshInterval {
+		return files, nil
+	}
+
+	files, err = finder.FindFiles(m.include, m.exclude, m.maxAge)
 	if err != nil {
 		errs = errors.Join(errs, err)
 	}
+
 	if len(files) == 0 {
 		return files, errors.Join(fmt.Errorf("no files match the configured criteria"), errs)
 	}
@@ -174,14 +221,19 @@ func (m Matcher) MatchFiles() ([]string, error) {
 		return files, errs
 	}
 
-	result, err := filter.Filter(files, m.regex, m.filterOpts...)
-	if len(result) == 0 {
-		return result, errors.Join(err, errs)
+	files, err = filter.Filter(files, m.regex, m.filterOpts...)
+	if len(files) == 0 {
+		return files, errors.Join(err, errs)
 	}
 
-	if len(result) <= m.topN {
-		return result, errors.Join(err, errs)
+	if len(files) <= m.topN {
+		m.cache.update(files)
+		return files, errors.Join(err, errs)
 	}
 
-	return result[:m.topN], errors.Join(err, errs)
+	files = files[:m.topN]
+
+	m.cache.update(files)
+
+	return files, errors.Join(err, errs)
 }

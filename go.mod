@@ -2,6 +2,8 @@ module github.com/open-telemetry/opentelemetry-collector-contrib
 
 go 1.20
 
+replace github.com/bmatcuk/doublestar/v4 => github.com/opsramp/doublestar/v4 v4.0.0-20240422124750-f0571f1928b4
+
 require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector v0.94.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/datadogconnector v0.94.0
@@ -545,7 +547,7 @@ require (
 	github.com/openshift/api v3.9.0+incompatible // indirect
 	github.com/openshift/client-go v0.0.0-20210521082421-73d9475a9142 // indirect
 	github.com/openzipkin/zipkin-go v0.4.2 // indirect
-	github.com/opsramp/go-proxy-dialer v0.0.0-20240209060732-5e75def1c040 // indirect
+	github.com/opsramp/go-proxy-dialer v0.0.0-20240313152735-64bb1ce65640 // indirect
 	github.com/outcaste-io/ristretto v0.2.1 // indirect
 	github.com/ovh/go-ovh v1.4.3 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect

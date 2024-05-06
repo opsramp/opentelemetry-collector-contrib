@@ -176,17 +176,17 @@ func TestFindFiles(t *testing.T) {
 				require.NoError(t, os.Chdir(cwd))
 			}()
 			for _, f := range tc.files {
-				require.NoError(t, os.MkdirAll(filepath.Dir(f), 0700))
+				require.NoError(t, os.MkdirAll(filepath.Dir(f), 0o700))
 
 				var file *os.File
-				file, err = os.OpenFile(f, os.O_CREATE|os.O_RDWR, 0600)
+				file, err = os.OpenFile(f, os.O_CREATE|os.O_RDWR, 0o600)
 				require.NoError(t, err)
 
 				_, err = file.WriteString(filepath.Base(f))
 				require.NoError(t, err)
 				require.NoError(t, file.Close())
 			}
-			files, err := FindFiles(tc.include, tc.exclude)
+			files, err := FindFiles(tc.include, tc.exclude, 0)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expected, files)
 		})
@@ -212,15 +212,15 @@ func TestFindFilesWithIOErrors(t *testing.T) {
 		filepath.Join("dir1", "1.log"),
 		filepath.Join("dir1", "2.log"),
 	} {
-		require.NoError(t, os.MkdirAll(filepath.Dir(f), 0700))
+		require.NoError(t, os.MkdirAll(filepath.Dir(f), 0o700))
 
-		_, err = os.OpenFile(f, os.O_CREATE|os.O_RDWR, 0600)
+		_, err = os.OpenFile(f, os.O_CREATE|os.O_RDWR, 0o600)
 		require.NoError(t, err)
 	}
 
-	require.NoError(t, os.Chmod("no_permission", 0000))
+	require.NoError(t, os.Chmod("no_permission", 0o000))
 	defer func() {
-		require.NoError(t, os.Chmod("no_permission", 0700))
+		require.NoError(t, os.Chmod("no_permission", 0o700))
 	}()
 
 	cases := []struct {
@@ -249,7 +249,7 @@ func TestFindFilesWithIOErrors(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			files, err := FindFiles(tc.include, []string{})
+			files, err := FindFiles(tc.include, []string{}, 0)
 			assert.ErrorContains(t, err, tc.failedMsg)
 			assert.Equal(t, tc.expected, files)
 		})

@@ -243,8 +243,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.94.
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.94.0/go.mod h1:2iqSk/ZjqmRsHdISoVnnKMLRtlpPWWEHaRTY9H3Lqjc=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.94.0 h1:0X1r/YZR+rbQqzKzQ40LTZUw1a8mKXV/BmO+BDuhx1w=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.94.0/go.mod h1:VR/KC70d5Jxfw71448BpbykhTK6+0bLjTgPobcm+7Vk=
-github.com/opsramp/go-proxy-dialer v0.0.0-20240209060732-5e75def1c040 h1:rDCvVLiz1viQjhbxg0lbzcjbdIXycDgZV9Gd85Iumhw=
-github.com/opsramp/go-proxy-dialer v0.0.0-20240209060732-5e75def1c040/go.mod h1:0jgCJucvjWwnzrRIJyj7QnmAmgRQunDLmTEOgIMGK5o=
+github.com/opsramp/go-proxy-dialer v0.0.0-20240313152735-64bb1ce65640 h1:EbItJmCPwzOSxox5Cfme1QT8pv5s/wEK08z/qp3t8uw=
+github.com/opsramp/go-proxy-dialer v0.0.0-20240313152735-64bb1ce65640/go.mod h1:0jgCJucvjWwnzrRIJyj7QnmAmgRQunDLmTEOgIMGK5o=
 github.com/pascaldekloe/goe v0.0.0-20180627143212-57f6aae5913c/go.mod h1:lzWF7FIEvWOWxwDKqyGYQf6ZUaNfKdP144TG7ZOy1lc=
 github.com/pascaldekloe/goe v0.1.0/go.mod h1:lzWF7FIEvWOWxwDKqyGYQf6ZUaNfKdP144TG7ZOy1lc=
 github.com/pelletier/go-toml v1.7.0/go.mod h1:vwGMzjaWMwyfHwgIBhI2YUM4fB6nL6lVAvS1LBMMhTE=

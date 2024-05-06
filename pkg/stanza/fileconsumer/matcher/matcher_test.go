@@ -720,6 +720,40 @@ func TestMatcher(t *testing.T) {
 			},
 			expected: []string{"err.b.1.2023020602.log"},
 		},
+		{
+			name: "Recursive match - include",
+			files: []string{
+				filepath.Join("a", "1.log"),
+				filepath.Join("a", "2.log"),
+				filepath.Join("a", "b", "1.log"),
+				filepath.Join("a", "b", "2.log"),
+				filepath.Join("a", "b", "c", "1.log"),
+				filepath.Join("a", "b", "c", "2.log"),
+			},
+			include: []string{filepath.Join("**", "1.log")},
+			exclude: []string{},
+			expected: []string{
+				filepath.Join("a", "1.log"),
+				filepath.Join("a", "b", "1.log"),
+				filepath.Join("a", "b", "c", "1.log"),
+			},
+		},
+		{
+			name: "Recursive match - include and exclude",
+			files: []string{
+				filepath.Join("a", "1.log"),
+				filepath.Join("a", "2.log"),
+				filepath.Join("a", "b", "1.log"),
+				filepath.Join("a", "b", "2.log"),
+				filepath.Join("a", "b", "c", "1.log"),
+				filepath.Join("a", "b", "c", "2.log"),
+			},
+			include: []string{filepath.Join("**", "1.log")},
+			exclude: []string{filepath.Join("**", "b", "**", "1.log")},
+			expected: []string{
+				filepath.Join("a", "1.log"),
+			},
+		},
 	}
 
 	for _, tc := range cases {
@@ -731,8 +765,8 @@ func TestMatcher(t *testing.T) {
 				require.NoError(t, os.Chdir(cwd))
 			}()
 			for _, f := range tc.files {
-				require.NoError(t, os.MkdirAll(filepath.Dir(f), 0700))
-				file, fErr := os.OpenFile(f, os.O_CREATE|os.O_RDWR, 0600)
+				require.NoError(t, os.MkdirAll(filepath.Dir(f), 0o700))
+				file, fErr := os.OpenFile(f, os.O_CREATE|os.O_RDWR, 0o600)
 				require.NoError(t, fErr)
 
 				_, fErr = file.WriteString(filepath.Base(f))
