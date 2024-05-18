@@ -1,4 +1,4 @@
-module go.opentelemetry.io/collector/exporter/debugexporter
+module github.com/open-telemetry/opentelemetry-collector-contrib/exporter/opsrampdebugexporter
 
 go 1.20
 
