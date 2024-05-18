@@ -5,15 +5,13 @@ package opsrampdebugexporter // import "go.opentelemetry.io/collector/exporter/d
 
 import (
 	"context"
-	"errors"
-	"os"
-	"syscall"
 	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/opsrampdebugexporter/internal/metadata"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/opsrampdebugexporter/internal/otlptext"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configtelemetry"
 	"go.opentelemetry.io/collector/consumer"
@@ -56,7 +54,7 @@ func createTracesExporter(ctx context.Context, set exporter.CreateSettings, conf
 		debugExporter.pushTraces,
 		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
 		exporterhelper.WithTimeout(exporterhelper.TimeoutSettings{Timeout: 0}),
-		exporterhelper.WithShutdown(loggerSync(exporterLogger)),
+		exporterhelper.WithShutdown(otlptext.LoggerSync(exporterLogger)),
 	)
 }
 
@@ -68,7 +66,7 @@ func createMetricsExporter(ctx context.Context, set exporter.CreateSettings, con
 		debugExporter.pushMetrics,
 		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
 		exporterhelper.WithTimeout(exporterhelper.TimeoutSettings{Timeout: 0}),
-		exporterhelper.WithShutdown(loggerSync(exporterLogger)),
+		exporterhelper.WithShutdown(otlptext.LoggerSync(exporterLogger)),
 	)
 }
 
@@ -80,7 +78,7 @@ func createLogsExporter(ctx context.Context, set exporter.CreateSettings, config
 		debugExporter.pushLogs,
 		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
 		exporterhelper.WithTimeout(exporterhelper.TimeoutSettings{Timeout: 0}),
-		exporterhelper.WithShutdown(loggerSync(exporterLogger)),
+		exporterhelper.WithShutdown(otlptext.LoggerSync(exporterLogger)),
 	)
 }
 
@@ -93,43 +91,4 @@ func createLogger(cfg *Config, logger *zap.Logger) *zap.Logger {
 	)
 
 	return zap.New(core)
-}
-
-func loggerSync(logger *zap.Logger) func(context.Context) error {
-	return func(context.Context) error {
-		// Currently Sync() return a different error depending on the OS.
-		// Since these are not actionable ignore them.
-		err := logger.Sync()
-		osErr := &os.PathError{}
-		if errors.As(err, &osErr) {
-			wrappedErr := osErr.Unwrap()
-			if knownSyncError(wrappedErr) {
-				err = nil
-			}
-		}
-		return err
-	}
-}
-
-var knownSyncErrors = []error{
-	// sync /dev/stdout: invalid argument
-	syscall.EINVAL,
-	// sync /dev/stdout: not supported
-	syscall.ENOTSUP,
-	// sync /dev/stdout: inappropriate ioctl for device
-	syscall.ENOTTY,
-	// sync /dev/stdout: bad file descriptor
-	syscall.EBADF,
-}
-
-// knownSyncError returns true if the given error is one of the known
-// non-actionable errors returned by Sync on Linux and macOS.
-func knownSyncError(err error) bool {
-	for _, syncError := range knownSyncErrors {
-		if errors.Is(err, syncError) {
-			return true
-		}
-	}
-
-	return false
 }
