@@ -26,12 +26,12 @@ func FindFiles(includes, excludes []string, maxAge time.Duration) ([]string, err
 	var errs error
 	all := make([]string, 0, len(includes))
 	for _, include := range includes {
-		matches, err := doublestar.FilepathGlob(include, doublestar.WithFilesOnly(), doublestar.WithFailOnIOErrors(), doublestar.WithMaxAge(maxAge))
+		matches, err := doublestar.FilepathGlob(include, doublestar.WithFilesOnly(), doublestar.WithFailOnIOErrors())
 		if err != nil {
 			errs = errors.Join(errs, fmt.Errorf("find files with '%s' pattern: %w", include, err))
 			// the same pattern could cause an IO error due to one file or directory,
 			// but also could still find files without `doublestar.WithFailOnIOErrors()`.
-			matches, _ = doublestar.FilepathGlob(include, doublestar.WithFilesOnly(), doublestar.WithMaxAge(maxAge))
+			matches, _ = doublestar.FilepathGlob(include, doublestar.WithFilesOnly())
 		}
 	INCLUDE:
 		for _, match := range matches {
