@@ -25,15 +25,17 @@ func newOpsrampK8sObjectsProcessor(logger *zap.Logger) *opsrampK8sObjectsProcess
 
 func (a *opsrampK8sObjectsProcessor) processLogs(ctx context.Context, ld plog.Logs) (plog.Logs, error) {
 	out := make(map[string]interface{})
+	addedUids := make(map[string]interface{})
+	outld := plog.NewLogs()
+	isWatchLog := true
+
 	rls := ld.ResourceLogs()
 	for i := 0; i < rls.Len(); i++ {
 		rs := rls.At(i)
 		ilss := rs.ScopeLogs()
-		//resource := rs.Resource()
 		for j := 0; j < ilss.Len(); j++ {
 			ils := ilss.At(j)
 			logs := ils.LogRecords()
-			//library := ils.Scope()
 			for k := 0; k < logs.Len(); k++ {
 				lr := logs.At(k)
 
@@ -49,6 +51,37 @@ func (a *opsrampK8sObjectsProcessor) processLogs(ctx context.Context, ld plog.Lo
 				err := json.Unmarshal([]byte(lr.Body().AsString()), &watchevent)
 				if err != nil {
 					fmt.Println("Error unmarshalling JSON:", err)
+					continue
+					// Throw exception and not continue. may be assert.
+				}
+
+				uid := watchevent.Object.Metadata.Uid
+				if uid == "" {
+					fmt.Printf("resourceLog #%d is a pull log\n", i)
+
+					isWatchLog = false
+					break
+				}
+
+				eventType := watchevent.Type
+
+				if eventType == "ADDED" {
+					addedUids[uid] = nil
+				}
+
+				/*
+					if eventType == "MODIFIED" {
+						if _, exists := addedUids[uid]; exists {
+							watchevent.Type = "ADDED"
+						}
+					}
+				*/
+
+				if eventType == "DELETED" {
+					if _, exists := addedUids[uid]; exists {
+						delete(out, uid)
+						continue
+					}
 				}
 
 				out[watchevent.Object.Metadata.Uid] = lr
@@ -56,6 +89,17 @@ func (a *opsrampK8sObjectsProcessor) processLogs(ctx context.Context, ld plog.Lo
 				fmt.Printf("After unmarshal opsramp resourceLog #%d, scopeLog #%d, logRecord #%d UID %s \n", i, j, k, watchevent.Object.Metadata.Uid)
 
 			}
+
+			if !isWatchLog {
+				break
+			}
+		}
+
+		if !isWatchLog {
+			isWatchLog = true
+			resourceLogs := outld.ResourceLogs()
+			dst := resourceLogs.AppendEmpty()
+			rs.CopyTo(dst)
 		}
 	}
 
@@ -70,7 +114,6 @@ func (a *opsrampK8sObjectsProcessor) processLogs(ctx context.Context, ld plog.Lo
 		time.Sleep(1 * time.Second)
 	*/
 
-	outld := plog.NewLogs()
 	resourceLogs := outld.ResourceLogs()
 
 	for _, v := range out {
