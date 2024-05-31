@@ -1192,3 +1192,5 @@ replace github.com/open-telemetry/opentelemetry-collector-contrib/extension/sola
 replace github.com/open-telemetry/opentelemetry-collector-contrib/receiver/namedpipereceiver => ../../receiver/namedpipereceiver
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/internal/sqlquery => ../../internal/sqlquery
+
+replace github.com/bmatcuk/doublestar/v4 => github.com/opsramp/doublestar/v4 v4.0.0-20240422124750-f0571f1928b4
