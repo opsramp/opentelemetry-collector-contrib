@@ -20,7 +20,7 @@ import (
 )
 
 // The value of "type" key in configuration.
-var componentType = component.MustNewType("debug")
+var componentType = component.MustNewType("opsrampdebug")
 
 const (
 	defaultSamplingInitial    = 2
