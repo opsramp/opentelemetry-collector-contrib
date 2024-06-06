@@ -6,7 +6,6 @@ package opsrampk8sobjectsprocessor // import "github.com/open-telemetry/opentele
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.uber.org/zap"
@@ -50,15 +49,13 @@ func (a *opsrampK8sObjectsProcessor) processLogs(ctx context.Context, ld plog.Lo
 
 				err := json.Unmarshal([]byte(lr.Body().AsString()), &watchevent)
 				if err != nil {
-					fmt.Println("Error unmarshalling JSON:", err)
+					a.logger.Error("Error unmarshalling json", zap.Error(err))
 					continue
 					// Throw exception and not continue. may be assert.
 				}
 
 				uid := watchevent.Object.Metadata.Uid
 				if uid == "" {
-					fmt.Printf("resourceLog #%d is a pull log\n", i)
-
 					isWatchLog = false
 					break
 				}
@@ -85,9 +82,6 @@ func (a *opsrampK8sObjectsProcessor) processLogs(ctx context.Context, ld plog.Lo
 				}
 
 				out[watchevent.Object.Metadata.Uid] = lr
-
-				fmt.Printf("After unmarshal opsramp resourceLog #%d, scopeLog #%d, logRecord #%d UID %s \n", i, j, k, watchevent.Object.Metadata.Uid)
-
 			}
 
 			if !isWatchLog {
