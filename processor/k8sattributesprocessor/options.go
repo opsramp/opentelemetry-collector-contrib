@@ -315,6 +315,23 @@ func withFilterFields(filters ...FieldFilterConfig) option {
 	}
 }
 
+func withAddOnFields(filters ...AddOnMetadata) option {
+	return func(p *kubernetesprocessor) error {
+		var fields []kube.AddOnMetadata
+		for _, f := range filters {
+
+			fmt.Println("The value of key : ", f.Key, " Value : ", f.Value)
+
+			fields = append(fields, kube.AddOnMetadata{
+				Key:   f.Key,
+				Value: f.Value,
+			})
+		}
+		p.addons = fields
+		return nil
+	}
+}
+
 // withExtractPodAssociations allows specifying options to associate pod metadata with incoming resource
 func withExtractPodAssociations(podAssociations ...PodAssociationConfig) option {
 	return func(p *kubernetesprocessor) error {

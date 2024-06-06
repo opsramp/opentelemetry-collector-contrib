@@ -4,7 +4,6 @@
 package kube // import "github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/kube"
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"strings"
@@ -69,7 +68,6 @@ type WatchClient struct {
 	// A map containing ReplicaSets related data, used to associate them with resources.
 	// Key is replicaset uid
 	ReplicaSets map[string]*ReplicaSet
-	// AddOnsList   []FieldFilter
 }
 
 // Extract replicaset name from the pod name. Pod name is created using
@@ -91,7 +89,6 @@ func New(logger *zap.Logger, apiCfg k8sconfig.APIConfig, rules ExtractionRules, 
 		replicasetRegex: rRegex,
 		cronJobRegex:    cronJobRegex,
 		stopCh:          make(chan struct{}),
-		// AddOnsList:      make([]FieldFilter, 0),
 	}
 	go c.deleteLoop(time.Second*30, defaultPodDeleteGracePeriod)
 
@@ -511,25 +508,6 @@ func (c *WatchClient) extractPodAttributes(pod *api_v1.Pod) map[string]string {
 			c.logger.Debug("unable to find kube-system namespace, cluster uid will not be available")
 		}
 	}
-
-	// fmt.Println("########")
-	// fmt.Println("Filter addons : ", c.AddOnsList)
-	// fmt.Println("########")
-	clusterDetailConfigMapName := "k8sattributes-addon"
-	configMap, err := c.kc.CoreV1().ConfigMaps("opsramp-agent").Get(context.Background(), clusterDetailConfigMapName, meta_v1.GetOptions{})
-
-	if err != nil {
-		c.logger.Debug("unable to get cluster details from configMap: ", zap.Any("configMap ", clusterDetailConfigMapName))
-	}
-
-	// Iterate over the data section and add to tags map
-	for key, value := range configMap.Data {
-		tags[key] = value
-	}
-
-	// c.logger.Info("The values of tags ", zap.Any("tags", tags))
-
-	// fmt.Printf("Tags : %v\n", tags)
 
 	for _, r := range c.Rules.Labels {
 		r.extractFromPodMetadata(pod.Labels, tags, "k8s.pod.labels.%s")
