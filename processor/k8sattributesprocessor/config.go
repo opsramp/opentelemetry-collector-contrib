@@ -38,6 +38,9 @@ type Config struct {
 	// Exclude section allows to define names of pod that should be
 	// ignored while tagging.
 	Exclude ExcludeConfig `mapstructure:"exclude"`
+
+	//Opsramp Metadata Addons Section
+	MetadataAddOn []AddOnMetadata `mapstructure:"metadata_addon"`
 }
 
 func (cfg *Config) Validate() error {
@@ -288,6 +291,12 @@ type PodAssociationConfig struct {
 	// List of pod association sources which should be taken
 	// to identify pod
 	Sources []PodAssociationSourceConfig `mapstructure:"sources"`
+}
+
+type AddOnMetadata struct {
+	Key string `mapstructure:"key"`
+
+	Value string `mapstructure:"value"`
 }
 
 // ExcludeConfig represent a list of Pods to exclude

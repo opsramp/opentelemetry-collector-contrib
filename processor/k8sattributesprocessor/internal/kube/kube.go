@@ -328,6 +328,12 @@ type Association struct {
 	Sources []AssociationSource
 }
 
+type AddOnMetadata struct {
+	Key string `mapstructure:"key"`
+
+	Value string `mapstructure:"value"`
+}
+
 // Excludes represent a list of Pods to ignore
 type Excludes struct {
 	Pods []ExcludePods
