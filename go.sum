@@ -1259,8 +1259,8 @@ github.com/openzipkin/zipkin-go v0.2.1/go.mod h1:NaW6tEwdmWMaCDZzg8sh+IBNOxHMPnh
 github.com/openzipkin/zipkin-go v0.2.2/go.mod h1:NaW6tEwdmWMaCDZzg8sh+IBNOxHMPnhQw8ySjnjRyN4=
 github.com/openzipkin/zipkin-go v0.4.2 h1:zjqfqHjUpPmB3c1GlCvvgsM1G4LkvqQbBDueDOCg/jA=
 github.com/openzipkin/zipkin-go v0.4.2/go.mod h1:ZeVkFjuuBiSy13y8vpSDCjMi9GoI3hPpCJSBx/EYFhY=
-github.com/opsramp/doublestar/v4 v4.0.0-20240422124750-f0571f1928b4 h1:0dcH6flvhvjixWt9Kq/IPZG0DYSTcWeocH4PsWGLFVA=
-github.com/opsramp/doublestar/v4 v4.0.0-20240422124750-f0571f1928b4/go.mod h1:xBQ8jztBU6kakFMg+8WGxn0c6z1fTSPVIjEY1Wr7jzc=
+github.com/opsramp/doublestar/v4 v4.0.0-20240930095449-f20addb8d8a8 h1:Jg4dF6Ep7GImq1AQH9010hX6anhUo9SVLC+m7GkQkZ0=
+github.com/opsramp/doublestar/v4 v4.0.0-20240930095449-f20addb8d8a8/go.mod h1:xBQ8jztBU6kakFMg+8WGxn0c6z1fTSPVIjEY1Wr7jzc=
 github.com/opsramp/go-proxy-dialer v0.0.0-20240313152735-64bb1ce65640 h1:EbItJmCPwzOSxox5Cfme1QT8pv5s/wEK08z/qp3t8uw=
 github.com/opsramp/go-proxy-dialer v0.0.0-20240313152735-64bb1ce65640/go.mod h1:0jgCJucvjWwnzrRIJyj7QnmAmgRQunDLmTEOgIMGK5o=
 github.com/outcaste-io/ristretto v0.2.1 h1:KCItuNIGJZcursqHr3ghO7fc5ddZLEHspL9UR0cQM64=

@@ -2,7 +2,7 @@ module github.com/open-telemetry/opentelemetry-collector-contrib
 
 go 1.20
 
-replace github.com/bmatcuk/doublestar/v4 => github.com/opsramp/doublestar/v4 v4.0.0-20240422124750-f0571f1928b4
+replace github.com/bmatcuk/doublestar/v4 => github.com/opsramp/doublestar/v4 v4.0.0-20240930095449-f20addb8d8a8
 
 require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector v0.94.0
