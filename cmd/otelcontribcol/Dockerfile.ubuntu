@@ -9,9 +9,6 @@ RUN apt-get update && apt-get install -y \
 # Copy the pre-built OpenTelemetry Contrib Collector binary
 COPY ./bin/otelcontribcol_linux_amd64 /usr/local/bin/otelcontribcol
 
-# Copy configuration file (you need to provide otel-config.yaml)
-COPY ./otel-config.yaml /etc/otel-config.yaml
-
 # Expose necessary ports
 EXPOSE 4317 55680 8888
 
