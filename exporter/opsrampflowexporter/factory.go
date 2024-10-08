@@ -16,6 +16,7 @@ func NewFactory() exporter.Factory {
 		metadata.Type,
 		newDefaultConfig,
 		exporter.WithLogs(createLogsExporter, metadata.LogsStability),
+		exporter.WithMetrics(createMetricsExporter, metadata.MetricsStability),
 	)
 }
 
@@ -36,9 +37,24 @@ func createLogsExporter(ctx context.Context,
 	}
 
 	return exporterhelper.NewLogsExporter(ctx, set, cfg,
-		fe.pushLogData,
+		fe.consumeLogs,
 		exporterhelper.WithStart(fe.Start),
 		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: true}),
-		exporterhelper.WithRetry(c.BackOffConfig),
-		exporterhelper.WithTimeout(c.TimeoutSettings))
+		exporterhelper.WithRetry(c.BackOffConfig))
+}
+
+func createMetricsExporter(ctx context.Context,
+	set exporter.Settings,
+	cfg component.Config) (exporter.Metrics, error) {
+	c := cfg.(*Config)
+	fe, e := newFlowExporter(c, set)
+	if e != nil {
+		return nil, e
+	}
+
+	return exporterhelper.NewMetricsExporter(ctx, set, cfg,
+		fe.consumeMetrics,
+		exporterhelper.WithStart(fe.Start),
+		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: true}),
+		exporterhelper.WithRetry(c.BackOffConfig))
 }

@@ -4,7 +4,7 @@ scope_name: otelcol/opsrampflow
 status:
   class: exporter
   stability:
-    development: [logs]
+    development: [logs, metrics]
   distributions: [contrib]
   codeowners:
     active: [Sai Verma, Mithun]
