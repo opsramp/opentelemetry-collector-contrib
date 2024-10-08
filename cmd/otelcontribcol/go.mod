@@ -2,9 +2,9 @@
 
 module github.com/open-telemetry/opentelemetry-collector-contrib/cmd/otelcontribcol
 
-go 1.22.0
+go 1.21.0
 
-toolchain go1.22.8
+toolchain go1.21.12
 
 require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/s3provider v0.106.1
@@ -216,7 +216,7 @@ require (
 	go.opentelemetry.io/collector/config/configgrpc v0.106.1
 	go.opentelemetry.io/collector/config/confighttp v0.106.1
 	go.opentelemetry.io/collector/config/configopaque v1.12.0
-	go.opentelemetry.io/collector/confmap v1.17.0
+	go.opentelemetry.io/collector/confmap v0.106.1
 	go.opentelemetry.io/collector/confmap/converter/expandconverter v0.106.1
 	go.opentelemetry.io/collector/confmap/provider/envprovider v0.106.1
 	go.opentelemetry.io/collector/confmap/provider/fileprovider v0.106.1
@@ -235,7 +235,7 @@ require (
 	go.opentelemetry.io/collector/extension/ballastextension v0.106.1
 	go.opentelemetry.io/collector/extension/zpagesextension v0.106.1
 	go.opentelemetry.io/collector/otelcol v0.106.1
-	go.opentelemetry.io/collector/pdata v1.17.0
+	go.opentelemetry.io/collector/pdata v1.12.0
 	go.opentelemetry.io/collector/processor v0.106.1
 	go.opentelemetry.io/collector/processor/batchprocessor v0.106.1
 	go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.106.1
@@ -770,7 +770,7 @@ require (
 	go.opentelemetry.io/collector/config/configauth v0.106.1 // indirect
 	go.opentelemetry.io/collector/config/configcompression v1.12.0 // indirect
 	go.opentelemetry.io/collector/config/confignet v0.106.1 // indirect
-	go.opentelemetry.io/collector/config/configretry v1.17.0 // indirect
+	go.opentelemetry.io/collector/config/configretry v1.12.0 // indirect
 	go.opentelemetry.io/collector/config/configtelemetry v0.106.1 // indirect
 	go.opentelemetry.io/collector/config/configtls v1.12.0 // indirect
 	go.opentelemetry.io/collector/config/internal v0.106.1 // indirect
