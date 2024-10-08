@@ -1,0 +1,10 @@
+type: opsrampflow
+scope_name: otelcol/opsrampflow
+
+status:
+  class: exporter
+  stability:
+    development: [logs]
+  distributions: [contrib]
+  codeowners:
+    active: [Sai Verma, Mithun]
