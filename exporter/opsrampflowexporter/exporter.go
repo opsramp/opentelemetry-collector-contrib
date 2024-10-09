@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"log"
 
-	aflow "opsrampflowexporter/internal/aflow/v1"
+	aflow "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/opsrampflowexporter/internal/aflow/v1"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/exporter"

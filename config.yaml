@@ -1,0 +1,21 @@
+receivers:
+  otlp/ebpf:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+exporters:
+  opsrampflow:
+    endpoint: int.opsramp.net
+    authToken: 3e803fb2-ac43-4534-9f7b-41bb67b9824a
+  debug:
+    verbosity: detailed
+service:
+  pipelines:
+    logs:
+      receivers: [otlp/ebpf]
+      processors: []
+      exporters: [debug]
+    metrics:
+      receivers: [otlp/ebpf]
+      processors: []
+      exporters: [debug, opsrampflow]

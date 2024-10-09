@@ -1,4 +1,4 @@
-module opsrampflowexporter
+module github.com/open-telemetry/opentelemetry-collector-contrib/exporter/opsrampflowexporter
 
 go 1.21.0
 

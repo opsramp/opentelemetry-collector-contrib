@@ -2,7 +2,8 @@ package opsrampflowexporter // import "github.com/open-telemetry/opentelemetry-c
 
 import (
 	"context"
-	"opsrampflowexporter/internal/metadata"
+
+	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/opsrampflowexporter/internal/metadata"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"

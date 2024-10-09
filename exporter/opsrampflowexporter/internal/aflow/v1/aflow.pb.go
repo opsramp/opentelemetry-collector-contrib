@@ -21,7 +21,7 @@ import (
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	common "opsrampflowexporter/internal/aflow/common"
+	common "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/opsrampflowexporter/internal/aflow/common"
 	reflect "reflect"
 	sync "sync"
 )

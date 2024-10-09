@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otelcontribcol-deployment
+  labels:
+    app: otelcontribcol
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otelcontribcol
+  template:
+    metadata:
+      labels:
+        app: otelcontribcol
+    spec:
+      containers:
+      - name: otelcontribcol
+        image: docker.io/mithunbs/otelcontibcol
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 4317
+        - containerPort: 55680
+        - containerPort: 8888
+        command: ["/usr/bin/tail"]
+        args: ["-f", "/dev/null"]
