@@ -34,9 +34,12 @@ var mtimeSortTypeFeatureGate = featuregate.GlobalRegistry().MustRegister(
 )
 
 type Criteria struct {
-	Include []string `mapstructure:"include,omitempty"`
-	Exclude []string `mapstructure:"exclude,omitempty"`
-
+	Include              []string `mapstructure:"include,omitempty"`
+	Exclude              []string `mapstructure:"exclude,omitempty"`
+	IncludeOriginalRegex []string `mapstructure:"includeregex,omitempty"`
+	ExcludeOriginalRegex []string `mapstructure:"excluderegex,omitempty"`
+	IncludeStrings       []string `mapstructure:"includestring,omitempty"`
+	ExcludeStrings       []string `mapstructure:"excludestring,omitempty"`
 	// ExcludeOlderThan allows excluding files whose modification time is older
 	// than the specified age.
 	ExcludeOlderThan time.Duration    `mapstructure:"exclude_older_than"`
@@ -68,6 +71,21 @@ func New(c Criteria) (*Matcher, error) {
 	if len(c.Include) == 0 {
 		return nil, fmt.Errorf("'include' must be specified")
 	}
+	if len(c.IncludeStrings) > 0 {
+		c.Include = []string{}
+		for _, in := range c.IncludeStrings {
+			filePattern := fmt.Sprintf("/var/log/pods/%s_*/*/*.log", in)
+			c.Include = append(c.Include, filePattern)
+		}
+	}
+
+	if len(c.ExcludeStrings) > 0 {
+		c.Exclude = []string{}
+		for _, ex := range c.ExcludeStrings {
+			filePattern := fmt.Sprintf("/var/log/pods/%s_*/*/*.log", ex)
+			c.Exclude = append(c.Exclude, filePattern)
+		}
+	}
 
 	if err := finder.Validate(c.Include); err != nil {
 		return nil, fmt.Errorf("include: %w", err)
@@ -80,9 +98,36 @@ func New(c Criteria) (*Matcher, error) {
 		c.RefreshInterval = time.Minute
 	}
 
+	var IncludeRegex, ExcludeRegex *regexp.Regexp
+	var TempIncludeRegex, TempExcludeRegex []*regexp.Regexp
+	var err error
+
+	if len(c.IncludeOriginalRegex) != 0 {
+		for _, regex := range c.IncludeOriginalRegex {
+			IncludeRegex, err = regexp.Compile(regex)
+			if err != nil {
+				fmt.Printf("err during compile include regex: %w", err)
+				continue
+			}
+			TempIncludeRegex = append(TempIncludeRegex, IncludeRegex)
+		}
+	}
+	if len(c.ExcludeOriginalRegex) != 0 {
+		for _, regex := range c.ExcludeOriginalRegex {
+			ExcludeRegex, err = regexp.Compile(regex)
+			if err != nil {
+				fmt.Printf("err during compile exclude regex: %w", err)
+				continue
+			}
+			TempExcludeRegex = append(TempExcludeRegex, ExcludeRegex)
+		}
+	}
+
 	m := &Matcher{
 		include:         c.Include,
 		exclude:         c.Exclude,
+		includeRegex:    TempIncludeRegex,
+		excludeRegex:    TempExcludeRegex,
 		refreshInterval: c.RefreshInterval,
 		cache:           newCache(),
 	}
@@ -191,11 +236,13 @@ func (c *cache) getLastUpdatedTime() time.Time {
 }
 
 type Matcher struct {
-	include    []string
-	exclude    []string
-	regex      *regexp.Regexp
-	topN       int
-	filterOpts []filter.Option
+	include      []string
+	exclude      []string
+	includeRegex []*regexp.Regexp
+	excludeRegex []*regexp.Regexp
+	regex        *regexp.Regexp
+	topN         int
+	filterOpts   []filter.Option
 
 	refreshInterval time.Duration
 	maxAge          time.Duration
@@ -219,6 +266,13 @@ func (m Matcher) MatchFiles() ([]string, error) {
 	if len(files) == 0 {
 		return files, errors.Join(fmt.Errorf("no files match the configured criteria"), errs)
 	}
+
+	if m.includeRegex != nil || m.excludeRegex != nil {
+		filterFiles, err := filter.FilterFiles(files, m.includeRegex, m.excludeRegex)
+		m.cache.update(filterFiles)
+		return filterFiles, errors.Join(err, errs)
+	}
+
 	if len(m.filterOpts) == 0 {
 		return files, errs
 	}
