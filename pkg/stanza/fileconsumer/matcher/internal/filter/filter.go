@@ -5,10 +5,8 @@ package filter // import "github.com/open-telemetry/opentelemetry-collector-cont
 
 import (
 	"fmt"
-	"regexp"
-	"strings"
-
 	"go.uber.org/multierr"
+	"regexp"
 )
 
 type Option interface {
@@ -40,61 +38,6 @@ func Filter(values []string, regex *regexp.Regexp, opts ...Option) ([]string, er
 	return result, errs
 }
 
-func FilterFiles(values []string, includeregex []*regexp.Regexp, excluderegex []*regexp.Regexp) ([]string, error) {
-
-	result := []string{}
-	var errs error
-
-	for _, value := range values {
-
-		parts := strings.Split(value, "/")
-		parts = strings.SplitN(parts[4], "_", 2)
-		namespace := parts[0]
-
-		if len(includeregex) == 0 && len(excluderegex) == 0 {
-
-			result = append(result, value)
-
-		} else if len(includeregex) > 0 && len(excluderegex) == 0 {
-
-			_, err := callIncludeFunc(namespace, includeregex)
-			if err != nil {
-				errs = multierr.Append(errs, err)
-				continue
-			} else {
-				result = append(result, value)
-			}
-
-		} else if len(excluderegex) > 0 && len(includeregex) == 0 {
-
-			_, err := callExcludeFunc(namespace, excluderegex)
-			if err != nil {
-				errs = multierr.Append(errs, err)
-				continue
-			} else {
-				result = append(result, value)
-			}
-
-		} else {
-			for _, includeregexVar := range includeregex {
-				if includeregexVar != nil {
-					match := includeregexVar.MatchString(namespace)
-					if match {
-						_, err := callExcludeFunc(namespace, excluderegex)
-						if err != nil {
-							errs = multierr.Append(errs, err)
-							continue
-						} else {
-							result = append(result, value)
-						}
-					}
-				}
-			}
-		}
-	}
-	return result, errs
-}
-
 type item struct {
 	value    string
 	captures map[string]string
@@ -102,34 +45,6 @@ type item struct {
 	// Used when an Option is unable to interpret the value.
 	// For example, a numeric sort may fail to parse the value as a number.
 	err error
-}
-
-func callIncludeFunc(value string, includeregexlist []*regexp.Regexp) (string, error) {
-
-	for _, includeregex := range includeregexlist {
-		if includeregex != nil {
-			match := includeregex.MatchString(value)
-			if match {
-				return value, nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf("'%s' does not match with whole include regex list hence not considering this namsepace\n", value)
-}
-
-func callExcludeFunc(value string, excluderegexlist []*regexp.Regexp) (string, error) {
-
-	for _, excluderegex := range excluderegexlist { //kubeing=   include:{^kube} exclude:{ing$,}
-		if excluderegex != nil {
-			match := excluderegex.MatchString(value)
-			if match {
-				return "", fmt.Errorf("'%s' does match with exclude regex hence not considering this namsepace\n", value)
-			}
-		}
-	}
-
-	return value, nil
 }
 
 func newItem(value string, regex *regexp.Regexp) (*item, error) {
