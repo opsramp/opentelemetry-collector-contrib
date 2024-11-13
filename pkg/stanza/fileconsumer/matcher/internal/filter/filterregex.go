@@ -69,7 +69,6 @@ func (fr filterRegex) apply(items []*item) ([]*item, error) {
 			}
 		}
 	}
-	fmt.Println("Filtered items", filteredItems)
 	return filteredItems, errs
 }
 
