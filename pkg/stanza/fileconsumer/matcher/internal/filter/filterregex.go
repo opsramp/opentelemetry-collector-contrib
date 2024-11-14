@@ -89,7 +89,7 @@ func callIncludeFunc(value string, includeregexlist []string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("'%s' does not match with whole include regex list hence not considering this namsepace\n", value)
+	return "", fmt.Errorf("'%s' does not match with include list hence not considered for collecting logs ", value)
 }
 
 func callExcludeFunc(value string, excluderegexlist []string) (string, error) {
@@ -99,7 +99,7 @@ func callExcludeFunc(value string, excluderegexlist []string) (string, error) {
 			re := regexp.MustCompile(excluderegex)
 			is_match := re.MatchString(value)
 			if is_match {
-				return "", fmt.Errorf("'%s' matched with exclude regex hence not considering this namsepace\n", value)
+				return "", fmt.Errorf("'%s' matched with exclude list hence not considered for collecting logs ", value)
 			}
 		}
 	}
