@@ -2,8 +2,6 @@
 
 package filter // import "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/matcher/internal/filter"
 import (
-	"fmt"
-	"go.uber.org/multierr"
 	"regexp"
 )
 
@@ -33,21 +31,15 @@ func (fr filterRegex) apply(items []*item) ([]*item, error) {
 
 		if len(fr.IncludeRegex) > 0 && len(fr.ExcludeRegex) == 0 {
 
-			_, err := callIncludeFunc(capturedPathSubstring, fr.IncludeRegex)
-			if err != nil {
-				errs = multierr.Append(errs, err)
-				continue
-			} else {
+			val := callIncludeFunc(capturedPathSubstring, fr.IncludeRegex)
+			if val != "" {
 				filteredItems = append(filteredItems, item)
 			}
 
 		} else if len(fr.ExcludeRegex) > 0 && len(fr.IncludeRegex) == 0 {
 
-			_, err := callExcludeFunc(capturedPathSubstring, fr.ExcludeRegex)
-			if err != nil {
-				errs = multierr.Append(errs, err)
-				continue
-			} else {
+			val := callExcludeFunc(capturedPathSubstring, fr.ExcludeRegex)
+			if val != "" {
 				filteredItems = append(filteredItems, item)
 			}
 
@@ -57,11 +49,8 @@ func (fr filterRegex) apply(items []*item) ([]*item, error) {
 					re := regexp.MustCompile(includeregexVar)
 					is_match := re.MatchString(capturedPathSubstring)
 					if is_match {
-						_, err := callExcludeFunc(capturedPathSubstring, fr.ExcludeRegex)
-						if err != nil {
-							errs = multierr.Append(errs, err)
-							continue
-						} else {
+						val := callExcludeFunc(capturedPathSubstring, fr.ExcludeRegex)
+						if val != "" {
 							filteredItems = append(filteredItems, item)
 						}
 					}
@@ -77,32 +66,32 @@ func FilterRegex(capture_path_SubstringRegex string, include_regex []string, exc
 	return filterRegex{CapturePathSubstringRegex: capture_path_SubstringRegex, IncludeRegex: include_regex, ExcludeRegex: exclude_regex}
 }
 
-func callIncludeFunc(value string, includeregexlist []string) (string, error) {
+func callIncludeFunc(value string, includeregexlist []string) string {
 
 	for _, includeregex := range includeregexlist {
 		if includeregex != "" {
 			re := regexp.MustCompile(includeregex)
 			is_match := re.MatchString(value)
 			if is_match {
-				return value, nil
+				return value
 			}
 		}
 	}
 
-	return "", fmt.Errorf("'%s' does not match with include list hence not considered for collecting logs ", value)
+	return ""
 }
 
-func callExcludeFunc(value string, excluderegexlist []string) (string, error) {
+func callExcludeFunc(value string, excluderegexlist []string) string {
 
 	for _, excluderegex := range excluderegexlist {
 		if excluderegex != "" {
 			re := regexp.MustCompile(excluderegex)
 			is_match := re.MatchString(value)
 			if is_match {
-				return "", fmt.Errorf("'%s' matched with exclude list hence not considered for collecting logs ", value)
+				return ""
 			}
 		}
 	}
 
-	return value, nil
+	return value
 }
