@@ -92,7 +92,7 @@ func New(c Criteria) (*Matcher, error) {
 		m.filterOpts = append(m.filterOpts, filter.ExcludeOlderThan(c.ExcludeOlderThan))
 	}
 
-	if len(c.CapturedPathIncludeRegex) != 0 || len(c.CapturedPathExcludeRegex) != 0 {
+	if c.CapturePathSubstringRegex != "" && (len(c.CapturedPathIncludeRegex) != 0 || len(c.CapturedPathExcludeRegex) != 0) {
 		m.filterOpts = append(m.filterOpts, filter.FilterRegex(c.CapturePathSubstringRegex, c.CapturedPathIncludeRegex, c.CapturedPathExcludeRegex))
 	}
 
@@ -239,6 +239,8 @@ func (m Matcher) MatchFiles() ([]string, error) {
 		return files, errors.Join(err, errs)
 	}
 
+	//topN will be 0 in case of orderingCriteria.sortBy is not provided.
+	//This means filteropts has only filtering and no sorting. In this case we should not filter topN files.
 	if m.topN > 0 {
 		files = files[:m.topN]
 	}

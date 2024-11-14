@@ -16,7 +16,7 @@ type filterRegex struct {
 func (fr filterRegex) apply(items []*item) ([]*item, error) {
 	filteredItems := make([]*item, 0, len(items))
 	var errs error
-	var namespace string
+	var capturedPathSubstring string
 
 	// Compile the regular expression
 	re := regexp.MustCompile(fr.CapturePathSubstringRegex)
@@ -26,14 +26,14 @@ func (fr filterRegex) apply(items []*item) ([]*item, error) {
 		match := re.FindStringSubmatch(item.value)
 
 		if len(match) > 1 {
-			namespace = match[1]
+			capturedPathSubstring = match[1]
 		} else {
 			continue
 		}
 
 		if len(fr.IncludeRegex) > 0 && len(fr.ExcludeRegex) == 0 {
 
-			_, err := callIncludeFunc(namespace, fr.IncludeRegex)
+			_, err := callIncludeFunc(capturedPathSubstring, fr.IncludeRegex)
 			if err != nil {
 				errs = multierr.Append(errs, err)
 				continue
@@ -43,7 +43,7 @@ func (fr filterRegex) apply(items []*item) ([]*item, error) {
 
 		} else if len(fr.ExcludeRegex) > 0 && len(fr.IncludeRegex) == 0 {
 
-			_, err := callExcludeFunc(namespace, fr.ExcludeRegex)
+			_, err := callExcludeFunc(capturedPathSubstring, fr.ExcludeRegex)
 			if err != nil {
 				errs = multierr.Append(errs, err)
 				continue
@@ -55,9 +55,9 @@ func (fr filterRegex) apply(items []*item) ([]*item, error) {
 			for _, includeregexVar := range fr.IncludeRegex {
 				if includeregexVar != "" {
 					re := regexp.MustCompile(includeregexVar)
-					is_match := re.MatchString(namespace)
+					is_match := re.MatchString(capturedPathSubstring)
 					if is_match {
-						_, err := callExcludeFunc(namespace, fr.ExcludeRegex)
+						_, err := callExcludeFunc(capturedPathSubstring, fr.ExcludeRegex)
 						if err != nil {
 							errs = multierr.Append(errs, err)
 							continue
