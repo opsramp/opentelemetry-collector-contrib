@@ -22,6 +22,8 @@ type Config struct {
 	Include MatchConfig `mapstructure:"include"`
 	Exclude MatchConfig `mapstructure:"exclude"`
 
+	GroupConfig []GroupMatchConfig `mapstructure:"group_configs"`
+
 	// MuteProcessAllErrors is a flag that will mute all the errors encountered when trying to read metrics of a process.
 	// When this flag is enabled, there is no need to activate any other error suppression flags.
 	MuteProcessAllErrors bool `mapstructure:"mute_process_all_errors,omitempty"`
@@ -61,4 +63,12 @@ type MatchConfig struct {
 	filterset.Config `mapstructure:",squash"`
 
 	Names []string `mapstructure:"names"`
+}
+
+type GroupMatchConfig struct {
+	filterset.Config `mapstructure:",squash"`
+
+	Names []string `mapstructure:"names"`
+
+	GroupName string `mapstructure:"groupname"`
 }

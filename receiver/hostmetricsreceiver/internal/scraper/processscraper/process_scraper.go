@@ -52,6 +52,8 @@ type scraper struct {
 	ucals              map[int32]*ucal.CPUUtilizationCalculator
 	logicalCores       int
 
+	matchGroupFS map[string]filterset.FilterSet
+
 	// for mocking
 	getProcessCreateTime func(p processHandle, ctx context.Context) (int64, error)
 	getProcessHandles    func(context.Context) (processHandles, error)
@@ -85,6 +87,14 @@ func newProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, error
 		if err != nil {
 			return nil, fmt.Errorf("error creating process exclude filters: %w", err)
 		}
+	}
+
+	for _, gc := range cfg.GroupConfig {
+		fs, err := filterset.CreateFilterSet(gc.Names, &gc.Config)
+		if err != nil {
+			return nil, fmt.Errorf("error creating process exclude filters: %w", err)
+		}
+		scraper.matchGroupFS[gc.GroupName] = fs
 	}
 
 	logicalCores, err := cpu.Counts(true)
@@ -198,7 +208,7 @@ func (s *scraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 // for all currently running processes. If errors occur obtaining information
 // for some processes, an error will be returned, but any processes that were
 // successfully obtained will still be returned.
-func (s *scraper) getProcessMetadata() ([]*processMetadata, error) {
+func (s *scraper) getProcessMetadata() (map[string][]*processMetadata, error) {
 	ctx := context.WithValue(context.Background(), common.EnvKey, s.config.EnvMap)
 	handles, err := s.getProcessHandles(ctx)
 	if err != nil {
@@ -211,7 +221,8 @@ func (s *scraper) getProcessMetadata() ([]*processMetadata, error) {
 		errs.Add(err)
 	}
 
-	data := make([]*processMetadata, 0, handles.Len())
+	//data := make([]*processMetadata, 0, handles.Len())
+	data := make(map[string][]*processMetadata)
 	for i := 0; i < handles.Len(); i++ {
 		pid := handles.Pid(i)
 		handle := handles.At(i)
@@ -246,6 +257,18 @@ func (s *scraper) getProcessMetadata() ([]*processMetadata, error) {
 			continue
 		}
 
+		groupConfigName := ""
+		for groupName, fs := range s.matchGroupFS {
+			if fs.Matches(executable.name) {
+				groupConfigName = groupName
+				break
+			}
+		}
+
+		if groupConfigName == "" {
+			continue
+		}
+
 		command, err := getProcessCommand(ctx, handle)
 		if err != nil {
 			errs.AddPartial(0, fmt.Errorf("error reading command for process %q (pid %v): %w", executable.name, pid, err))
@@ -274,16 +297,17 @@ func (s *scraper) getProcessMetadata() ([]*processMetadata, error) {
 		}
 
 		md := &processMetadata{
-			pid:        pid,
-			parentPid:  parentPid,
-			executable: executable,
-			command:    command,
-			username:   username,
-			handle:     handle,
-			createTime: createTime,
+			pid:             pid,
+			parentPid:       parentPid,
+			executable:      executable,
+			command:         command,
+			username:        username,
+			handle:          handle,
+			createTime:      createTime,
+			groupConfigName: groupConfigName,
 		}
 
-		data = append(data, md)
+		data[groupConfigName] = append(data[groupConfigName], md)
 	}
 
 	return data, errs.Combine()

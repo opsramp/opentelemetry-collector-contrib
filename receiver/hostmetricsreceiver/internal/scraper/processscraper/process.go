@@ -25,13 +25,14 @@ import (
 // initialize a pcommon.Resource with the metadata
 
 type processMetadata struct {
-	pid        int32
-	parentPid  int32
-	executable *executableMetadata
-	command    *commandMetadata
-	username   string
-	handle     processHandle
-	createTime int64
+	pid             int32
+	parentPid       int32
+	executable      *executableMetadata
+	command         *commandMetadata
+	username        string
+	handle          processHandle
+	createTime      int64
+	groupConfigName string
 }
 
 type executableMetadata struct {
