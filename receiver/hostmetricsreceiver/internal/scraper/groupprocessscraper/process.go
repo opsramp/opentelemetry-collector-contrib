@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package processscraper // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/processscraper"
+package groupprocessscraper // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper"
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 	"github.com/shirou/gopsutil/v4/process"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 
-	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/processscraper/internal/metadata"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper/internal/metadata"
 )
 
 // processMetadata stores process related metadata along
@@ -25,13 +25,14 @@ import (
 // initialize a pcommon.Resource with the metadata
 
 type processMetadata struct {
-	pid        int32
-	parentPid  int32
-	executable *executableMetadata
-	command    *commandMetadata
-	username   string
-	handle     processHandle
-	createTime int64
+	pid             int32
+	parentPid       int32
+	executable      *executableMetadata
+	command         *commandMetadata
+	username        string
+	handle          processHandle
+	createTime      int64
+	groupConfigName string
 }
 
 type executableMetadata struct {

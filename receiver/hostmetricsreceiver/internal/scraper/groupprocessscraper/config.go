@@ -1,14 +1,14 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package processscraper // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/processscraper"
+package groupprocessscraper // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper"
 
 import (
 	"time"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/filter/filterset"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/processscraper/internal/metadata"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper/internal/metadata"
 )
 
 // Config relating to Process Metric Scraper.
@@ -16,11 +16,8 @@ type Config struct {
 	// MetricsBuilderConfig allows to customize scraped metrics/attributes representation.
 	metadata.MetricsBuilderConfig `mapstructure:",squash"`
 	internal.ScraperConfig
-	// Include specifies a filter on the process names that should be included from the generated metrics.
-	// Exclude specifies a filter on the process names that should be excluded from the generated metrics.
-	// If neither `include` or `exclude` are set, process metrics will be generated for all processes.
-	Include MatchConfig `mapstructure:"include"`
-	Exclude MatchConfig `mapstructure:"exclude"`
+
+	GroupConfig []GroupMatchConfig `mapstructure:"group_configs"`
 
 	// MuteProcessAllErrors is a flag that will mute all the errors encountered when trying to read metrics of a process.
 	// When this flag is enabled, there is no need to activate any other error suppression flags.
@@ -62,3 +59,11 @@ type MatchConfig struct {
 
 	Names []string `mapstructure:"names"`
 }
+
+type GroupMatchConfig struct {
+	filterset.Config `mapstructure:",squash"`
+
+	Names []string `mapstructure:"names"`
+
+	GroupName string `mapstructure:"groupname"`
+} 

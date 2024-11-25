@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package processscraper // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/processscraper"
+package groupprocessscraper // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper"
 
 import (
 	"context"
@@ -21,9 +21,9 @@ import (
 	"go.opentelemetry.io/collector/receiver/scrapererror"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/filter/filterset"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/processscraper/internal/handlecount"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/processscraper/internal/metadata"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/processscraper/ucal"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper/internal/handlecount"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper/internal/metadata"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper/ucal"
 )
 
 const (
@@ -46,11 +46,11 @@ type scraper struct {
 	settings           receiver.Settings
 	config             *Config
 	mb                 *metadata.MetricsBuilder
-	includeFS          filterset.FilterSet
-	excludeFS          filterset.FilterSet
 	scrapeProcessDelay time.Duration
 	ucals              map[int32]*ucal.CPUUtilizationCalculator
 	logicalCores       int
+
+	matchGroupFS map[string]filterset.FilterSet
 
 	// for mocking
 	getProcessCreateTime func(p processHandle, ctx context.Context) (int64, error)
@@ -59,8 +59,8 @@ type scraper struct {
 	handleCountManager handlecount.Manager
 }
 
-// newProcessScraper creates a Process Scraper
-func newProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, error) {
+// newGroupProcessScraper creates a Process Scraper
+func newGroupProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, error) {
 	scraper := &scraper{
 		settings:             settings,
 		config:               cfg,
@@ -73,18 +73,12 @@ func newProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, error
 
 	var err error
 
-	if len(cfg.Include.Names) > 0 {
-		scraper.includeFS, err = filterset.CreateFilterSet(cfg.Include.Names, &cfg.Include.Config)
-		if err != nil {
-			return nil, fmt.Errorf("error creating process include filters: %w", err)
-		}
-	}
-
-	if len(cfg.Exclude.Names) > 0 {
-		scraper.excludeFS, err = filterset.CreateFilterSet(cfg.Exclude.Names, &cfg.Exclude.Config)
+	for _, gc := range cfg.GroupConfig {
+		fs, err := filterset.CreateFilterSet(gc.Names, &gc.Config)
 		if err != nil {
 			return nil, fmt.Errorf("error creating process exclude filters: %w", err)
 		}
+		scraper.matchGroupFS[gc.GroupName] = fs 
 	}
 
 	logicalCores, err := cpu.Counts(true)
@@ -131,53 +125,56 @@ func (s *scraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 	presentPIDs := make(map[int32]struct{}, len(data))
 	ctx = context.WithValue(ctx, common.EnvKey, s.config.EnvMap)
 
-	for _, md := range data {
-		presentPIDs[md.pid] = struct{}{}
+	for groupName, processMetadataList := range data {
 
-		now := pcommon.NewTimestampFromTime(time.Now())
+		for _, md := range processMetadataList {
+			presentPIDs[md.pid] = struct{}{}
 
-		if err = s.scrapeAndAppendCPUTimeMetric(ctx, now, md.handle, md.pid); err != nil {
-			errs.AddPartial(cpuMetricsLen, fmt.Errorf("error reading cpu times for process %q (pid %v): %w", md.executable.name, md.pid, err))
+			now := pcommon.NewTimestampFromTime(time.Now())
+
+			if err = s.scrapeAndAppendCPUTimeMetric(ctx, now, md.handle, md.pid); err != nil {
+				errs.AddPartial(cpuMetricsLen, fmt.Errorf("error reading cpu times for process %q (pid %v): %w", md.executable.name, md.pid, err))
+			}
+
+			if err = s.scrapeAndAppendMemoryUsageMetrics(ctx, now, md.handle); err != nil {
+				errs.AddPartial(memoryMetricsLen, fmt.Errorf("error reading memory info for process %q (pid %v): %w", md.executable.name, md.pid, err))
+			}
+
+			if err = s.scrapeAndAppendMemoryUtilizationMetric(ctx, now, md.handle); err != nil {
+				errs.AddPartial(memoryUtilizationMetricsLen, fmt.Errorf("error reading memory utilization for process %q (pid %v): %w", md.executable.name, md.pid, err))
+			}
+
+			if err = s.scrapeAndAppendDiskMetrics(ctx, now, md.handle); err != nil && !s.config.MuteProcessIOError {
+				errs.AddPartial(diskMetricsLen, fmt.Errorf("error reading disk usage for process %q (pid %v): %w", md.executable.name, md.pid, err))
+			}
+
+			if err = s.scrapeAndAppendPagingMetric(ctx, now, md.handle); err != nil {
+				errs.AddPartial(pagingMetricsLen, fmt.Errorf("error reading memory paging info for process %q (pid %v): %w", md.executable.name, md.pid, err))
+			}
+
+			if err = s.scrapeAndAppendThreadsMetrics(ctx, now, md.handle); err != nil {
+				errs.AddPartial(threadMetricsLen, fmt.Errorf("error reading thread info for process %q (pid %v): %w", md.executable.name, md.pid, err))
+			}
+
+			if err = s.scrapeAndAppendContextSwitchMetrics(ctx, now, md.handle); err != nil {
+				errs.AddPartial(contextSwitchMetricsLen, fmt.Errorf("error reading context switch counts for process %q (pid %v): %w", md.executable.name, md.pid, err))
+			}
+
+			if err = s.scrapeAndAppendOpenFileDescriptorsMetric(ctx, now, md.handle); err != nil {
+				errs.AddPartial(fileDescriptorMetricsLen, fmt.Errorf("error reading open file descriptor count for process %q (pid %v): %w", md.executable.name, md.pid, err))
+			}
+
+			if err = s.scrapeAndAppendHandlesMetric(ctx, now, int64(md.pid)); err != nil {
+				errs.AddPartial(handleMetricsLen, fmt.Errorf("error reading handle count for process %q (pid %v): %w", md.executable.name, md.pid, err))
+			}
+
+			if err = s.scrapeAndAppendSignalsPendingMetric(ctx, now, md.handle); err != nil {
+				errs.AddPartial(signalMetricsLen, fmt.Errorf("error reading pending signals for process %q (pid %v): %w", md.executable.name, md.pid, err))
+			}
+
+			s.mb.EmitForResource(metadata.WithResource(md.buildResource(s.mb.NewResourceBuilder())),
+				metadata.WithStartTimeOverride(pcommon.Timestamp(md.createTime*1e6)))
 		}
-
-		if err = s.scrapeAndAppendMemoryUsageMetrics(ctx, now, md.handle); err != nil {
-			errs.AddPartial(memoryMetricsLen, fmt.Errorf("error reading memory info for process %q (pid %v): %w", md.executable.name, md.pid, err))
-		}
-
-		if err = s.scrapeAndAppendMemoryUtilizationMetric(ctx, now, md.handle); err != nil {
-			errs.AddPartial(memoryUtilizationMetricsLen, fmt.Errorf("error reading memory utilization for process %q (pid %v): %w", md.executable.name, md.pid, err))
-		}
-
-		if err = s.scrapeAndAppendDiskMetrics(ctx, now, md.handle); err != nil && !s.config.MuteProcessIOError {
-			errs.AddPartial(diskMetricsLen, fmt.Errorf("error reading disk usage for process %q (pid %v): %w", md.executable.name, md.pid, err))
-		}
-
-		if err = s.scrapeAndAppendPagingMetric(ctx, now, md.handle); err != nil {
-			errs.AddPartial(pagingMetricsLen, fmt.Errorf("error reading memory paging info for process %q (pid %v): %w", md.executable.name, md.pid, err))
-		}
-
-		if err = s.scrapeAndAppendThreadsMetrics(ctx, now, md.handle); err != nil {
-			errs.AddPartial(threadMetricsLen, fmt.Errorf("error reading thread info for process %q (pid %v): %w", md.executable.name, md.pid, err))
-		}
-
-		if err = s.scrapeAndAppendContextSwitchMetrics(ctx, now, md.handle); err != nil {
-			errs.AddPartial(contextSwitchMetricsLen, fmt.Errorf("error reading context switch counts for process %q (pid %v): %w", md.executable.name, md.pid, err))
-		}
-
-		if err = s.scrapeAndAppendOpenFileDescriptorsMetric(ctx, now, md.handle); err != nil {
-			errs.AddPartial(fileDescriptorMetricsLen, fmt.Errorf("error reading open file descriptor count for process %q (pid %v): %w", md.executable.name, md.pid, err))
-		}
-
-		if err = s.scrapeAndAppendHandlesMetric(ctx, now, int64(md.pid)); err != nil {
-			errs.AddPartial(handleMetricsLen, fmt.Errorf("error reading handle count for process %q (pid %v): %w", md.executable.name, md.pid, err))
-		}
-
-		if err = s.scrapeAndAppendSignalsPendingMetric(ctx, now, md.handle); err != nil {
-			errs.AddPartial(signalMetricsLen, fmt.Errorf("error reading pending signals for process %q (pid %v): %w", md.executable.name, md.pid, err))
-		}
-
-		s.mb.EmitForResource(metadata.WithResource(md.buildResource(s.mb.NewResourceBuilder())),
-			metadata.WithStartTimeOverride(pcommon.Timestamp(md.createTime*1e6)))
 	}
 
 	// Cleanup any [ucal.CPUUtilizationCalculator]s for PIDs that are no longer present
@@ -198,7 +195,7 @@ func (s *scraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 // for all currently running processes. If errors occur obtaining information
 // for some processes, an error will be returned, but any processes that were
 // successfully obtained will still be returned.
-func (s *scraper) getProcessMetadata() ([]*processMetadata, error) {
+func (s *scraper) getProcessMetadata() (map[string][]*processMetadata, error) {
 	ctx := context.WithValue(context.Background(), common.EnvKey, s.config.EnvMap)
 	handles, err := s.getProcessHandles(ctx)
 	if err != nil {
@@ -211,7 +208,8 @@ func (s *scraper) getProcessMetadata() ([]*processMetadata, error) {
 		errs.Add(err)
 	}
 
-	data := make([]*processMetadata, 0, handles.Len())
+	//data := make([]*processMetadata, 0, handles.Len())
+	data := make(map[string][]*processMetadata)
 	for i := 0; i < handles.Len(); i++ {
 		pid := handles.Pid(i)
 		handle := handles.At(i)
@@ -240,9 +238,15 @@ func (s *scraper) getProcessMetadata() ([]*processMetadata, error) {
 
 		executable := &executableMetadata{name: name, path: exe, cgroup: cgroup}
 
-		// filter processes by name
-		if (s.includeFS != nil && !s.includeFS.Matches(executable.name)) ||
-			(s.excludeFS != nil && s.excludeFS.Matches(executable.name)) {
+		groupConfigName := ""
+		for groupName, fs := range s.matchGroupFS {
+			if fs.Matches(executable.name) {
+				groupConfigName = groupName
+				break
+			}
+		} 
+
+		if groupConfigName == "" {
 			continue
 		}
 
@@ -274,16 +278,17 @@ func (s *scraper) getProcessMetadata() ([]*processMetadata, error) {
 		}
 
 		md := &processMetadata{
-			pid:        pid,
-			parentPid:  parentPid,
-			executable: executable,
-			command:    command,
-			username:   username,
-			handle:     handle,
-			createTime: createTime,
+			pid:             pid,
+			parentPid:       parentPid,
+			executable:      executable,
+			command:         command,
+			username:        username,
+			handle:          handle,
+			createTime:      createTime,
+			groupConfigName: groupConfigName,
 		}
 
-		data = append(data, md)
+		data[groupConfigName] = append(data[groupConfigName], md)
 	}
 
 	return data, errs.Combine()
