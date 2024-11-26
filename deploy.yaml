@@ -101,6 +101,12 @@ spec:
       labels:
         app: otelcontribcol
     spec:
+      volumes:
+        - name: host-proc
+          hostPath:
+            path: /proc
+            type: Directory
+      hostPID: true
       serviceAccountName: otelcontribcol
       containers:
       - name: otelcontribcol
@@ -113,3 +119,6 @@ spec:
         - containerPort: 8888
         command: ["/usr/bin/tail"]
         args: ["-f", "/dev/null"]
+        volumeMounts:
+          - name: host-proc
+            mountPath: /host/proc
