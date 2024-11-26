@@ -47,25 +47,8 @@ type commandMetadata struct {
 	commandLineSlice []string
 }
 
-func (m *processMetadata) buildResource(rb *metadata.ResourceBuilder) pcommon.Resource {
-	rb.SetProcessPid(int64(m.pid))
-	rb.SetProcessParentPid(int64(m.parentPid))
-	rb.SetProcessExecutableName(m.executable.name)
-	rb.SetProcessExecutablePath(m.executable.path)
-	rb.SetProcessCgroup(m.executable.cgroup)
-	if m.command != nil {
-		rb.SetProcessCommand(m.command.command)
-		if m.command.commandLineSlice != nil {
-			// TODO insert slice here once this is supported by the data model
-			// (see https://github.com/open-telemetry/opentelemetry-collector/pull/1142)
-			rb.SetProcessCommandLine(strings.Join(m.command.commandLineSlice, " "))
-		} else {
-			rb.SetProcessCommandLine(m.command.commandLine)
-		}
-	}
-	if m.username != "" {
-		rb.SetProcessOwner(m.username)
-	}
+func (s *scraper) buildGroupResource(rb *metadata.ResourceBuilder, groupName string) pcommon.Resource {
+	rb.SetGroupName(groupName)
 	return rb.Emit()
 }
 

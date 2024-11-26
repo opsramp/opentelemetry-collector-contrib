@@ -21,59 +21,10 @@ func NewResourceBuilder(rac ResourceAttributesConfig) *ResourceBuilder {
 	}
 }
 
-// SetProcessCgroup sets provided value as "process.cgroup" attribute.
-func (rb *ResourceBuilder) SetProcessCgroup(val string) {
-	if rb.config.ProcessCgroup.Enabled {
-		rb.res.Attributes().PutStr("process.cgroup", val)
-	}
-}
-
-// SetProcessCommand sets provided value as "process.command" attribute.
-func (rb *ResourceBuilder) SetProcessCommand(val string) {
-	if rb.config.ProcessCommand.Enabled {
-		rb.res.Attributes().PutStr("process.command", val)
-	}
-}
-
-// SetProcessCommandLine sets provided value as "process.command_line" attribute.
-func (rb *ResourceBuilder) SetProcessCommandLine(val string) {
-	if rb.config.ProcessCommandLine.Enabled {
-		rb.res.Attributes().PutStr("process.command_line", val)
-	}
-}
-
-// SetProcessExecutableName sets provided value as "process.executable.name" attribute.
-func (rb *ResourceBuilder) SetProcessExecutableName(val string) {
-	if rb.config.ProcessExecutableName.Enabled {
-		rb.res.Attributes().PutStr("process.executable.name", val)
-	}
-}
-
-// SetProcessExecutablePath sets provided value as "process.executable.path" attribute.
-func (rb *ResourceBuilder) SetProcessExecutablePath(val string) {
-	if rb.config.ProcessExecutablePath.Enabled {
-		rb.res.Attributes().PutStr("process.executable.path", val)
-	}
-}
-
-// SetProcessOwner sets provided value as "process.owner" attribute.
-func (rb *ResourceBuilder) SetProcessOwner(val string) {
-	if rb.config.ProcessOwner.Enabled {
-		rb.res.Attributes().PutStr("process.owner", val)
-	}
-}
-
-// SetProcessParentPid sets provided value as "process.parent_pid" attribute.
-func (rb *ResourceBuilder) SetProcessParentPid(val int64) {
-	if rb.config.ProcessParentPid.Enabled {
-		rb.res.Attributes().PutInt("process.parent_pid", val)
-	}
-}
-
-// SetProcessPid sets provided value as "process.pid" attribute.
-func (rb *ResourceBuilder) SetProcessPid(val int64) {
-	if rb.config.ProcessPid.Enabled {
-		rb.res.Attributes().PutInt("process.pid", val)
+// SetGroupName sets provided value as "group.name" attribute.
+func (rb *ResourceBuilder) SetGroupName(val string) {
+	if rb.config.GroupName.Enabled {
+		rb.res.Attributes().PutStr("group.name", val)
 	}
 }
 

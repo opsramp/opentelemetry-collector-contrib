@@ -26,63 +26,31 @@ func (ms *MetricConfig) Unmarshal(parser *confmap.Conf) error {
 	return nil
 }
 
-// MetricsConfig provides config for hostmetricsreceiver/process metrics.
+// MetricsConfig provides config for hostmetricsreceiver/groupprocess metrics.
 type MetricsConfig struct {
-	ProcessContextSwitches     MetricConfig `mapstructure:"process.context_switches"`
-	ProcessCPUTime             MetricConfig `mapstructure:"process.cpu.time"`
-	ProcessCPUUtilization      MetricConfig `mapstructure:"process.cpu.utilization"`
-	ProcessDiskIo              MetricConfig `mapstructure:"process.disk.io"`
-	ProcessDiskOperations      MetricConfig `mapstructure:"process.disk.operations"`
-	ProcessHandles             MetricConfig `mapstructure:"process.handles"`
-	ProcessMemoryUsage         MetricConfig `mapstructure:"process.memory.usage"`
-	ProcessMemoryUtilization   MetricConfig `mapstructure:"process.memory.utilization"`
-	ProcessMemoryVirtual       MetricConfig `mapstructure:"process.memory.virtual"`
-	ProcessOpenFileDescriptors MetricConfig `mapstructure:"process.open_file_descriptors"`
-	ProcessPagingFaults        MetricConfig `mapstructure:"process.paging.faults"`
-	ProcessSignalsPending      MetricConfig `mapstructure:"process.signals_pending"`
-	ProcessThreads             MetricConfig `mapstructure:"process.threads"`
+	GroupProcessCount               MetricConfig `mapstructure:"group.process.count"`
+	GroupProcessCPUTime             MetricConfig `mapstructure:"group.process.cpu.time"`
+	GroupProcessMemoryUsage         MetricConfig `mapstructure:"group.process.memory.usage"`
+	GroupProcessOpenFileDescriptors MetricConfig `mapstructure:"group.process.open_file_descriptors"`
+	GroupProcessThreads             MetricConfig `mapstructure:"group.process.threads"`
 }
 
 func DefaultMetricsConfig() MetricsConfig {
 	return MetricsConfig{
-		ProcessContextSwitches: MetricConfig{
-			Enabled: false,
-		},
-		ProcessCPUTime: MetricConfig{
+		GroupProcessCount: MetricConfig{
 			Enabled: true,
 		},
-		ProcessCPUUtilization: MetricConfig{
-			Enabled: false,
-		},
-		ProcessDiskIo: MetricConfig{
+		GroupProcessCPUTime: MetricConfig{
 			Enabled: true,
 		},
-		ProcessDiskOperations: MetricConfig{
-			Enabled: false,
-		},
-		ProcessHandles: MetricConfig{
-			Enabled: false,
-		},
-		ProcessMemoryUsage: MetricConfig{
+		GroupProcessMemoryUsage: MetricConfig{
 			Enabled: true,
 		},
-		ProcessMemoryUtilization: MetricConfig{
-			Enabled: false,
-		},
-		ProcessMemoryVirtual: MetricConfig{
+		GroupProcessOpenFileDescriptors: MetricConfig{
 			Enabled: true,
 		},
-		ProcessOpenFileDescriptors: MetricConfig{
-			Enabled: false,
-		},
-		ProcessPagingFaults: MetricConfig{
-			Enabled: false,
-		},
-		ProcessSignalsPending: MetricConfig{
-			Enabled: false,
-		},
-		ProcessThreads: MetricConfig{
-			Enabled: false,
+		GroupProcessThreads: MetricConfig{
+			Enabled: true,
 		},
 	}
 }
@@ -113,48 +81,20 @@ func (rac *ResourceAttributeConfig) Unmarshal(parser *confmap.Conf) error {
 	return nil
 }
 
-// ResourceAttributesConfig provides config for hostmetricsreceiver/process resource attributes.
+// ResourceAttributesConfig provides config for hostmetricsreceiver/groupprocess resource attributes.
 type ResourceAttributesConfig struct {
-	ProcessCgroup         ResourceAttributeConfig `mapstructure:"process.cgroup"`
-	ProcessCommand        ResourceAttributeConfig `mapstructure:"process.command"`
-	ProcessCommandLine    ResourceAttributeConfig `mapstructure:"process.command_line"`
-	ProcessExecutableName ResourceAttributeConfig `mapstructure:"process.executable.name"`
-	ProcessExecutablePath ResourceAttributeConfig `mapstructure:"process.executable.path"`
-	ProcessOwner          ResourceAttributeConfig `mapstructure:"process.owner"`
-	ProcessParentPid      ResourceAttributeConfig `mapstructure:"process.parent_pid"`
-	ProcessPid            ResourceAttributeConfig `mapstructure:"process.pid"`
+	GroupName ResourceAttributeConfig `mapstructure:"group.name"`
 }
 
 func DefaultResourceAttributesConfig() ResourceAttributesConfig {
 	return ResourceAttributesConfig{
-		ProcessCgroup: ResourceAttributeConfig{
-			Enabled: false,
-		},
-		ProcessCommand: ResourceAttributeConfig{
-			Enabled: true,
-		},
-		ProcessCommandLine: ResourceAttributeConfig{
-			Enabled: true,
-		},
-		ProcessExecutableName: ResourceAttributeConfig{
-			Enabled: true,
-		},
-		ProcessExecutablePath: ResourceAttributeConfig{
-			Enabled: true,
-		},
-		ProcessOwner: ResourceAttributeConfig{
-			Enabled: true,
-		},
-		ProcessParentPid: ResourceAttributeConfig{
-			Enabled: true,
-		},
-		ProcessPid: ResourceAttributeConfig{
+		GroupName: ResourceAttributeConfig{
 			Enabled: true,
 		},
 	}
 }
 
-// MetricsBuilderConfig is a configuration for hostmetricsreceiver/process metrics builder.
+// MetricsBuilderConfig is a configuration for hostmetricsreceiver/groupprocess metrics builder.
 type MetricsBuilderConfig struct {
 	Metrics            MetricsConfig            `mapstructure:"metrics"`
 	ResourceAttributes ResourceAttributesConfig `mapstructure:"resource_attributes"`

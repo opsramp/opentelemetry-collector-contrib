@@ -9,73 +9,31 @@ import (
 )
 
 func TestResourceBuilder(t *testing.T) {
-	for _, tt := range []string{"default", "all_set", "none_set"} {
-		t.Run(tt, func(t *testing.T) {
-			cfg := loadResourceAttributesConfig(t, tt)
+	for _, test := range []string{"default", "all_set", "none_set"} {
+		t.Run(test, func(t *testing.T) {
+			cfg := loadResourceAttributesConfig(t, test)
 			rb := NewResourceBuilder(cfg)
-			rb.SetProcessCgroup("process.cgroup-val")
-			rb.SetProcessCommand("process.command-val")
-			rb.SetProcessCommandLine("process.command_line-val")
-			rb.SetProcessExecutableName("process.executable.name-val")
-			rb.SetProcessExecutablePath("process.executable.path-val")
-			rb.SetProcessOwner("process.owner-val")
-			rb.SetProcessParentPid(18)
-			rb.SetProcessPid(11)
+			rb.SetGroupName("group.name-val")
 
 			res := rb.Emit()
 			assert.Equal(t, 0, rb.Emit().Attributes().Len()) // Second call should return empty Resource
 
-			switch tt {
+			switch test {
 			case "default":
-				assert.Equal(t, 7, res.Attributes().Len())
+				assert.Equal(t, 1, res.Attributes().Len())
 			case "all_set":
-				assert.Equal(t, 8, res.Attributes().Len())
+				assert.Equal(t, 1, res.Attributes().Len())
 			case "none_set":
 				assert.Equal(t, 0, res.Attributes().Len())
 				return
 			default:
-				assert.Failf(t, "unexpected test case: %s", tt)
+				assert.Failf(t, "unexpected test case: %s", test)
 			}
 
-			val, ok := res.Attributes().Get("process.cgroup")
-			assert.Equal(t, tt == "all_set", ok)
-			if ok {
-				assert.EqualValues(t, "process.cgroup-val", val.Str())
-			}
-			val, ok = res.Attributes().Get("process.command")
+			val, ok := res.Attributes().Get("group.name")
 			assert.True(t, ok)
 			if ok {
-				assert.EqualValues(t, "process.command-val", val.Str())
-			}
-			val, ok = res.Attributes().Get("process.command_line")
-			assert.True(t, ok)
-			if ok {
-				assert.EqualValues(t, "process.command_line-val", val.Str())
-			}
-			val, ok = res.Attributes().Get("process.executable.name")
-			assert.True(t, ok)
-			if ok {
-				assert.EqualValues(t, "process.executable.name-val", val.Str())
-			}
-			val, ok = res.Attributes().Get("process.executable.path")
-			assert.True(t, ok)
-			if ok {
-				assert.EqualValues(t, "process.executable.path-val", val.Str())
-			}
-			val, ok = res.Attributes().Get("process.owner")
-			assert.True(t, ok)
-			if ok {
-				assert.EqualValues(t, "process.owner-val", val.Str())
-			}
-			val, ok = res.Attributes().Get("process.parent_pid")
-			assert.True(t, ok)
-			if ok {
-				assert.EqualValues(t, 18, val.Int())
-			}
-			val, ok = res.Attributes().Get("process.pid")
-			assert.True(t, ok)
-			if ok {
-				assert.EqualValues(t, 11, val.Int())
+				assert.EqualValues(t, "group.name-val", val.Str())
 			}
 		})
 	}
