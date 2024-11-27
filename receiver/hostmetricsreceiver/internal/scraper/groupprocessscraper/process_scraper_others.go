@@ -7,18 +7,7 @@ package groupprocessscraper // import "github.com/open-telemetry/opentelemetry-c
 
 import (
 	"context"
-
-	"github.com/shirou/gopsutil/v4/cpu"
-	"go.opentelemetry.io/collector/pdata/pcommon"
-
-	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper/ucal"
 )
-
-func (s *scraper) recordCPUTimeMetric(now pcommon.Timestamp, cpuTime *cpu.TimesStat) {
-}
-
-func (s *scraper) recordCPUUtilization(now pcommon.Timestamp, cpuUtilization ucal.CPUUtilization) {
-}
 
 func getProcessName(context.Context, processHandle, string) (string, error) {
 	return "", nil
