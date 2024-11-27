@@ -17,11 +17,11 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper/internal/metadata"
 )
 
-// This file implements Factory for Process scraper.
+// This file implements Factory for Group Process scraper.
 
 const (
 	// TypeStr the value of "type" key in configuration.
-	TypeStr = "process"
+	TypeStr = "groupprocess"
 )
 
 var (
