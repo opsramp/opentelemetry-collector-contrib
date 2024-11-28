@@ -98,28 +98,26 @@ func newMetricGroupProcessCount(cfg MetricConfig) metricGroupProcessCount {
 	return m
 }
 
-type metricGroupProcessCPUTime struct {
+type metricGroupProcessCPUPercent struct {
 	data     pmetric.Metric // data buffer for generated metric.
 	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
-// init fills group.process.cpu.time metric with initial data.
-func (m *metricGroupProcessCPUTime) init() {
-	m.data.SetName("group.process.cpu.time")
-	m.data.SetDescription("Total CPU time used by the process")
-	m.data.SetUnit("s")
-	m.data.SetEmptySum()
-	m.data.Sum().SetIsMonotonic(true)
-	m.data.Sum().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
-	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
+// init fills group.process.cpu.percent metric with initial data.
+func (m *metricGroupProcessCPUPercent) init() {
+	m.data.SetName("group.process.cpu.percent")
+	m.data.SetDescription("Total CPU percent used by the process")
+	m.data.SetUnit("%")
+	m.data.SetEmptyGauge()
+	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricGroupProcessCPUTime) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, stateAttributeValue string) {
+func (m *metricGroupProcessCPUPercent) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, stateAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
-	dp := m.data.Sum().DataPoints().AppendEmpty()
+	dp := m.data.Gauge().DataPoints().AppendEmpty()
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetDoubleValue(val)
@@ -127,23 +125,23 @@ func (m *metricGroupProcessCPUTime) recordDataPoint(start pcommon.Timestamp, ts 
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
-func (m *metricGroupProcessCPUTime) updateCapacity() {
-	if m.data.Sum().DataPoints().Len() > m.capacity {
-		m.capacity = m.data.Sum().DataPoints().Len()
+func (m *metricGroupProcessCPUPercent) updateCapacity() {
+	if m.data.Gauge().DataPoints().Len() > m.capacity {
+		m.capacity = m.data.Gauge().DataPoints().Len()
 	}
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricGroupProcessCPUTime) emit(metrics pmetric.MetricSlice) {
-	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
+func (m *metricGroupProcessCPUPercent) emit(metrics pmetric.MetricSlice) {
+	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricGroupProcessCPUTime(cfg MetricConfig) metricGroupProcessCPUTime {
-	m := metricGroupProcessCPUTime{config: cfg}
+func newMetricGroupProcessCPUPercent(cfg MetricConfig) metricGroupProcessCPUPercent {
+	m := metricGroupProcessCPUPercent{config: cfg}
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -151,50 +149,48 @@ func newMetricGroupProcessCPUTime(cfg MetricConfig) metricGroupProcessCPUTime {
 	return m
 }
 
-type metricGroupProcessMemoryUsage struct {
+type metricGroupProcessMemoryPercent struct {
 	data     pmetric.Metric // data buffer for generated metric.
 	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
-// init fills group.process.memory.usage metric with initial data.
-func (m *metricGroupProcessMemoryUsage) init() {
-	m.data.SetName("group.process.memory.usage")
-	m.data.SetDescription("Total memory usage by the process")
-	m.data.SetUnit("By")
-	m.data.SetEmptySum()
-	m.data.Sum().SetIsMonotonic(false)
-	m.data.Sum().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
+// init fills group.process.memory.percent metric with initial data.
+func (m *metricGroupProcessMemoryPercent) init() {
+	m.data.SetName("group.process.memory.percent")
+	m.data.SetDescription("Total memory percent used by the process")
+	m.data.SetUnit("%")
+	m.data.SetEmptyGauge()
 }
 
-func (m *metricGroupProcessMemoryUsage) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64) {
+func (m *metricGroupProcessMemoryPercent) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64) {
 	if !m.config.Enabled {
 		return
 	}
-	dp := m.data.Sum().DataPoints().AppendEmpty()
+	dp := m.data.Gauge().DataPoints().AppendEmpty()
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
-	dp.SetIntValue(val)
+	dp.SetDoubleValue(val)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
-func (m *metricGroupProcessMemoryUsage) updateCapacity() {
-	if m.data.Sum().DataPoints().Len() > m.capacity {
-		m.capacity = m.data.Sum().DataPoints().Len()
+func (m *metricGroupProcessMemoryPercent) updateCapacity() {
+	if m.data.Gauge().DataPoints().Len() > m.capacity {
+		m.capacity = m.data.Gauge().DataPoints().Len()
 	}
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricGroupProcessMemoryUsage) emit(metrics pmetric.MetricSlice) {
-	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
+func (m *metricGroupProcessMemoryPercent) emit(metrics pmetric.MetricSlice) {
+	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricGroupProcessMemoryUsage(cfg MetricConfig) metricGroupProcessMemoryUsage {
-	m := metricGroupProcessMemoryUsage{config: cfg}
+func newMetricGroupProcessMemoryPercent(cfg MetricConfig) metricGroupProcessMemoryPercent {
+	m := metricGroupProcessMemoryPercent{config: cfg}
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -315,31 +311,39 @@ type MetricsBuilder struct {
 	resourceAttributeIncludeFilter        map[string]filter.Filter
 	resourceAttributeExcludeFilter        map[string]filter.Filter
 	metricGroupProcessCount               metricGroupProcessCount
-	metricGroupProcessCPUTime             metricGroupProcessCPUTime
-	metricGroupProcessMemoryUsage         metricGroupProcessMemoryUsage
+	metricGroupProcessCPUPercent          metricGroupProcessCPUPercent
+	metricGroupProcessMemoryPercent       metricGroupProcessMemoryPercent
 	metricGroupProcessOpenFileDescriptors metricGroupProcessOpenFileDescriptors
 	metricGroupProcessThreads             metricGroupProcessThreads
 }
 
-// metricBuilderOption applies changes to default metrics builder.
-type metricBuilderOption func(*MetricsBuilder)
-
-// WithStartTime sets startTime on the metrics builder.
-func WithStartTime(startTime pcommon.Timestamp) metricBuilderOption {
-	return func(mb *MetricsBuilder) {
-		mb.startTime = startTime
-	}
+// MetricBuilderOption applies changes to default metrics builder.
+type MetricBuilderOption interface {
+	apply(*MetricsBuilder)
 }
 
-func NewMetricsBuilder(mbc MetricsBuilderConfig, settings receiver.Settings, options ...metricBuilderOption) *MetricsBuilder {
+type metricBuilderOptionFunc func(mb *MetricsBuilder)
+
+func (mbof metricBuilderOptionFunc) apply(mb *MetricsBuilder) {
+	mbof(mb)
+}
+
+// WithStartTime sets startTime on the metrics builder.
+func WithStartTime(startTime pcommon.Timestamp) MetricBuilderOption {
+	return metricBuilderOptionFunc(func(mb *MetricsBuilder) {
+		mb.startTime = startTime
+	})
+}
+
+func NewMetricsBuilder(mbc MetricsBuilderConfig, settings receiver.Settings, options ...MetricBuilderOption) *MetricsBuilder {
 	mb := &MetricsBuilder{
 		config:                                mbc,
 		startTime:                             pcommon.NewTimestampFromTime(time.Now()),
 		metricsBuffer:                         pmetric.NewMetrics(),
 		buildInfo:                             settings.BuildInfo,
 		metricGroupProcessCount:               newMetricGroupProcessCount(mbc.Metrics.GroupProcessCount),
-		metricGroupProcessCPUTime:             newMetricGroupProcessCPUTime(mbc.Metrics.GroupProcessCPUTime),
-		metricGroupProcessMemoryUsage:         newMetricGroupProcessMemoryUsage(mbc.Metrics.GroupProcessMemoryUsage),
+		metricGroupProcessCPUPercent:          newMetricGroupProcessCPUPercent(mbc.Metrics.GroupProcessCPUPercent),
+		metricGroupProcessMemoryPercent:       newMetricGroupProcessMemoryPercent(mbc.Metrics.GroupProcessMemoryPercent),
 		metricGroupProcessOpenFileDescriptors: newMetricGroupProcessOpenFileDescriptors(mbc.Metrics.GroupProcessOpenFileDescriptors),
 		metricGroupProcessThreads:             newMetricGroupProcessThreads(mbc.Metrics.GroupProcessThreads),
 		resourceAttributeIncludeFilter:        make(map[string]filter.Filter),
@@ -353,7 +357,7 @@ func NewMetricsBuilder(mbc MetricsBuilderConfig, settings receiver.Settings, opt
 	}
 
 	for _, op := range options {
-		op(mb)
+		op.apply(mb)
 	}
 	return mb
 }
@@ -371,20 +375,28 @@ func (mb *MetricsBuilder) updateCapacity(rm pmetric.ResourceMetrics) {
 }
 
 // ResourceMetricsOption applies changes to provided resource metrics.
-type ResourceMetricsOption func(pmetric.ResourceMetrics)
+type ResourceMetricsOption interface {
+	apply(pmetric.ResourceMetrics)
+}
+
+type resourceMetricsOptionFunc func(pmetric.ResourceMetrics)
+
+func (rmof resourceMetricsOptionFunc) apply(rm pmetric.ResourceMetrics) {
+	rmof(rm)
+}
 
 // WithResource sets the provided resource on the emitted ResourceMetrics.
 // It's recommended to use ResourceBuilder to create the resource.
 func WithResource(res pcommon.Resource) ResourceMetricsOption {
-	return func(rm pmetric.ResourceMetrics) {
+	return resourceMetricsOptionFunc(func(rm pmetric.ResourceMetrics) {
 		res.CopyTo(rm.Resource())
-	}
+	})
 }
 
 // WithStartTimeOverride overrides start time for all the resource metrics data points.
 // This option should be only used if different start time has to be set on metrics coming from different resources.
 func WithStartTimeOverride(start pcommon.Timestamp) ResourceMetricsOption {
-	return func(rm pmetric.ResourceMetrics) {
+	return resourceMetricsOptionFunc(func(rm pmetric.ResourceMetrics) {
 		var dps pmetric.NumberDataPointSlice
 		metrics := rm.ScopeMetrics().At(0).Metrics()
 		for i := 0; i < metrics.Len(); i++ {
@@ -398,7 +410,7 @@ func WithStartTimeOverride(start pcommon.Timestamp) ResourceMetricsOption {
 				dps.At(j).SetStartTimestamp(start)
 			}
 		}
-	}
+	})
 }
 
 // EmitForResource saves all the generated metrics under a new resource and updates the internal state to be ready for
@@ -406,7 +418,7 @@ func WithStartTimeOverride(start pcommon.Timestamp) ResourceMetricsOption {
 // needs to emit metrics from several resources. Otherwise calling this function is not required,
 // just `Emit` function can be called instead.
 // Resource attributes should be provided as ResourceMetricsOption arguments.
-func (mb *MetricsBuilder) EmitForResource(rmo ...ResourceMetricsOption) {
+func (mb *MetricsBuilder) EmitForResource(options ...ResourceMetricsOption) {
 	rm := pmetric.NewResourceMetrics()
 	rm.SetSchemaUrl(conventions.SchemaURL)
 	ils := rm.ScopeMetrics().AppendEmpty()
@@ -414,13 +426,13 @@ func (mb *MetricsBuilder) EmitForResource(rmo ...ResourceMetricsOption) {
 	ils.Scope().SetVersion(mb.buildInfo.Version)
 	ils.Metrics().EnsureCapacity(mb.metricsCapacity)
 	mb.metricGroupProcessCount.emit(ils.Metrics())
-	mb.metricGroupProcessCPUTime.emit(ils.Metrics())
-	mb.metricGroupProcessMemoryUsage.emit(ils.Metrics())
+	mb.metricGroupProcessCPUPercent.emit(ils.Metrics())
+	mb.metricGroupProcessMemoryPercent.emit(ils.Metrics())
 	mb.metricGroupProcessOpenFileDescriptors.emit(ils.Metrics())
 	mb.metricGroupProcessThreads.emit(ils.Metrics())
 
-	for _, op := range rmo {
-		op(rm)
+	for _, op := range options {
+		op.apply(rm)
 	}
 	for attr, filter := range mb.resourceAttributeIncludeFilter {
 		if val, ok := rm.Resource().Attributes().Get(attr); ok && !filter.Matches(val.AsString()) {
@@ -442,8 +454,8 @@ func (mb *MetricsBuilder) EmitForResource(rmo ...ResourceMetricsOption) {
 // Emit returns all the metrics accumulated by the metrics builder and updates the internal state to be ready for
 // recording another set of metrics. This function will be responsible for applying all the transformations required to
 // produce metric representation defined in metadata and user config, e.g. delta or cumulative.
-func (mb *MetricsBuilder) Emit(rmo ...ResourceMetricsOption) pmetric.Metrics {
-	mb.EmitForResource(rmo...)
+func (mb *MetricsBuilder) Emit(options ...ResourceMetricsOption) pmetric.Metrics {
+	mb.EmitForResource(options...)
 	metrics := mb.metricsBuffer
 	mb.metricsBuffer = pmetric.NewMetrics()
 	return metrics
@@ -454,14 +466,14 @@ func (mb *MetricsBuilder) RecordGroupProcessCountDataPoint(ts pcommon.Timestamp,
 	mb.metricGroupProcessCount.recordDataPoint(mb.startTime, ts, val)
 }
 
-// RecordGroupProcessCPUTimeDataPoint adds a data point to group.process.cpu.time metric.
-func (mb *MetricsBuilder) RecordGroupProcessCPUTimeDataPoint(ts pcommon.Timestamp, val float64, stateAttributeValue AttributeState) {
-	mb.metricGroupProcessCPUTime.recordDataPoint(mb.startTime, ts, val, stateAttributeValue.String())
+// RecordGroupProcessCPUPercentDataPoint adds a data point to group.process.cpu.percent metric.
+func (mb *MetricsBuilder) RecordGroupProcessCPUPercentDataPoint(ts pcommon.Timestamp, val float64, stateAttributeValue AttributeState) {
+	mb.metricGroupProcessCPUPercent.recordDataPoint(mb.startTime, ts, val, stateAttributeValue.String())
 }
 
-// RecordGroupProcessMemoryUsageDataPoint adds a data point to group.process.memory.usage metric.
-func (mb *MetricsBuilder) RecordGroupProcessMemoryUsageDataPoint(ts pcommon.Timestamp, val int64) {
-	mb.metricGroupProcessMemoryUsage.recordDataPoint(mb.startTime, ts, val)
+// RecordGroupProcessMemoryPercentDataPoint adds a data point to group.process.memory.percent metric.
+func (mb *MetricsBuilder) RecordGroupProcessMemoryPercentDataPoint(ts pcommon.Timestamp, val float64) {
+	mb.metricGroupProcessMemoryPercent.recordDataPoint(mb.startTime, ts, val)
 }
 
 // RecordGroupProcessOpenFileDescriptorsDataPoint adds a data point to group.process.open_file_descriptors metric.
@@ -476,9 +488,9 @@ func (mb *MetricsBuilder) RecordGroupProcessThreadsDataPoint(ts pcommon.Timestam
 
 // Reset resets metrics builder to its initial state. It should be used when external metrics source is restarted,
 // and metrics builder should update its startTime and reset it's internal state accordingly.
-func (mb *MetricsBuilder) Reset(options ...metricBuilderOption) {
+func (mb *MetricsBuilder) Reset(options ...MetricBuilderOption) {
 	mb.startTime = pcommon.NewTimestampFromTime(time.Now())
 	for _, op := range options {
-		op(mb)
+		op.apply(mb)
 	}
 }

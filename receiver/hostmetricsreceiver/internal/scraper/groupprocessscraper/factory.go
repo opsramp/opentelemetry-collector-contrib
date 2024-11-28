@@ -30,11 +30,11 @@ var (
 )
 
 var (
-	bootTimeCacheFeaturegateID = "hostmetrics.process.bootTimeCache"
+	bootTimeCacheFeaturegateID = "hostmetrics.groupprocess.bootTimeCache"
 	bootTimeCacheFeaturegate   = featuregate.GlobalRegistry().MustRegister(
 		bootTimeCacheFeaturegateID,
 		featuregate.StageBeta,
-		featuregate.WithRegisterDescription("When enabled, all process scrapes will use the boot time value that is cached at the start of the process."),
+		featuregate.WithRegisterDescription("When enabled, all groupprocess scrapes will use the boot time value that is cached at the start of the process."),
 		featuregate.WithRegisterReferenceURL("https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/28849"),
 		featuregate.WithRegisterFromVersion("v0.98.0"),
 	)
@@ -58,7 +58,7 @@ func (f *Factory) CreateMetricsScraper(
 	cfg internal.Config,
 ) (scraperhelper.Scraper, error) {
 	if runtime.GOOS != "linux" && runtime.GOOS != "windows" && runtime.GOOS != "darwin" {
-		return nil, errors.New("process scraper only available on Linux, Windows, or MacOS")
+		return nil, errors.New("groupprocess scraper only available on Linux, Windows, or MacOS")
 	}
 
 	s, err := newGroupProcessScraper(settings, cfg.(*Config))

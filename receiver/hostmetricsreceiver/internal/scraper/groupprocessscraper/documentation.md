@@ -22,13 +22,13 @@ Total number of processes
 | ---- | ----------- | ---------- | ----------------------- | --------- |
 | count | Sum | Int | Cumulative | false |
 
-### group.process.cpu.time
+### group.process.cpu.percent
 
-Total CPU time used by the process
+Total CPU percent used by the process
 
-| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
-| ---- | ----------- | ---------- | ----------------------- | --------- |
-| s | Sum | Double | Cumulative | true |
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| % | Gauge | Double |
 
 #### Attributes
 
@@ -36,13 +36,13 @@ Total CPU time used by the process
 | ---- | ----------- | ------ |
 | state | Breakdown of CPU usage by type. | Str: ``system``, ``user``, ``wait``, ``total`` |
 
-### group.process.memory.usage
+### group.process.memory.percent
 
-Total memory usage by the process
+Total memory percent used by the process
 
-| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
-| ---- | ----------- | ---------- | ----------------------- | --------- |
-| By | Sum | Int | Cumulative | false |
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| % | Gauge | Double |
 
 ### group.process.open_file_descriptors
 

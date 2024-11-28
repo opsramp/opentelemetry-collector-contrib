@@ -35,24 +35,20 @@ metrics:
       aggregation_temporality: cumulative
       monotonic: false
 
-  group.process.cpu.time:
+  group.process.cpu.percent:
     enabled: true
-    description: "Total CPU time used by the process"
-    unit: s
-    sum:
+    description: "Total CPU percent used by the process"
+    unit: "%"
+    gauge:
       value_type: double
-      aggregation_temporality: cumulative
-      monotonic: true
     attributes: [state]
 
-  group.process.memory.usage:
+  group.process.memory.percent:
     enabled: true
-    description: "Total memory usage by the process"
-    unit: By
-    sum:
-      value_type: int
-      aggregation_temporality: cumulative
-      monotonic: false
+    description: "Total memory percent used by the process"
+    unit: "%"
+    gauge:
+      value_type: double
 
   group.process.open_file_descriptors:
     enabled: true

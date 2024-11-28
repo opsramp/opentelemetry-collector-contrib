@@ -26,8 +26,8 @@ func TestMetricsBuilderConfig(t *testing.T) {
 			want: MetricsBuilderConfig{
 				Metrics: MetricsConfig{
 					GroupProcessCount:               MetricConfig{Enabled: true},
-					GroupProcessCPUTime:             MetricConfig{Enabled: true},
-					GroupProcessMemoryUsage:         MetricConfig{Enabled: true},
+					GroupProcessCPUPercent:          MetricConfig{Enabled: true},
+					GroupProcessMemoryPercent:       MetricConfig{Enabled: true},
 					GroupProcessOpenFileDescriptors: MetricConfig{Enabled: true},
 					GroupProcessThreads:             MetricConfig{Enabled: true},
 				},
@@ -41,8 +41,8 @@ func TestMetricsBuilderConfig(t *testing.T) {
 			want: MetricsBuilderConfig{
 				Metrics: MetricsConfig{
 					GroupProcessCount:               MetricConfig{Enabled: false},
-					GroupProcessCPUTime:             MetricConfig{Enabled: false},
-					GroupProcessMemoryUsage:         MetricConfig{Enabled: false},
+					GroupProcessCPUPercent:          MetricConfig{Enabled: false},
+					GroupProcessMemoryPercent:       MetricConfig{Enabled: false},
 					GroupProcessOpenFileDescriptors: MetricConfig{Enabled: false},
 					GroupProcessThreads:             MetricConfig{Enabled: false},
 				},
@@ -55,9 +55,8 @@ func TestMetricsBuilderConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := loadMetricsBuilderConfig(t, tt.name)
-			if diff := cmp.Diff(tt.want, cfg, cmpopts.IgnoreUnexported(MetricConfig{}, ResourceAttributeConfig{})); diff != "" {
-				t.Errorf("Config mismatch (-expected +actual):\n%s", diff)
-			}
+			diff := cmp.Diff(tt.want, cfg, cmpopts.IgnoreUnexported(MetricConfig{}, ResourceAttributeConfig{}))
+			require.Emptyf(t, diff, "Config mismatch (-expected +actual):\n%s", diff)
 		})
 	}
 }
@@ -97,9 +96,8 @@ func TestResourceAttributesConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := loadResourceAttributesConfig(t, tt.name)
-			if diff := cmp.Diff(tt.want, cfg, cmpopts.IgnoreUnexported(ResourceAttributeConfig{})); diff != "" {
-				t.Errorf("Config mismatch (-expected +actual):\n%s", diff)
-			}
+			diff := cmp.Diff(tt.want, cfg, cmpopts.IgnoreUnexported(ResourceAttributeConfig{}))
+			require.Emptyf(t, diff, "Config mismatch (-expected +actual):\n%s", diff)
 		})
 	}
 }

@@ -3,9 +3,9 @@ all_set:
   metrics:
     group.process.count:
       enabled: true
-    group.process.cpu.time:
+    group.process.cpu.percent:
       enabled: true
-    group.process.memory.usage:
+    group.process.memory.percent:
       enabled: true
     group.process.open_file_descriptors:
       enabled: true
@@ -18,9 +18,9 @@ none_set:
   metrics:
     group.process.count:
       enabled: false
-    group.process.cpu.time:
+    group.process.cpu.percent:
       enabled: false
-    group.process.memory.usage:
+    group.process.memory.percent:
       enabled: false
     group.process.open_file_descriptors:
       enabled: false

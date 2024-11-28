@@ -29,8 +29,8 @@ func (ms *MetricConfig) Unmarshal(parser *confmap.Conf) error {
 // MetricsConfig provides config for hostmetricsreceiver/groupprocess metrics.
 type MetricsConfig struct {
 	GroupProcessCount               MetricConfig `mapstructure:"group.process.count"`
-	GroupProcessCPUTime             MetricConfig `mapstructure:"group.process.cpu.time"`
-	GroupProcessMemoryUsage         MetricConfig `mapstructure:"group.process.memory.usage"`
+	GroupProcessCPUPercent          MetricConfig `mapstructure:"group.process.cpu.percent"`
+	GroupProcessMemoryPercent       MetricConfig `mapstructure:"group.process.memory.percent"`
 	GroupProcessOpenFileDescriptors MetricConfig `mapstructure:"group.process.open_file_descriptors"`
 	GroupProcessThreads             MetricConfig `mapstructure:"group.process.threads"`
 }
@@ -40,10 +40,10 @@ func DefaultMetricsConfig() MetricsConfig {
 		GroupProcessCount: MetricConfig{
 			Enabled: true,
 		},
-		GroupProcessCPUTime: MetricConfig{
+		GroupProcessCPUPercent: MetricConfig{
 			Enabled: true,
 		},
-		GroupProcessMemoryUsage: MetricConfig{
+		GroupProcessMemoryPercent: MetricConfig{
 			Enabled: true,
 		},
 		GroupProcessOpenFileDescriptors: MetricConfig{

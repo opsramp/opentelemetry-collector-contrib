@@ -67,6 +67,7 @@ func newGroupProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, 
 		scrapeProcessDelay:   cfg.ScrapeProcessDelay,
 		ucals:                make(map[int32]*ucal.CPUUtilizationCalculator),
 		handleCountManager:   handlecount.NewManager(),
+		matchGroupFS:         make(map[string]filterset.FilterSet), // Initialize the map
 	}
 
 	var err error
@@ -124,27 +125,27 @@ func (s *scraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 	ctx = context.WithValue(ctx, common.EnvKey, s.config.EnvMap)
 
 	for groupName, processMetadataList := range data {
-		var totalCPUTime float64
-		var totalMemoryUsage int64
+		var totalCPUPercent float64
+		var totalMemoryPercent float32
 		var totalProcessCount int64
 		var totalThreadCount int64
 		var totalOpenFDCount int64
 
 		for _, md := range processMetadataList {
 			presentPIDs[md.pid] = struct{}{}
-			times, err := md.handle.TimesWithContext(ctx)
+			cpuPercent, err := md.handle.PercentWithContext(ctx, 0)
 			if err != nil {
-				errs.AddPartial(cpuMetricsLen, fmt.Errorf("error reading cpu times for process %q (pid %v): %w", md.executable.name, md.pid, err))
+				errs.AddPartial(cpuMetricsLen, fmt.Errorf("error reading cpu percent for process %q (pid %v): %w", md.executable.name, md.pid, err))
 				continue
 			}
-			totalCPUTime += times.User + times.System + times.Idle + times.Nice + times.Iowait + times.Irq + times.Softirq + times.Steal + times.Guest + times.GuestNice
+			totalCPUPercent += cpuPercent
 
-			mem, err := md.handle.MemoryInfoWithContext(ctx)
+			memPercent, err := md.handle.MemoryPercentWithContext(ctx)
 			if err != nil {
-				errs.AddPartial(memoryMetricsLen, fmt.Errorf("error reading memory info for process %q (pid %v): %w", md.executable.name, md.pid, err))
+				errs.AddPartial(memoryMetricsLen, fmt.Errorf("error reading memory percent for process %q (pid %v): %w", md.executable.name, md.pid, err))
 				continue
 			}
-			totalMemoryUsage += int64(mem.RSS)
+			totalMemoryPercent += memPercent
 
 			threads, err := md.handle.NumThreadsWithContext(ctx)
 			if err != nil {
@@ -164,8 +165,8 @@ func (s *scraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 		}
 
 		now := pcommon.NewTimestampFromTime(time.Now())
-		s.mb.RecordGroupProcessCPUTimeDataPoint(now, totalCPUTime, metadata.AttributeStateTotal)
-		s.mb.RecordGroupProcessMemoryUsageDataPoint(now, totalMemoryUsage)
+		s.mb.RecordGroupProcessCPUPercentDataPoint(now, totalCPUPercent, metadata.AttributeStateTotal)
+		s.mb.RecordGroupProcessMemoryPercentDataPoint(now, float64(totalMemoryPercent))
 		s.mb.RecordGroupProcessCountDataPoint(now, totalProcessCount)
 		s.mb.RecordGroupProcessThreadsDataPoint(now, totalThreadCount)
 		s.mb.RecordGroupProcessOpenFileDescriptorsDataPoint(now, totalOpenFDCount)
