@@ -5,9 +5,9 @@ parent: hostmetrics
 sem_conv_version: 1.9.0
 
 resource_attributes:
-  group.name:
+  process.name:
     enabled: true
-    description: "Name of the process group"
+    description: "Name of the process"
     type: string
 
 attributes:
@@ -17,7 +17,7 @@ attributes:
     enum: [system, user, wait, total]
 
 metrics:
-  group.process.count:
+  process.count:
     enabled: true
     description: "Total number of processes"
     unit: "count"
@@ -26,7 +26,7 @@ metrics:
       aggregation_temporality: cumulative
       monotonic: false
 
-  group.process.threads:
+  process.threads:
     enabled: true
     description: "Total number of threads"
     unit: "count"
@@ -35,7 +35,7 @@ metrics:
       aggregation_temporality: cumulative
       monotonic: false
 
-  group.process.cpu.percent:
+  process.cpu.percent:
     enabled: true
     description: "Total CPU percent used by the process"
     unit: "%"
@@ -43,14 +43,14 @@ metrics:
       value_type: double
     attributes: [state]
 
-  group.process.memory.percent:
+  process.memory.percent:
     enabled: true
     description: "Total memory percent used by the process"
     unit: "%"
     gauge:
       value_type: double
 
-  group.process.open_file_descriptors:
+  process.open_file_descriptors:
     enabled: true
     description: "Total number of open file descriptors"
     unit: "count"

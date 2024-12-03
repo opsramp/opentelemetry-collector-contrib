@@ -28,28 +28,28 @@ func (ms *MetricConfig) Unmarshal(parser *confmap.Conf) error {
 
 // MetricsConfig provides config for hostmetricsreceiver/groupprocess metrics.
 type MetricsConfig struct {
-	GroupProcessCount               MetricConfig `mapstructure:"group.process.count"`
-	GroupProcessCPUPercent          MetricConfig `mapstructure:"group.process.cpu.percent"`
-	GroupProcessMemoryPercent       MetricConfig `mapstructure:"group.process.memory.percent"`
-	GroupProcessOpenFileDescriptors MetricConfig `mapstructure:"group.process.open_file_descriptors"`
-	GroupProcessThreads             MetricConfig `mapstructure:"group.process.threads"`
+	ProcessCount               MetricConfig `mapstructure:"process.count"`
+	ProcessCPUPercent          MetricConfig `mapstructure:"process.cpu.percent"`
+	ProcessMemoryPercent       MetricConfig `mapstructure:"process.memory.percent"`
+	ProcessOpenFileDescriptors MetricConfig `mapstructure:"process.open_file_descriptors"`
+	ProcessThreads             MetricConfig `mapstructure:"process.threads"`
 }
 
 func DefaultMetricsConfig() MetricsConfig {
 	return MetricsConfig{
-		GroupProcessCount: MetricConfig{
+		ProcessCount: MetricConfig{
 			Enabled: true,
 		},
-		GroupProcessCPUPercent: MetricConfig{
+		ProcessCPUPercent: MetricConfig{
 			Enabled: true,
 		},
-		GroupProcessMemoryPercent: MetricConfig{
+		ProcessMemoryPercent: MetricConfig{
 			Enabled: true,
 		},
-		GroupProcessOpenFileDescriptors: MetricConfig{
+		ProcessOpenFileDescriptors: MetricConfig{
 			Enabled: true,
 		},
-		GroupProcessThreads: MetricConfig{
+		ProcessThreads: MetricConfig{
 			Enabled: true,
 		},
 	}
@@ -83,12 +83,12 @@ func (rac *ResourceAttributeConfig) Unmarshal(parser *confmap.Conf) error {
 
 // ResourceAttributesConfig provides config for hostmetricsreceiver/groupprocess resource attributes.
 type ResourceAttributesConfig struct {
-	GroupName ResourceAttributeConfig `mapstructure:"group.name"`
+	ProcessName ResourceAttributeConfig `mapstructure:"process.name"`
 }
 
 func DefaultResourceAttributesConfig() ResourceAttributesConfig {
 	return ResourceAttributesConfig{
-		GroupName: ResourceAttributeConfig{
+		ProcessName: ResourceAttributeConfig{
 			Enabled: true,
 		},
 	}

@@ -13,7 +13,7 @@ func TestResourceBuilder(t *testing.T) {
 		t.Run(tt, func(t *testing.T) {
 			cfg := loadResourceAttributesConfig(t, tt)
 			rb := NewResourceBuilder(cfg)
-			rb.SetGroupName("group.name-val")
+			rb.SetProcessName("process.name-val")
 
 			res := rb.Emit()
 			assert.Equal(t, 0, rb.Emit().Attributes().Len()) // Second call should return empty Resource
@@ -30,10 +30,10 @@ func TestResourceBuilder(t *testing.T) {
 				assert.Failf(t, "unexpected test case: %s", tt)
 			}
 
-			val, ok := res.Attributes().Get("group.name")
+			val, ok := res.Attributes().Get("process.name")
 			assert.True(t, ok)
 			if ok {
-				assert.EqualValues(t, "group.name-val", val.Str())
+				assert.EqualValues(t, "process.name-val", val.Str())
 			}
 		})
 	}

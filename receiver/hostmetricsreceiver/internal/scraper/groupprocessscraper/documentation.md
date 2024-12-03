@@ -14,7 +14,7 @@ metrics:
     enabled: false
 ```
 
-### group.process.count
+### process.count
 
 Total number of processes
 
@@ -22,7 +22,7 @@ Total number of processes
 | ---- | ----------- | ---------- | ----------------------- | --------- |
 | count | Sum | Int | Cumulative | false |
 
-### group.process.cpu.percent
+### process.cpu.percent
 
 Total CPU percent used by the process
 
@@ -36,7 +36,7 @@ Total CPU percent used by the process
 | ---- | ----------- | ------ |
 | state | Breakdown of CPU usage by type. | Str: ``system``, ``user``, ``wait``, ``total`` |
 
-### group.process.memory.percent
+### process.memory.percent
 
 Total memory percent used by the process
 
@@ -44,7 +44,7 @@ Total memory percent used by the process
 | ---- | ----------- | ---------- |
 | % | Gauge | Double |
 
-### group.process.open_file_descriptors
+### process.open_file_descriptors
 
 Total number of open file descriptors
 
@@ -52,7 +52,7 @@ Total number of open file descriptors
 | ---- | ----------- | ---------- | ----------------------- | --------- |
 | count | Sum | Int | Cumulative | false |
 
-### group.process.threads
+### process.threads
 
 Total number of threads
 
@@ -64,4 +64,4 @@ Total number of threads
 
 | Name | Description | Values | Enabled |
 | ---- | ----------- | ------ | ------- |
-| group.name | Name of the process group | Any Str | true |
+| process.name | Name of the process | Any Str | true |

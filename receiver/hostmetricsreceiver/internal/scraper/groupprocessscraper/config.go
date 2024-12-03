@@ -17,7 +17,7 @@ type Config struct {
 	metadata.MetricsBuilderConfig `mapstructure:",squash"`
 	internal.ScraperConfig
 
-	GroupConfig []GroupMatchConfig `mapstructure:"group_configs"`
+	GroupConfig []GroupMatchConfig `mapstructure:"process_configs"`
 
 	// MuteProcessAllErrors is a flag that will mute all the errors encountered when trying to read metrics of a process.
 	// When this flag is enabled, there is no need to activate any other error suppression flags.
@@ -65,5 +65,5 @@ type GroupMatchConfig struct {
 
 	Names []string `mapstructure:"names"`
 
-	GroupName string `mapstructure:"groupname"`
-} 
+	ProcessName string `mapstructure:"processname"`
+}

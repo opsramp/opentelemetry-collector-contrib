@@ -70,26 +70,26 @@ func TestMetricsBuilder(t *testing.T) {
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordGroupProcessCountDataPoint(ts, 1)
+			mb.RecordProcessCountDataPoint(ts, 1)
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordGroupProcessCPUPercentDataPoint(ts, 1, AttributeStateSystem)
+			mb.RecordProcessCPUPercentDataPoint(ts, 1, AttributeStateSystem)
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordGroupProcessMemoryPercentDataPoint(ts, 1)
+			mb.RecordProcessMemoryPercentDataPoint(ts, 1)
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordGroupProcessOpenFileDescriptorsDataPoint(ts, 1)
+			mb.RecordProcessOpenFileDescriptorsDataPoint(ts, 1)
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordGroupProcessThreadsDataPoint(ts, 1)
+			mb.RecordProcessThreadsDataPoint(ts, 1)
 
 			rb := mb.NewResourceBuilder()
-			rb.SetGroupName("group.name-val")
+			rb.SetProcessName("process.name-val")
 			res := rb.Emit()
 			metrics := mb.Emit(WithResource(res))
 
@@ -112,9 +112,9 @@ func TestMetricsBuilder(t *testing.T) {
 			validatedMetrics := make(map[string]bool)
 			for i := 0; i < ms.Len(); i++ {
 				switch ms.At(i).Name() {
-				case "group.process.count":
-					assert.False(t, validatedMetrics["group.process.count"], "Found a duplicate in the metrics slice: group.process.count")
-					validatedMetrics["group.process.count"] = true
+				case "process.count":
+					assert.False(t, validatedMetrics["process.count"], "Found a duplicate in the metrics slice: process.count")
+					validatedMetrics["process.count"] = true
 					assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
 					assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
 					assert.Equal(t, "Total number of processes", ms.At(i).Description())
@@ -126,9 +126,9 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
 					assert.Equal(t, int64(1), dp.IntValue())
-				case "group.process.cpu.percent":
-					assert.False(t, validatedMetrics["group.process.cpu.percent"], "Found a duplicate in the metrics slice: group.process.cpu.percent")
-					validatedMetrics["group.process.cpu.percent"] = true
+				case "process.cpu.percent":
+					assert.False(t, validatedMetrics["process.cpu.percent"], "Found a duplicate in the metrics slice: process.cpu.percent")
+					validatedMetrics["process.cpu.percent"] = true
 					assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
 					assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
 					assert.Equal(t, "Total CPU percent used by the process", ms.At(i).Description())
@@ -141,9 +141,9 @@ func TestMetricsBuilder(t *testing.T) {
 					attrVal, ok := dp.Attributes().Get("state")
 					assert.True(t, ok)
 					assert.EqualValues(t, "system", attrVal.Str())
-				case "group.process.memory.percent":
-					assert.False(t, validatedMetrics["group.process.memory.percent"], "Found a duplicate in the metrics slice: group.process.memory.percent")
-					validatedMetrics["group.process.memory.percent"] = true
+				case "process.memory.percent":
+					assert.False(t, validatedMetrics["process.memory.percent"], "Found a duplicate in the metrics slice: process.memory.percent")
+					validatedMetrics["process.memory.percent"] = true
 					assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
 					assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
 					assert.Equal(t, "Total memory percent used by the process", ms.At(i).Description())
@@ -153,9 +153,9 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
 					assert.InDelta(t, float64(1), dp.DoubleValue(), 0.01)
-				case "group.process.open_file_descriptors":
-					assert.False(t, validatedMetrics["group.process.open_file_descriptors"], "Found a duplicate in the metrics slice: group.process.open_file_descriptors")
-					validatedMetrics["group.process.open_file_descriptors"] = true
+				case "process.open_file_descriptors":
+					assert.False(t, validatedMetrics["process.open_file_descriptors"], "Found a duplicate in the metrics slice: process.open_file_descriptors")
+					validatedMetrics["process.open_file_descriptors"] = true
 					assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
 					assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
 					assert.Equal(t, "Total number of open file descriptors", ms.At(i).Description())
@@ -167,9 +167,9 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
 					assert.Equal(t, int64(1), dp.IntValue())
-				case "group.process.threads":
-					assert.False(t, validatedMetrics["group.process.threads"], "Found a duplicate in the metrics slice: group.process.threads")
-					validatedMetrics["group.process.threads"] = true
+				case "process.threads":
+					assert.False(t, validatedMetrics["process.threads"], "Found a duplicate in the metrics slice: process.threads")
+					validatedMetrics["process.threads"] = true
 					assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
 					assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
 					assert.Equal(t, "Total number of threads", ms.At(i).Description())

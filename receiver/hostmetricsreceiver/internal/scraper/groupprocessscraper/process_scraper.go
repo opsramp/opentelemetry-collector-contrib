@@ -77,7 +77,7 @@ func newGroupProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, 
 		if err != nil {
 			return nil, fmt.Errorf("error creating process exclude filters: %w", err)
 		}
-		scraper.matchGroupFS[gc.GroupName] = fs
+		scraper.matchGroupFS[gc.ProcessName] = fs
 	}
 
 	logicalCores, err := cpu.Counts(true)
@@ -133,7 +133,7 @@ func (s *scraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 
 		for _, md := range processMetadataList {
 			presentPIDs[md.pid] = struct{}{}
-			cpuPercent, err := md.handle.PercentWithContext(ctx, 0)
+			cpuPercent, err := md.handle.PercentWithContext(ctx, time.Second)
 			if err != nil {
 				errs.AddPartial(cpuMetricsLen, fmt.Errorf("error reading cpu percent for process %q (pid %v): %w", md.executable.name, md.pid, err))
 				continue
@@ -164,12 +164,15 @@ func (s *scraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 			totalProcessCount++
 		}
 
+		// Normalize the total CPU percentage by dividing by the number of logical cores
+		totalCPUPercent /= float64(s.logicalCores)
+
 		now := pcommon.NewTimestampFromTime(time.Now())
-		s.mb.RecordGroupProcessCPUPercentDataPoint(now, totalCPUPercent, metadata.AttributeStateTotal)
-		s.mb.RecordGroupProcessMemoryPercentDataPoint(now, float64(totalMemoryPercent))
-		s.mb.RecordGroupProcessCountDataPoint(now, totalProcessCount)
-		s.mb.RecordGroupProcessThreadsDataPoint(now, totalThreadCount)
-		s.mb.RecordGroupProcessOpenFileDescriptorsDataPoint(now, totalOpenFDCount)
+		s.mb.RecordProcessCPUPercentDataPoint(now, totalCPUPercent, metadata.AttributeStateTotal)
+		s.mb.RecordProcessMemoryPercentDataPoint(now, float64(totalMemoryPercent))
+		s.mb.RecordProcessCountDataPoint(now, totalProcessCount)
+		s.mb.RecordProcessThreadsDataPoint(now, totalThreadCount)
+		s.mb.RecordProcessOpenFileDescriptorsDataPoint(now, totalOpenFDCount)
 
 		s.mb.EmitForResource(metadata.WithResource(s.buildGroupResource(s.mb.NewResourceBuilder(), groupName)))
 	}

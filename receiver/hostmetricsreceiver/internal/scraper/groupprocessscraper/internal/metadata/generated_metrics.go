@@ -47,15 +47,15 @@ var MapAttributeState = map[string]AttributeState{
 	"total":  AttributeStateTotal,
 }
 
-type metricGroupProcessCount struct {
+type metricProcessCount struct {
 	data     pmetric.Metric // data buffer for generated metric.
 	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
-// init fills group.process.count metric with initial data.
-func (m *metricGroupProcessCount) init() {
-	m.data.SetName("group.process.count")
+// init fills process.count metric with initial data.
+func (m *metricProcessCount) init() {
+	m.data.SetName("process.count")
 	m.data.SetDescription("Total number of processes")
 	m.data.SetUnit("count")
 	m.data.SetEmptySum()
@@ -63,7 +63,7 @@ func (m *metricGroupProcessCount) init() {
 	m.data.Sum().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
 }
 
-func (m *metricGroupProcessCount) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64) {
+func (m *metricProcessCount) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64) {
 	if !m.config.Enabled {
 		return
 	}
@@ -74,14 +74,14 @@ func (m *metricGroupProcessCount) recordDataPoint(start pcommon.Timestamp, ts pc
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
-func (m *metricGroupProcessCount) updateCapacity() {
+func (m *metricProcessCount) updateCapacity() {
 	if m.data.Sum().DataPoints().Len() > m.capacity {
 		m.capacity = m.data.Sum().DataPoints().Len()
 	}
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricGroupProcessCount) emit(metrics pmetric.MetricSlice) {
+func (m *metricProcessCount) emit(metrics pmetric.MetricSlice) {
 	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -89,8 +89,8 @@ func (m *metricGroupProcessCount) emit(metrics pmetric.MetricSlice) {
 	}
 }
 
-func newMetricGroupProcessCount(cfg MetricConfig) metricGroupProcessCount {
-	m := metricGroupProcessCount{config: cfg}
+func newMetricProcessCount(cfg MetricConfig) metricProcessCount {
+	m := metricProcessCount{config: cfg}
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -98,22 +98,22 @@ func newMetricGroupProcessCount(cfg MetricConfig) metricGroupProcessCount {
 	return m
 }
 
-type metricGroupProcessCPUPercent struct {
+type metricProcessCPUPercent struct {
 	data     pmetric.Metric // data buffer for generated metric.
 	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
-// init fills group.process.cpu.percent metric with initial data.
-func (m *metricGroupProcessCPUPercent) init() {
-	m.data.SetName("group.process.cpu.percent")
+// init fills process.cpu.percent metric with initial data.
+func (m *metricProcessCPUPercent) init() {
+	m.data.SetName("process.cpu.percent")
 	m.data.SetDescription("Total CPU percent used by the process")
 	m.data.SetUnit("%")
 	m.data.SetEmptyGauge()
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricGroupProcessCPUPercent) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, stateAttributeValue string) {
+func (m *metricProcessCPUPercent) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, stateAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
@@ -125,14 +125,14 @@ func (m *metricGroupProcessCPUPercent) recordDataPoint(start pcommon.Timestamp, 
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
-func (m *metricGroupProcessCPUPercent) updateCapacity() {
+func (m *metricProcessCPUPercent) updateCapacity() {
 	if m.data.Gauge().DataPoints().Len() > m.capacity {
 		m.capacity = m.data.Gauge().DataPoints().Len()
 	}
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricGroupProcessCPUPercent) emit(metrics pmetric.MetricSlice) {
+func (m *metricProcessCPUPercent) emit(metrics pmetric.MetricSlice) {
 	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -140,8 +140,8 @@ func (m *metricGroupProcessCPUPercent) emit(metrics pmetric.MetricSlice) {
 	}
 }
 
-func newMetricGroupProcessCPUPercent(cfg MetricConfig) metricGroupProcessCPUPercent {
-	m := metricGroupProcessCPUPercent{config: cfg}
+func newMetricProcessCPUPercent(cfg MetricConfig) metricProcessCPUPercent {
+	m := metricProcessCPUPercent{config: cfg}
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -149,21 +149,21 @@ func newMetricGroupProcessCPUPercent(cfg MetricConfig) metricGroupProcessCPUPerc
 	return m
 }
 
-type metricGroupProcessMemoryPercent struct {
+type metricProcessMemoryPercent struct {
 	data     pmetric.Metric // data buffer for generated metric.
 	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
-// init fills group.process.memory.percent metric with initial data.
-func (m *metricGroupProcessMemoryPercent) init() {
-	m.data.SetName("group.process.memory.percent")
+// init fills process.memory.percent metric with initial data.
+func (m *metricProcessMemoryPercent) init() {
+	m.data.SetName("process.memory.percent")
 	m.data.SetDescription("Total memory percent used by the process")
 	m.data.SetUnit("%")
 	m.data.SetEmptyGauge()
 }
 
-func (m *metricGroupProcessMemoryPercent) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64) {
+func (m *metricProcessMemoryPercent) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64) {
 	if !m.config.Enabled {
 		return
 	}
@@ -174,14 +174,14 @@ func (m *metricGroupProcessMemoryPercent) recordDataPoint(start pcommon.Timestam
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
-func (m *metricGroupProcessMemoryPercent) updateCapacity() {
+func (m *metricProcessMemoryPercent) updateCapacity() {
 	if m.data.Gauge().DataPoints().Len() > m.capacity {
 		m.capacity = m.data.Gauge().DataPoints().Len()
 	}
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricGroupProcessMemoryPercent) emit(metrics pmetric.MetricSlice) {
+func (m *metricProcessMemoryPercent) emit(metrics pmetric.MetricSlice) {
 	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -189,8 +189,8 @@ func (m *metricGroupProcessMemoryPercent) emit(metrics pmetric.MetricSlice) {
 	}
 }
 
-func newMetricGroupProcessMemoryPercent(cfg MetricConfig) metricGroupProcessMemoryPercent {
-	m := metricGroupProcessMemoryPercent{config: cfg}
+func newMetricProcessMemoryPercent(cfg MetricConfig) metricProcessMemoryPercent {
+	m := metricProcessMemoryPercent{config: cfg}
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -198,15 +198,15 @@ func newMetricGroupProcessMemoryPercent(cfg MetricConfig) metricGroupProcessMemo
 	return m
 }
 
-type metricGroupProcessOpenFileDescriptors struct {
+type metricProcessOpenFileDescriptors struct {
 	data     pmetric.Metric // data buffer for generated metric.
 	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
-// init fills group.process.open_file_descriptors metric with initial data.
-func (m *metricGroupProcessOpenFileDescriptors) init() {
-	m.data.SetName("group.process.open_file_descriptors")
+// init fills process.open_file_descriptors metric with initial data.
+func (m *metricProcessOpenFileDescriptors) init() {
+	m.data.SetName("process.open_file_descriptors")
 	m.data.SetDescription("Total number of open file descriptors")
 	m.data.SetUnit("count")
 	m.data.SetEmptySum()
@@ -214,7 +214,7 @@ func (m *metricGroupProcessOpenFileDescriptors) init() {
 	m.data.Sum().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
 }
 
-func (m *metricGroupProcessOpenFileDescriptors) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64) {
+func (m *metricProcessOpenFileDescriptors) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64) {
 	if !m.config.Enabled {
 		return
 	}
@@ -225,14 +225,14 @@ func (m *metricGroupProcessOpenFileDescriptors) recordDataPoint(start pcommon.Ti
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
-func (m *metricGroupProcessOpenFileDescriptors) updateCapacity() {
+func (m *metricProcessOpenFileDescriptors) updateCapacity() {
 	if m.data.Sum().DataPoints().Len() > m.capacity {
 		m.capacity = m.data.Sum().DataPoints().Len()
 	}
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricGroupProcessOpenFileDescriptors) emit(metrics pmetric.MetricSlice) {
+func (m *metricProcessOpenFileDescriptors) emit(metrics pmetric.MetricSlice) {
 	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -240,8 +240,8 @@ func (m *metricGroupProcessOpenFileDescriptors) emit(metrics pmetric.MetricSlice
 	}
 }
 
-func newMetricGroupProcessOpenFileDescriptors(cfg MetricConfig) metricGroupProcessOpenFileDescriptors {
-	m := metricGroupProcessOpenFileDescriptors{config: cfg}
+func newMetricProcessOpenFileDescriptors(cfg MetricConfig) metricProcessOpenFileDescriptors {
+	m := metricProcessOpenFileDescriptors{config: cfg}
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -249,15 +249,15 @@ func newMetricGroupProcessOpenFileDescriptors(cfg MetricConfig) metricGroupProce
 	return m
 }
 
-type metricGroupProcessThreads struct {
+type metricProcessThreads struct {
 	data     pmetric.Metric // data buffer for generated metric.
 	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
-// init fills group.process.threads metric with initial data.
-func (m *metricGroupProcessThreads) init() {
-	m.data.SetName("group.process.threads")
+// init fills process.threads metric with initial data.
+func (m *metricProcessThreads) init() {
+	m.data.SetName("process.threads")
 	m.data.SetDescription("Total number of threads")
 	m.data.SetUnit("count")
 	m.data.SetEmptySum()
@@ -265,7 +265,7 @@ func (m *metricGroupProcessThreads) init() {
 	m.data.Sum().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
 }
 
-func (m *metricGroupProcessThreads) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64) {
+func (m *metricProcessThreads) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64) {
 	if !m.config.Enabled {
 		return
 	}
@@ -276,14 +276,14 @@ func (m *metricGroupProcessThreads) recordDataPoint(start pcommon.Timestamp, ts 
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
-func (m *metricGroupProcessThreads) updateCapacity() {
+func (m *metricProcessThreads) updateCapacity() {
 	if m.data.Sum().DataPoints().Len() > m.capacity {
 		m.capacity = m.data.Sum().DataPoints().Len()
 	}
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricGroupProcessThreads) emit(metrics pmetric.MetricSlice) {
+func (m *metricProcessThreads) emit(metrics pmetric.MetricSlice) {
 	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -291,8 +291,8 @@ func (m *metricGroupProcessThreads) emit(metrics pmetric.MetricSlice) {
 	}
 }
 
-func newMetricGroupProcessThreads(cfg MetricConfig) metricGroupProcessThreads {
-	m := metricGroupProcessThreads{config: cfg}
+func newMetricProcessThreads(cfg MetricConfig) metricProcessThreads {
+	m := metricProcessThreads{config: cfg}
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -303,18 +303,18 @@ func newMetricGroupProcessThreads(cfg MetricConfig) metricGroupProcessThreads {
 // MetricsBuilder provides an interface for scrapers to report metrics while taking care of all the transformations
 // required to produce metric representation defined in metadata and user config.
 type MetricsBuilder struct {
-	config                                MetricsBuilderConfig // config of the metrics builder.
-	startTime                             pcommon.Timestamp    // start time that will be applied to all recorded data points.
-	metricsCapacity                       int                  // maximum observed number of metrics per resource.
-	metricsBuffer                         pmetric.Metrics      // accumulates metrics data before emitting.
-	buildInfo                             component.BuildInfo  // contains version information.
-	resourceAttributeIncludeFilter        map[string]filter.Filter
-	resourceAttributeExcludeFilter        map[string]filter.Filter
-	metricGroupProcessCount               metricGroupProcessCount
-	metricGroupProcessCPUPercent          metricGroupProcessCPUPercent
-	metricGroupProcessMemoryPercent       metricGroupProcessMemoryPercent
-	metricGroupProcessOpenFileDescriptors metricGroupProcessOpenFileDescriptors
-	metricGroupProcessThreads             metricGroupProcessThreads
+	config                           MetricsBuilderConfig // config of the metrics builder.
+	startTime                        pcommon.Timestamp    // start time that will be applied to all recorded data points.
+	metricsCapacity                  int                  // maximum observed number of metrics per resource.
+	metricsBuffer                    pmetric.Metrics      // accumulates metrics data before emitting.
+	buildInfo                        component.BuildInfo  // contains version information.
+	resourceAttributeIncludeFilter   map[string]filter.Filter
+	resourceAttributeExcludeFilter   map[string]filter.Filter
+	metricProcessCount               metricProcessCount
+	metricProcessCPUPercent          metricProcessCPUPercent
+	metricProcessMemoryPercent       metricProcessMemoryPercent
+	metricProcessOpenFileDescriptors metricProcessOpenFileDescriptors
+	metricProcessThreads             metricProcessThreads
 }
 
 // MetricBuilderOption applies changes to default metrics builder.
@@ -337,23 +337,23 @@ func WithStartTime(startTime pcommon.Timestamp) MetricBuilderOption {
 
 func NewMetricsBuilder(mbc MetricsBuilderConfig, settings receiver.Settings, options ...MetricBuilderOption) *MetricsBuilder {
 	mb := &MetricsBuilder{
-		config:                                mbc,
-		startTime:                             pcommon.NewTimestampFromTime(time.Now()),
-		metricsBuffer:                         pmetric.NewMetrics(),
-		buildInfo:                             settings.BuildInfo,
-		metricGroupProcessCount:               newMetricGroupProcessCount(mbc.Metrics.GroupProcessCount),
-		metricGroupProcessCPUPercent:          newMetricGroupProcessCPUPercent(mbc.Metrics.GroupProcessCPUPercent),
-		metricGroupProcessMemoryPercent:       newMetricGroupProcessMemoryPercent(mbc.Metrics.GroupProcessMemoryPercent),
-		metricGroupProcessOpenFileDescriptors: newMetricGroupProcessOpenFileDescriptors(mbc.Metrics.GroupProcessOpenFileDescriptors),
-		metricGroupProcessThreads:             newMetricGroupProcessThreads(mbc.Metrics.GroupProcessThreads),
-		resourceAttributeIncludeFilter:        make(map[string]filter.Filter),
-		resourceAttributeExcludeFilter:        make(map[string]filter.Filter),
+		config:                           mbc,
+		startTime:                        pcommon.NewTimestampFromTime(time.Now()),
+		metricsBuffer:                    pmetric.NewMetrics(),
+		buildInfo:                        settings.BuildInfo,
+		metricProcessCount:               newMetricProcessCount(mbc.Metrics.ProcessCount),
+		metricProcessCPUPercent:          newMetricProcessCPUPercent(mbc.Metrics.ProcessCPUPercent),
+		metricProcessMemoryPercent:       newMetricProcessMemoryPercent(mbc.Metrics.ProcessMemoryPercent),
+		metricProcessOpenFileDescriptors: newMetricProcessOpenFileDescriptors(mbc.Metrics.ProcessOpenFileDescriptors),
+		metricProcessThreads:             newMetricProcessThreads(mbc.Metrics.ProcessThreads),
+		resourceAttributeIncludeFilter:   make(map[string]filter.Filter),
+		resourceAttributeExcludeFilter:   make(map[string]filter.Filter),
 	}
-	if mbc.ResourceAttributes.GroupName.MetricsInclude != nil {
-		mb.resourceAttributeIncludeFilter["group.name"] = filter.CreateFilter(mbc.ResourceAttributes.GroupName.MetricsInclude)
+	if mbc.ResourceAttributes.ProcessName.MetricsInclude != nil {
+		mb.resourceAttributeIncludeFilter["process.name"] = filter.CreateFilter(mbc.ResourceAttributes.ProcessName.MetricsInclude)
 	}
-	if mbc.ResourceAttributes.GroupName.MetricsExclude != nil {
-		mb.resourceAttributeExcludeFilter["group.name"] = filter.CreateFilter(mbc.ResourceAttributes.GroupName.MetricsExclude)
+	if mbc.ResourceAttributes.ProcessName.MetricsExclude != nil {
+		mb.resourceAttributeExcludeFilter["process.name"] = filter.CreateFilter(mbc.ResourceAttributes.ProcessName.MetricsExclude)
 	}
 
 	for _, op := range options {
@@ -425,11 +425,11 @@ func (mb *MetricsBuilder) EmitForResource(options ...ResourceMetricsOption) {
 	ils.Scope().SetName("github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper")
 	ils.Scope().SetVersion(mb.buildInfo.Version)
 	ils.Metrics().EnsureCapacity(mb.metricsCapacity)
-	mb.metricGroupProcessCount.emit(ils.Metrics())
-	mb.metricGroupProcessCPUPercent.emit(ils.Metrics())
-	mb.metricGroupProcessMemoryPercent.emit(ils.Metrics())
-	mb.metricGroupProcessOpenFileDescriptors.emit(ils.Metrics())
-	mb.metricGroupProcessThreads.emit(ils.Metrics())
+	mb.metricProcessCount.emit(ils.Metrics())
+	mb.metricProcessCPUPercent.emit(ils.Metrics())
+	mb.metricProcessMemoryPercent.emit(ils.Metrics())
+	mb.metricProcessOpenFileDescriptors.emit(ils.Metrics())
+	mb.metricProcessThreads.emit(ils.Metrics())
 
 	for _, op := range options {
 		op.apply(rm)
@@ -461,29 +461,29 @@ func (mb *MetricsBuilder) Emit(options ...ResourceMetricsOption) pmetric.Metrics
 	return metrics
 }
 
-// RecordGroupProcessCountDataPoint adds a data point to group.process.count metric.
-func (mb *MetricsBuilder) RecordGroupProcessCountDataPoint(ts pcommon.Timestamp, val int64) {
-	mb.metricGroupProcessCount.recordDataPoint(mb.startTime, ts, val)
+// RecordProcessCountDataPoint adds a data point to process.count metric.
+func (mb *MetricsBuilder) RecordProcessCountDataPoint(ts pcommon.Timestamp, val int64) {
+	mb.metricProcessCount.recordDataPoint(mb.startTime, ts, val)
 }
 
-// RecordGroupProcessCPUPercentDataPoint adds a data point to group.process.cpu.percent metric.
-func (mb *MetricsBuilder) RecordGroupProcessCPUPercentDataPoint(ts pcommon.Timestamp, val float64, stateAttributeValue AttributeState) {
-	mb.metricGroupProcessCPUPercent.recordDataPoint(mb.startTime, ts, val, stateAttributeValue.String())
+// RecordProcessCPUPercentDataPoint adds a data point to process.cpu.percent metric.
+func (mb *MetricsBuilder) RecordProcessCPUPercentDataPoint(ts pcommon.Timestamp, val float64, stateAttributeValue AttributeState) {
+	mb.metricProcessCPUPercent.recordDataPoint(mb.startTime, ts, val, stateAttributeValue.String())
 }
 
-// RecordGroupProcessMemoryPercentDataPoint adds a data point to group.process.memory.percent metric.
-func (mb *MetricsBuilder) RecordGroupProcessMemoryPercentDataPoint(ts pcommon.Timestamp, val float64) {
-	mb.metricGroupProcessMemoryPercent.recordDataPoint(mb.startTime, ts, val)
+// RecordProcessMemoryPercentDataPoint adds a data point to process.memory.percent metric.
+func (mb *MetricsBuilder) RecordProcessMemoryPercentDataPoint(ts pcommon.Timestamp, val float64) {
+	mb.metricProcessMemoryPercent.recordDataPoint(mb.startTime, ts, val)
 }
 
-// RecordGroupProcessOpenFileDescriptorsDataPoint adds a data point to group.process.open_file_descriptors metric.
-func (mb *MetricsBuilder) RecordGroupProcessOpenFileDescriptorsDataPoint(ts pcommon.Timestamp, val int64) {
-	mb.metricGroupProcessOpenFileDescriptors.recordDataPoint(mb.startTime, ts, val)
+// RecordProcessOpenFileDescriptorsDataPoint adds a data point to process.open_file_descriptors metric.
+func (mb *MetricsBuilder) RecordProcessOpenFileDescriptorsDataPoint(ts pcommon.Timestamp, val int64) {
+	mb.metricProcessOpenFileDescriptors.recordDataPoint(mb.startTime, ts, val)
 }
 
-// RecordGroupProcessThreadsDataPoint adds a data point to group.process.threads metric.
-func (mb *MetricsBuilder) RecordGroupProcessThreadsDataPoint(ts pcommon.Timestamp, val int64) {
-	mb.metricGroupProcessThreads.recordDataPoint(mb.startTime, ts, val)
+// RecordProcessThreadsDataPoint adds a data point to process.threads metric.
+func (mb *MetricsBuilder) RecordProcessThreadsDataPoint(ts pcommon.Timestamp, val int64) {
+	mb.metricProcessThreads.recordDataPoint(mb.startTime, ts, val)
 }
 
 // Reset resets metrics builder to its initial state. It should be used when external metrics source is restarted,

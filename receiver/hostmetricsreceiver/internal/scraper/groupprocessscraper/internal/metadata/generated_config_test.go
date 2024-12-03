@@ -25,14 +25,14 @@ func TestMetricsBuilderConfig(t *testing.T) {
 			name: "all_set",
 			want: MetricsBuilderConfig{
 				Metrics: MetricsConfig{
-					GroupProcessCount:               MetricConfig{Enabled: true},
-					GroupProcessCPUPercent:          MetricConfig{Enabled: true},
-					GroupProcessMemoryPercent:       MetricConfig{Enabled: true},
-					GroupProcessOpenFileDescriptors: MetricConfig{Enabled: true},
-					GroupProcessThreads:             MetricConfig{Enabled: true},
+					ProcessCount:               MetricConfig{Enabled: true},
+					ProcessCPUPercent:          MetricConfig{Enabled: true},
+					ProcessMemoryPercent:       MetricConfig{Enabled: true},
+					ProcessOpenFileDescriptors: MetricConfig{Enabled: true},
+					ProcessThreads:             MetricConfig{Enabled: true},
 				},
 				ResourceAttributes: ResourceAttributesConfig{
-					GroupName: ResourceAttributeConfig{Enabled: true},
+					ProcessName: ResourceAttributeConfig{Enabled: true},
 				},
 			},
 		},
@@ -40,14 +40,14 @@ func TestMetricsBuilderConfig(t *testing.T) {
 			name: "none_set",
 			want: MetricsBuilderConfig{
 				Metrics: MetricsConfig{
-					GroupProcessCount:               MetricConfig{Enabled: false},
-					GroupProcessCPUPercent:          MetricConfig{Enabled: false},
-					GroupProcessMemoryPercent:       MetricConfig{Enabled: false},
-					GroupProcessOpenFileDescriptors: MetricConfig{Enabled: false},
-					GroupProcessThreads:             MetricConfig{Enabled: false},
+					ProcessCount:               MetricConfig{Enabled: false},
+					ProcessCPUPercent:          MetricConfig{Enabled: false},
+					ProcessMemoryPercent:       MetricConfig{Enabled: false},
+					ProcessOpenFileDescriptors: MetricConfig{Enabled: false},
+					ProcessThreads:             MetricConfig{Enabled: false},
 				},
 				ResourceAttributes: ResourceAttributesConfig{
-					GroupName: ResourceAttributeConfig{Enabled: false},
+					ProcessName: ResourceAttributeConfig{Enabled: false},
 				},
 			},
 		},
@@ -83,13 +83,13 @@ func TestResourceAttributesConfig(t *testing.T) {
 		{
 			name: "all_set",
 			want: ResourceAttributesConfig{
-				GroupName: ResourceAttributeConfig{Enabled: true},
+				ProcessName: ResourceAttributeConfig{Enabled: true},
 			},
 		},
 		{
 			name: "none_set",
 			want: ResourceAttributesConfig{
-				GroupName: ResourceAttributeConfig{Enabled: false},
+				ProcessName: ResourceAttributeConfig{Enabled: false},
 			},
 		},
 	}
