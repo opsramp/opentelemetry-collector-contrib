@@ -6,7 +6,6 @@ package groupprocessscraper // import "github.com/open-telemetry/opentelemetry-c
 import (
 	"time"
 
-	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/filter/filterset"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper/internal/metadata"
 )
@@ -55,15 +54,14 @@ type Config struct {
 }
 
 type MatchConfig struct {
-	filterset.Config `mapstructure:",squash"`
-
-	Names []string `mapstructure:"names"`
+	Names     []string `mapstructure:"names"`
+	MatchType string   `mapstructure:"match_type"`
 }
 
 type GroupMatchConfig struct {
-	filterset.Config `mapstructure:",squash"`
-
-	Names []string `mapstructure:"names"`
-
-	ProcessName string `mapstructure:"processname"`
+	Names       []string    `mapstructure:"names"`
+	ProcessName string      `mapstructure:"group_name"`
+	Comm        MatchConfig `mapstructure:"comm"`
+	Exe         MatchConfig `mapstructure:"exe"`
+	Cmdline     MatchConfig `mapstructure:"cmdline"`
 }

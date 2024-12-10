@@ -33,7 +33,6 @@ const (
 	threadMetricsLen            = 1
 	contextSwitchMetricsLen     = 1
 	fileDescriptorMetricsLen    = 1
-	handleMetricsLen            = 1
 	signalMetricsLen            = 1
 
 	metricsLen = cpuMetricsLen + memoryMetricsLen + diskMetricsLen + memoryUtilizationMetricsLen + pagingMetricsLen + threadMetricsLen + contextSwitchMetricsLen + fileDescriptorMetricsLen + signalMetricsLen
@@ -48,7 +47,7 @@ type scraper struct {
 	ucals              map[int32]*ucal.CPUUtilizationCalculator
 	logicalCores       int
 
-	matchGroupFS map[string]filterset.FilterSet
+	matchGroupFS map[string]map[string]filterset.FilterSet
 
 	// for mocking
 	getProcessCreateTime func(p processHandle, ctx context.Context) (int64, error)
@@ -67,17 +66,45 @@ func newGroupProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, 
 		scrapeProcessDelay:   cfg.ScrapeProcessDelay,
 		ucals:                make(map[int32]*ucal.CPUUtilizationCalculator),
 		handleCountManager:   handlecount.NewManager(),
-		matchGroupFS:         make(map[string]filterset.FilterSet), // Initialize the map
+		matchGroupFS:         make(map[string]map[string]filterset.FilterSet), // Initialize the map
 	}
 
 	var err error
 
+	//for _, gc := range cfg.GroupConfig {
+	//	fs, err := filterset.CreateFilterSet(gc.Names, &gc.Config)
+	//	if err != nil {
+	//		return nil, fmt.Errorf("error creating process exclude filters: %w", err)
+	//	}
+	//	scraper.matchGroupFS[gc.ProcessName] = fs
+	//}
+
 	for _, gc := range cfg.GroupConfig {
-		fs, err := filterset.CreateFilterSet(gc.Names, &gc.Config)
-		if err != nil {
-			return nil, fmt.Errorf("error creating process exclude filters: %w", err)
+		scraper.matchGroupFS[gc.ProcessName] = make(map[string]filterset.FilterSet)
+
+		if len(gc.Comm.Names) > 0 {
+			commFS, err := filterset.CreateFilterSet(gc.Comm.Names, &filterset.Config{MatchType: filterset.MatchType(gc.Comm.MatchType)})
+			if err != nil {
+				return nil, fmt.Errorf("error creating comm filter set: %w", err)
+			}
+			scraper.matchGroupFS[gc.ProcessName]["comm"] = commFS
 		}
-		scraper.matchGroupFS[gc.ProcessName] = fs
+
+		if len(gc.Exe.Names) > 0 {
+			exeFS, err := filterset.CreateFilterSet(gc.Exe.Names, &filterset.Config{MatchType: filterset.MatchType(gc.Exe.MatchType)})
+			if err != nil {
+				return nil, fmt.Errorf("error creating exe filter set: %w", err)
+			}
+			scraper.matchGroupFS[gc.ProcessName]["exe"] = exeFS
+		}
+
+		if len(gc.Cmdline.Names) > 0 {
+			cmdlineFS, err := filterset.CreateFilterSet(gc.Cmdline.Names, &filterset.Config{MatchType: filterset.MatchType(gc.Cmdline.MatchType)})
+			if err != nil {
+				return nil, fmt.Errorf("error creating cmdline filter set: %w", err)
+			}
+			scraper.matchGroupFS[gc.ProcessName]["cmdline"] = cmdlineFS
+		}
 	}
 
 	logicalCores, err := cpu.Counts(true)
@@ -227,10 +254,21 @@ func (s *scraper) getProcessMetadata() (map[string][]*processMetadata, error) {
 
 		executable := &executableMetadata{name: name, path: exe, cgroup: cgroup}
 
+		command, err := getProcessCommand(ctx, handle)
+		if err != nil {
+			errs.AddPartial(0, fmt.Errorf("error reading command for process %q (pid %v): %w", executable.name, pid, err))
+		}
+
 		groupConfigName := ""
-		for groupName, fs := range s.matchGroupFS {
-			if fs.Matches(executable.name) {
-				groupConfigName = groupName
+		for _, gc := range s.config.GroupConfig {
+			if matchesFilterSetString(s.matchGroupFS[gc.ProcessName]["comm"], name) {
+				groupConfigName = gc.ProcessName
+				break
+			} else if matchesFilterSetString(s.matchGroupFS[gc.ProcessName]["exe"], exe) {
+				groupConfigName = gc.ProcessName
+				break
+			} else if matchesFilterSetSlice(s.matchGroupFS[gc.ProcessName]["cmdline"], command.commandLineSlice) {
+				groupConfigName = gc.ProcessName
 				break
 			}
 		}
@@ -239,10 +277,8 @@ func (s *scraper) getProcessMetadata() (map[string][]*processMetadata, error) {
 			continue
 		}
 
-		command, err := getProcessCommand(ctx, handle)
-		if err != nil {
-			errs.AddPartial(0, fmt.Errorf("error reading command for process %q (pid %v): %w", executable.name, pid, err))
-		}
+		// Debug log
+		fmt.Printf("PID: %d, ExecutableName: %s, ExecutablePath %s, Command: %s, CommandLine: %s, CommandLineSlice: %v\n", pid, executable.name, executable.path, command.command, command.commandLine, command.commandLineSlice)
 
 		username, err := handle.UsernameWithContext(ctx)
 		if err != nil {
@@ -281,4 +317,23 @@ func (s *scraper) getProcessMetadata() (map[string][]*processMetadata, error) {
 	}
 
 	return data, errs.Combine()
+}
+
+func matchesFilterSetString(fs filterset.FilterSet, value string) bool {
+	if fs == nil {
+		return false
+	}
+	return fs.Matches(value)
+}
+
+func matchesFilterSetSlice(fs filterset.FilterSet, values []string) bool {
+	if fs == nil {
+		return false
+	}
+	for _, value := range values {
+		if fs.Matches(value) {
+			return true
+		}
+	}
+	return false
 }
