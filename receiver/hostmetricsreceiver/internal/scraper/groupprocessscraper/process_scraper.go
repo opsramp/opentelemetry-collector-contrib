@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/shirou/gopsutil/v4/common"
@@ -47,7 +48,8 @@ type scraper struct {
 	ucals              map[int32]*ucal.CPUUtilizationCalculator
 	logicalCores       int
 
-	matchGroupFS map[string]map[string]filterset.FilterSet
+	matchGroupFS    map[string]map[string]filterset.FilterSet
+	matchGroupNames map[string][]string
 
 	// for mocking
 	getProcessCreateTime func(p processHandle, ctx context.Context) (int64, error)
@@ -67,6 +69,7 @@ func newGroupProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, 
 		ucals:                make(map[int32]*ucal.CPUUtilizationCalculator),
 		handleCountManager:   handlecount.NewManager(),
 		matchGroupFS:         make(map[string]map[string]filterset.FilterSet), // Initialize the map
+		matchGroupNames:      make(map[string][]string),                       // Initialize the map for cmdline names
 	}
 
 	var err error
@@ -99,11 +102,7 @@ func newGroupProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, 
 		}
 
 		if len(gc.Cmdline.Names) > 0 {
-			cmdlineFS, err := filterset.CreateFilterSet(gc.Cmdline.Names, &filterset.Config{MatchType: filterset.MatchType(gc.Cmdline.MatchType)})
-			if err != nil {
-				return nil, fmt.Errorf("error creating cmdline filter set: %w", err)
-			}
-			scraper.matchGroupFS[gc.ProcessName]["cmdline"] = cmdlineFS
+			scraper.matchGroupNames[gc.ProcessName] = gc.Cmdline.Names
 		}
 	}
 
@@ -259,15 +258,33 @@ func (s *scraper) getProcessMetadata() (map[string][]*processMetadata, error) {
 			errs.AddPartial(0, fmt.Errorf("error reading command for process %q (pid %v): %w", executable.name, pid, err))
 		}
 
+		// Debug log
+		fmt.Printf("PID: %d, ExecutableName: %s, ExecutablePath %s, Command: %s, CommandLine: %s, CommandLineSlice: %v\n", pid, executable.name, executable.path, command.command, command.commandLine, command.commandLineSlice)
+
 		groupConfigName := ""
 		for _, gc := range s.config.GroupConfig {
-			if matchesFilterSetString(s.matchGroupFS[gc.ProcessName]["comm"], name) {
-				groupConfigName = gc.ProcessName
-				break
-			} else if matchesFilterSetString(s.matchGroupFS[gc.ProcessName]["exe"], exe) {
-				groupConfigName = gc.ProcessName
-				break
-			} else if matchesFilterSetSlice(s.matchGroupFS[gc.ProcessName]["cmdline"], command.commandLineSlice) {
+			commMatched := true
+			exeMatched := true
+			cmdlineMatched := true
+
+			if s.matchGroupFS[gc.ProcessName]["comm"] == nil && s.matchGroupFS[gc.ProcessName]["exe"] == nil && s.matchGroupFS[gc.ProcessName]["cmdline"] == nil {
+				continue
+			}
+
+			if s.matchGroupFS[gc.ProcessName]["comm"] != nil {
+				commMatched = matchesFilterSetString(s.matchGroupFS[gc.ProcessName]["comm"], name)
+				fmt.Printf("commMatched: %v, name: %s\n", commMatched, name)
+			}
+			if s.matchGroupFS[gc.ProcessName]["exe"] != nil {
+				exeMatched = matchesFilterSetString(s.matchGroupFS[gc.ProcessName]["exe"], exe)
+				fmt.Printf("exeMatched: %v, exe: %s\n", exeMatched, exe)
+			}
+			if s.matchGroupFS[gc.ProcessName]["cmdline"] != nil {
+				cmdlineMatched = matchesFilterSetSlice(s.matchGroupNames[gc.ProcessName], command.commandLineSlice)
+				fmt.Printf("cmdlineMatched: %v, commandLineSlice: %v\n", cmdlineMatched, command.commandLineSlice)
+			}
+
+			if commMatched && exeMatched && cmdlineMatched {
 				groupConfigName = gc.ProcessName
 				break
 			}
@@ -276,9 +293,6 @@ func (s *scraper) getProcessMetadata() (map[string][]*processMetadata, error) {
 		if groupConfigName == "" {
 			continue
 		}
-
-		// Debug log
-		fmt.Printf("PID: %d, ExecutableName: %s, ExecutablePath %s, Command: %s, CommandLine: %s, CommandLineSlice: %v\n", pid, executable.name, executable.path, command.command, command.commandLine, command.commandLineSlice)
 
 		username, err := handle.UsernameWithContext(ctx)
 		if err != nil {
@@ -320,20 +334,25 @@ func (s *scraper) getProcessMetadata() (map[string][]*processMetadata, error) {
 }
 
 func matchesFilterSetString(fs filterset.FilterSet, value string) bool {
-	if fs == nil {
-		return false
-	}
 	return fs.Matches(value)
 }
 
-func matchesFilterSetSlice(fs filterset.FilterSet, values []string) bool {
-	if fs == nil {
-		return false
-	}
-	for _, value := range values {
-		if fs.Matches(value) {
-			return true
+func matchesFilterSetSlice(names []string, values []string) bool {
+	for _, name := range names {
+		matched := false
+		re, err := regexp.Compile(name)
+		if err != nil {
+			continue // Skip invalid regex patterns
+		}
+		for _, value := range values {
+			if re.MatchString(value) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
 		}
 	}
-	return false
+	return true
 }
