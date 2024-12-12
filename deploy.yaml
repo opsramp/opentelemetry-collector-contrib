@@ -13,62 +13,62 @@ metadata:
   labels:
     app: otelcontribcol
 rules:
-  - apiGroups:
-      - ""
-    resources:
-      - events
-      - namespaces
-      - namespaces/status
-      - nodes
-      - nodes/spec
-      - pods
-      - pods/status
-      - replicationcontrollers
-      - replicationcontrollers/status
-      - resourcequotas
-      - services
-    verbs:
-      - get
-      - list
-      - watch
-  - apiGroups:
-      - apps
-    resources:
-      - daemonsets
-      - deployments
-      - replicasets
-      - statefulsets
-    verbs:
-      - get
-      - list
-      - watch
-  - apiGroups:
-      - extensions
-    resources:
-      - daemonsets
-      - deployments
-      - replicasets
-    verbs:
-      - get
-      - list
-      - watch
-  - apiGroups:
-      - batch
-    resources:
-      - jobs
-      - cronjobs
-    verbs:
-      - get
-      - list
-      - watch
-  - apiGroups:
-      - autoscaling
-    resources:
-      - horizontalpodautoscalers
-    verbs:
-      - get
-      - list
-      - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  - namespaces
+  - namespaces/status
+  - nodes
+  - nodes/spec
+  - pods
+  - pods/status
+  - replicationcontrollers
+  - replicationcontrollers/status
+  - resourcequotas
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  - deployments
+  - replicasets
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - extensions
+  resources:
+  - daemonsets
+  - deployments
+  - replicasets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  - cronjobs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+    - autoscaling
+  resources:
+    - horizontalpodautoscalers
+  verbs:
+    - get
+    - list
+    - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -81,9 +81,9 @@ roleRef:
   kind: ClusterRole
   name: otelcontribcol
 subjects:
-  - kind: ServiceAccount
-    name: otelcontribcol
-    namespace: default
+- kind: ServiceAccount
+  name: otelcontribcol
+  namespace: default
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -103,13 +103,13 @@ spec:
     spec:
       serviceAccountName: otelcontribcol
       containers:
-        - name: otelcontribcol
-          image: docker.io/mithunbs/otelcontibcol
-          imagePullPolicy: IfNotPresent
-          ports:
-            - containerPort: 4317
-            - containerPort: 4318
-            - containerPort: 55680
-            - containerPort: 8888
-          command: ["/usr/bin/tail"]
-          args: ["-f", "/dev/null"]
+      - name: otelcontribcol
+        image: docker.io/mithunbs/otelcontibcol
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 4317
+        - containerPort: 4318
+        - containerPort: 55680
+        - containerPort: 8888
+        command: ["/usr/bin/tail"]
+        args: ["-f", "/dev/null"]
