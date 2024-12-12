@@ -38,19 +38,19 @@ hostmetrics:
 
 The available scrapers are:
 
-| Scraper        | Supported OSs                | Description                                            |
-|----------------| ---------------------------- |--------------------------------------------------------|
-| [cpu]          | All except Mac<sup>[1]</sup> | CPU utilization metrics                                |
-| [disk]         | All except Mac<sup>[1]</sup> | Disk I/O metrics                                       |
-| [load]         | All                          | CPU load metrics                                       |
-| [filesystem]   | All                          | File System utilization metrics                        |
-| [memory]       | All                          | Memory utilization metrics                             |
-| [network]      | All                          | Network interface I/O metrics & TCP connection metrics |
-| [paging]       | All                          | Paging/Swap space utilization and I/O metrics          |
-| [processes]    | Linux, Mac                   | Process count metrics                                  |
-| [process]      | Linux, Windows, Mac          | Per process CPU, Memory, and Disk I/O metrics          |
-| [system]       | Linux, Windows, Mac          | Miscellaneous system metrics                           |
-| [groupprocess] | Linux, Windows, Mac          | Per process group CPU, Memory, and Disk I/O metrics    |
+| Scraper        | Supported OSs                | Description                                                                                 |
+|----------------| ---------------------------- |---------------------------------------------------------------------------------------------|
+| [cpu]          | All except Mac<sup>[1]</sup> | CPU utilization metrics                                                                     |
+| [disk]         | All except Mac<sup>[1]</sup> | Disk I/O metrics                                                                            |
+| [load]         | All                          | CPU load metrics                                                                            |
+| [filesystem]   | All                          | File System utilization metrics                                                             |
+| [memory]       | All                          | Memory utilization metrics                                                                  |
+| [network]      | All                          | Network interface I/O metrics & TCP connection metrics                                      |
+| [paging]       | All                          | Paging/Swap space utilization and I/O metrics                                               |
+| [processes]    | Linux, Mac                   | Process count metrics                                                                       |
+| [process]      | Linux, Windows, Mac          | Per process CPU, Memory, and Disk I/O metrics                                               |
+| [system]       | Linux, Windows, Mac          | Miscellaneous system metrics                                                                |
+| [groupprocess] | Linux, Windows, Mac          | Aggregated metrics of all processes of group - CPU, Memory, Threads, Open FD, Process Count |
 
 [cpu]: ./internal/scraper/cpuscraper/documentation.md
 [disk]: ./internal/scraper/diskscraper/documentation.md
@@ -162,7 +162,9 @@ receivers:
 ```
 In this example, the groupprocessscraper is configured to scrape metrics for processes that match the specified comm, exe, and cmdline criteria. The group_name is used to identify the group of processes being monitored.
 For `comm` and `exe`, the list of strings is an `OR`, meaning any process matching any of the strings will be added to the process group.
-For `cmdline`, the list of regexes is an `AND`, meaning they all must match.
+For `cmdline`, the list of regexes is an `AND`, meaning they all must match. <br />
+
+**Note:** If more than one out of `comm`, `exe` and `cmdline` selectors are given then all of them has to match. If a process matches to one group, the same process will not be part of other groups.
 
 ## Advanced Configuration
 
