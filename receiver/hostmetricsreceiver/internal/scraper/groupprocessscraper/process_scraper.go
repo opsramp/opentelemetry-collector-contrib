@@ -102,6 +102,11 @@ func newGroupProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, 
 		}
 
 		if len(gc.Cmdline.Names) > 0 {
+			cmdlineFS, err := filterset.CreateFilterSet(gc.Cmdline.Names, &filterset.Config{MatchType: filterset.MatchType(gc.Cmdline.MatchType)})
+			if err != nil {
+				return nil, fmt.Errorf("error creating cmdline filter set: %w", err)
+			}
+			scraper.matchGroupFS[gc.ProcessName]["cmdline"] = cmdlineFS
 			scraper.matchGroupNames[gc.ProcessName] = gc.Cmdline.Names
 		}
 	}
@@ -225,8 +230,16 @@ func (s *scraper) getProcessMetadata() (map[string][]*processMetadata, error) {
 
 	//data := make([]*processMetadata, 0, handles.Len())
 	data := make(map[string][]*processMetadata)
+	assignedPIDs := make(map[int32]struct{})
+
 	for i := 0; i < handles.Len(); i++ {
 		pid := handles.Pid(i)
+
+		// Check and skip if PID is already assigned to a group
+		if _, exists := assignedPIDs[pid]; exists {
+			continue
+		}
+
 		handle := handles.At(i)
 
 		exe, err := getProcessExecutable(ctx, handle)
@@ -273,15 +286,12 @@ func (s *scraper) getProcessMetadata() (map[string][]*processMetadata, error) {
 
 			if s.matchGroupFS[gc.ProcessName]["comm"] != nil {
 				commMatched = matchesFilterSetString(s.matchGroupFS[gc.ProcessName]["comm"], name)
-				fmt.Printf("commMatched: %v, name: %s\n", commMatched, name)
 			}
 			if s.matchGroupFS[gc.ProcessName]["exe"] != nil {
 				exeMatched = matchesFilterSetString(s.matchGroupFS[gc.ProcessName]["exe"], exe)
-				fmt.Printf("exeMatched: %v, exe: %s\n", exeMatched, exe)
 			}
 			if s.matchGroupFS[gc.ProcessName]["cmdline"] != nil {
 				cmdlineMatched = matchesFilterSetSlice(s.matchGroupNames[gc.ProcessName], command.commandLineSlice)
-				fmt.Printf("cmdlineMatched: %v, commandLineSlice: %v\n", cmdlineMatched, command.commandLineSlice)
 			}
 
 			if commMatched && exeMatched && cmdlineMatched {
@@ -293,6 +303,8 @@ func (s *scraper) getProcessMetadata() (map[string][]*processMetadata, error) {
 		if groupConfigName == "" {
 			continue
 		}
+
+		assignedPIDs[pid] = struct{}{} // Mark PID as assigned
 
 		username, err := handle.UsernameWithContext(ctx)
 		if err != nil {
