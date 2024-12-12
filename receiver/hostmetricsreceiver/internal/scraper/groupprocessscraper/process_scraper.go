@@ -58,6 +58,19 @@ type scraper struct {
 	handleCountManager handlecount.Manager
 }
 
+func validateNames(names []string) bool {
+	patterns := []string{".*", ".", "[a-z]+", "[a-z]*", "*"}
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		for _, name := range names {
+			if re.MatchString(name) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // newGroupProcessScraper creates a Process Scraper
 func newGroupProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, error) {
 	scraper := &scraper{
@@ -74,15 +87,21 @@ func newGroupProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, 
 
 	var err error
 
-	//for _, gc := range cfg.GroupConfig {
-	//	fs, err := filterset.CreateFilterSet(gc.Names, &gc.Config)
-	//	if err != nil {
-	//		return nil, fmt.Errorf("error creating process exclude filters: %w", err)
-	//	}
-	//	scraper.matchGroupFS[gc.ProcessName] = fs
-	//}
-
 	for _, gc := range cfg.GroupConfig {
+
+		if !validateNames(gc.Comm.Names) {
+			fmt.Printf("Unsupported comm names in group: %s", gc.Comm.Names)
+			continue
+		}
+		if !validateNames(gc.Exe.Names) {
+			fmt.Printf("Unsupported exe names in group: %s", gc.Exe.Names)
+			continue
+		}
+		if !validateNames(gc.Cmdline.Names) {
+			fmt.Printf("Unsupported cmdline names in group: %s", gc.Cmdline.Names)
+			continue
+		}
+
 		scraper.matchGroupFS[gc.ProcessName] = make(map[string]filterset.FilterSet)
 
 		if len(gc.Comm.Names) > 0 {
