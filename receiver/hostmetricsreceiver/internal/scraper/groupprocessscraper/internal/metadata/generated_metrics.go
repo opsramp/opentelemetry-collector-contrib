@@ -349,11 +349,11 @@ func NewMetricsBuilder(mbc MetricsBuilderConfig, settings receiver.Settings, opt
 		resourceAttributeIncludeFilter:   make(map[string]filter.Filter),
 		resourceAttributeExcludeFilter:   make(map[string]filter.Filter),
 	}
-	if mbc.ResourceAttributes.ProcessName.MetricsInclude != nil {
-		mb.resourceAttributeIncludeFilter["process.name"] = filter.CreateFilter(mbc.ResourceAttributes.ProcessName.MetricsInclude)
+	if mbc.ResourceAttributes.GroupName.MetricsInclude != nil {
+		mb.resourceAttributeIncludeFilter["group.name"] = filter.CreateFilter(mbc.ResourceAttributes.GroupName.MetricsInclude)
 	}
-	if mbc.ResourceAttributes.ProcessName.MetricsExclude != nil {
-		mb.resourceAttributeExcludeFilter["process.name"] = filter.CreateFilter(mbc.ResourceAttributes.ProcessName.MetricsExclude)
+	if mbc.ResourceAttributes.GroupName.MetricsExclude != nil {
+		mb.resourceAttributeExcludeFilter["group.name"] = filter.CreateFilter(mbc.ResourceAttributes.GroupName.MetricsExclude)
 	}
 
 	for _, op := range options {

@@ -22,7 +22,6 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/filter/filterset"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper/internal/handlecount"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper/internal/metadata"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper/ucal"
 )
 
 const (
@@ -45,7 +44,6 @@ type scraper struct {
 	config             *Config
 	mb                 *metadata.MetricsBuilder
 	scrapeProcessDelay time.Duration
-	ucals              map[int32]*ucal.CPUUtilizationCalculator
 	logicalCores       int
 
 	matchGroupFS    map[string]map[string]filterset.FilterSet
@@ -58,19 +56,6 @@ type scraper struct {
 	handleCountManager handlecount.Manager
 }
 
-func validateNames(names []string) bool {
-	patterns := []string{".*", ".", "[a-z]+", "[a-z]*", "*"}
-	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
-		for _, name := range names {
-			if re.MatchString(name) {
-				return false
-			}
-		}
-	}
-	return true
-}
-
 // newGroupProcessScraper creates a Process Scraper
 func newGroupProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, error) {
 	scraper := &scraper{
@@ -79,7 +64,6 @@ func newGroupProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, 
 		getProcessCreateTime: processHandle.CreateTimeWithContext,
 		getProcessHandles:    getProcessHandlesInternal,
 		scrapeProcessDelay:   cfg.ScrapeProcessDelay,
-		ucals:                make(map[int32]*ucal.CPUUtilizationCalculator),
 		handleCountManager:   handlecount.NewManager(),
 		matchGroupFS:         make(map[string]map[string]filterset.FilterSet), // Initialize the map
 		matchGroupNames:      make(map[string][]string),                       // Initialize the map for cmdline names
@@ -89,27 +73,14 @@ func newGroupProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, 
 
 	for _, gc := range cfg.GroupConfig {
 
-		if !validateNames(gc.Comm.Names) {
-			fmt.Printf("Unsupported comm names in group: %s", gc.Comm.Names)
-			continue
-		}
-		if !validateNames(gc.Exe.Names) {
-			fmt.Printf("Unsupported exe names in group: %s", gc.Exe.Names)
-			continue
-		}
-		if !validateNames(gc.Cmdline.Names) {
-			fmt.Printf("Unsupported cmdline names in group: %s", gc.Cmdline.Names)
-			continue
-		}
-
-		scraper.matchGroupFS[gc.ProcessName] = make(map[string]filterset.FilterSet)
+		scraper.matchGroupFS[gc.GroupName] = make(map[string]filterset.FilterSet)
 
 		if len(gc.Comm.Names) > 0 {
 			commFS, err := filterset.CreateFilterSet(gc.Comm.Names, &filterset.Config{MatchType: filterset.MatchType(gc.Comm.MatchType)})
 			if err != nil {
 				return nil, fmt.Errorf("error creating comm filter set: %w", err)
 			}
-			scraper.matchGroupFS[gc.ProcessName]["comm"] = commFS
+			scraper.matchGroupFS[gc.GroupName]["comm"] = commFS
 		}
 
 		if len(gc.Exe.Names) > 0 {
@@ -117,7 +88,7 @@ func newGroupProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, 
 			if err != nil {
 				return nil, fmt.Errorf("error creating exe filter set: %w", err)
 			}
-			scraper.matchGroupFS[gc.ProcessName]["exe"] = exeFS
+			scraper.matchGroupFS[gc.GroupName]["exe"] = exeFS
 		}
 
 		if len(gc.Cmdline.Names) > 0 {
@@ -125,8 +96,8 @@ func newGroupProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, 
 			if err != nil {
 				return nil, fmt.Errorf("error creating cmdline filter set: %w", err)
 			}
-			scraper.matchGroupFS[gc.ProcessName]["cmdline"] = cmdlineFS
-			scraper.matchGroupNames[gc.ProcessName] = gc.Cmdline.Names
+			scraper.matchGroupFS[gc.GroupName]["cmdline"] = cmdlineFS
+			scraper.matchGroupNames[gc.GroupName] = gc.Cmdline.Names
 		}
 	}
 
@@ -290,31 +261,28 @@ func (s *scraper) getProcessMetadata() (map[string][]*processMetadata, error) {
 			errs.AddPartial(0, fmt.Errorf("error reading command for process %q (pid %v): %w", executable.name, pid, err))
 		}
 
-		// Debug log
-		fmt.Printf("PID: %d, ExecutableName: %s, ExecutablePath %s, Command: %s, CommandLine: %s, CommandLineSlice: %v\n", pid, executable.name, executable.path, command.command, command.commandLine, command.commandLineSlice)
-
 		groupConfigName := ""
 		for _, gc := range s.config.GroupConfig {
 			commMatched := true
 			exeMatched := true
 			cmdlineMatched := true
 
-			if s.matchGroupFS[gc.ProcessName]["comm"] == nil && s.matchGroupFS[gc.ProcessName]["exe"] == nil && s.matchGroupFS[gc.ProcessName]["cmdline"] == nil {
+			if s.matchGroupFS[gc.GroupName]["comm"] == nil && s.matchGroupFS[gc.GroupName]["exe"] == nil && s.matchGroupFS[gc.GroupName]["cmdline"] == nil {
 				continue
 			}
 
-			if s.matchGroupFS[gc.ProcessName]["comm"] != nil {
-				commMatched = matchesFilterSetString(s.matchGroupFS[gc.ProcessName]["comm"], name)
+			if s.matchGroupFS[gc.GroupName]["comm"] != nil {
+				commMatched = matchesFilterSetString(s.matchGroupFS[gc.GroupName]["comm"], name)
 			}
-			if s.matchGroupFS[gc.ProcessName]["exe"] != nil {
-				exeMatched = matchesFilterSetString(s.matchGroupFS[gc.ProcessName]["exe"], exe)
+			if s.matchGroupFS[gc.GroupName]["exe"] != nil {
+				exeMatched = matchesFilterSetString(s.matchGroupFS[gc.GroupName]["exe"], exe)
 			}
-			if s.matchGroupFS[gc.ProcessName]["cmdline"] != nil {
-				cmdlineMatched = matchesFilterSetSlice(s.matchGroupNames[gc.ProcessName], command.commandLineSlice)
+			if s.matchGroupFS[gc.GroupName]["cmdline"] != nil {
+				cmdlineMatched = matchesFilterSetSlice(s.matchGroupNames[gc.GroupName], command.commandLineSlice)
 			}
 
 			if commMatched && exeMatched && cmdlineMatched {
-				groupConfigName = gc.ProcessName
+				groupConfigName = gc.GroupName
 				break
 			}
 		}

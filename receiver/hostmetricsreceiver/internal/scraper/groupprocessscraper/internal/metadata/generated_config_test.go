@@ -32,7 +32,7 @@ func TestMetricsBuilderConfig(t *testing.T) {
 					ProcessThreads:             MetricConfig{Enabled: true},
 				},
 				ResourceAttributes: ResourceAttributesConfig{
-					ProcessName: ResourceAttributeConfig{Enabled: true},
+					GroupName: ResourceAttributeConfig{Enabled: true},
 				},
 			},
 		},
@@ -47,7 +47,7 @@ func TestMetricsBuilderConfig(t *testing.T) {
 					ProcessThreads:             MetricConfig{Enabled: false},
 				},
 				ResourceAttributes: ResourceAttributesConfig{
-					ProcessName: ResourceAttributeConfig{Enabled: false},
+					GroupName: ResourceAttributeConfig{Enabled: false},
 				},
 			},
 		},
@@ -83,13 +83,13 @@ func TestResourceAttributesConfig(t *testing.T) {
 		{
 			name: "all_set",
 			want: ResourceAttributesConfig{
-				ProcessName: ResourceAttributeConfig{Enabled: true},
+				GroupName: ResourceAttributeConfig{Enabled: true},
 			},
 		},
 		{
 			name: "none_set",
 			want: ResourceAttributesConfig{
-				ProcessName: ResourceAttributeConfig{Enabled: false},
+				GroupName: ResourceAttributeConfig{Enabled: false},
 			},
 		},
 	}

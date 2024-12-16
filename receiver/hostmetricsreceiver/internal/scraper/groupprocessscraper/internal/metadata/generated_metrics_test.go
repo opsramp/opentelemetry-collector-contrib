@@ -89,7 +89,7 @@ func TestMetricsBuilder(t *testing.T) {
 			mb.RecordProcessThreadsDataPoint(ts, 1)
 
 			rb := mb.NewResourceBuilder()
-			rb.SetProcessName("process.name-val")
+			rb.SetGroupName("group.name-val")
 			res := rb.Emit()
 			metrics := mb.Emit(WithResource(res))
 

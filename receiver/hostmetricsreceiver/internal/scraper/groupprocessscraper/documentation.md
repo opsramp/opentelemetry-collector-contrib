@@ -64,4 +64,4 @@ Total number of threads
 
 | Name | Description | Values | Enabled |
 | ---- | ----------- | ------ | ------- |
-| process.name | Name of the process | Any Str | true |
+| group.name | Name of the process | Any Str | true |

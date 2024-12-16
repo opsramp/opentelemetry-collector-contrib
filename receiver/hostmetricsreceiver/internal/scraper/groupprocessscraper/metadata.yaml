@@ -5,7 +5,7 @@ parent: hostmetrics
 sem_conv_version: 1.9.0
 
 resource_attributes:
-  process.name:
+  group.name:
     enabled: true
     description: "Name of the process"
     type: string

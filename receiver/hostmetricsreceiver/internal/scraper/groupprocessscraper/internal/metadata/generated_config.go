@@ -83,12 +83,12 @@ func (rac *ResourceAttributeConfig) Unmarshal(parser *confmap.Conf) error {
 
 // ResourceAttributesConfig provides config for hostmetricsreceiver/groupprocess resource attributes.
 type ResourceAttributesConfig struct {
-	ProcessName ResourceAttributeConfig `mapstructure:"process.name"`
+	GroupName ResourceAttributeConfig `mapstructure:"group.name"`
 }
 
 func DefaultResourceAttributesConfig() ResourceAttributesConfig {
 	return ResourceAttributesConfig{
-		ProcessName: ResourceAttributeConfig{
+		GroupName: ResourceAttributeConfig{
 			Enabled: true,
 		},
 	}

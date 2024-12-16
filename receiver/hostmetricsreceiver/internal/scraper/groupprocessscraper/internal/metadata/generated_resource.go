@@ -21,10 +21,10 @@ func NewResourceBuilder(rac ResourceAttributesConfig) *ResourceBuilder {
 	}
 }
 
-// SetProcessName sets provided value as "process.name" attribute.
-func (rb *ResourceBuilder) SetProcessName(val string) {
-	if rb.config.ProcessName.Enabled {
-		rb.res.Attributes().PutStr("process.name", val)
+// SetGroupName sets provided value as "group.name" attribute.
+func (rb *ResourceBuilder) SetGroupName(val string) {
+	if rb.config.GroupName.Enabled {
+		rb.res.Attributes().PutStr("group.name", val)
 	}
 }
 

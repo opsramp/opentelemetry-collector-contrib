@@ -48,7 +48,7 @@ type commandMetadata struct {
 }
 
 func (s *scraper) buildGroupResource(rb *metadata.ResourceBuilder, groupName string) pcommon.Resource {
-	rb.SetProcessName(groupName)
+	rb.SetGroupName(groupName)
 	return rb.Emit()
 }
 

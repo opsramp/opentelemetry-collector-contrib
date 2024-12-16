@@ -59,9 +59,8 @@ type MatchConfig struct {
 }
 
 type GroupMatchConfig struct {
-	Names       []string    `mapstructure:"names"`
-	ProcessName string      `mapstructure:"group_name"`
-	Comm        MatchConfig `mapstructure:"comm"`
-	Exe         MatchConfig `mapstructure:"exe"`
-	Cmdline     MatchConfig `mapstructure:"cmdline"`
+	GroupName string      `mapstructure:"group_name"`
+	Comm      MatchConfig `mapstructure:"comm"`
+	Exe       MatchConfig `mapstructure:"exe"`
+	Cmdline   MatchConfig `mapstructure:"cmdline"`
 }
