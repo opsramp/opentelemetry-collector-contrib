@@ -113,6 +113,8 @@ func (kp *kubernetesprocessor) processTraces(ctx context.Context, td ptrace.Trac
 	rss := td.ResourceSpans()
 	for i := 0; i < rss.Len(); i++ {
 		kp.processResource(ctx, rss.At(i).Resource())
+		// add extra resource uuid for traces
+		kp.addAdditionalResourceUuid(ctx, rss.At(i).Resource())
 	}
 
 	return td, nil
@@ -140,6 +142,50 @@ func (kp *kubernetesprocessor) processLogs(ctx context.Context, ld plog.Logs) (p
 	}
 
 	return ld, nil
+}
+
+// function to add resourceuuid to the resource
+func (kp *kubernetesprocessor) addAdditionalResourceUuid(ctx context.Context, resource pcommon.Resource) {
+	kp.logger.Debug("#################### Starting Test for additional resourceuuid")
+	var additionalResourceUuid string
+	if dpName, found := resource.Attributes().Get("k8s.deployment.name"); found {
+		if additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource); additionalResourceUuid == "" {
+			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("deployment", dpName.Str()))
+		} else {
+			resource.Attributes().PutStr("k8s.deployment.resourceuuid", additionalResourceUuid)
+		}
+	} else if rsName, found := resource.Attributes().Get("k8s.replicaset.name"); found {
+		if additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource); additionalResourceUuid == "" {
+			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("replicaset", rsName.Str()))
+		} else {
+			resource.Attributes().PutStr("k8s.replicaset.resourceuuid", additionalResourceUuid)
+		}
+	} else if ssName, found := resource.Attributes().Get("k8s.statefulset.name"); found {
+		if additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource); additionalResourceUuid == "" {
+			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("statefulset", ssName.Str()))
+		} else {
+			resource.Attributes().PutStr("k8s.statefulset.resourceuuid", additionalResourceUuid)
+		}
+	} else if dsName, found := resource.Attributes().Get("k8s.daemonset.name"); found {
+		if additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource); additionalResourceUuid == "" {
+			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("daemonset", dsName.Str()))
+		} else {
+			resource.Attributes().PutStr("k8s.daemonset.resourceuuid", additionalResourceUuid)
+		}
+	} else if cronJobName, found := resource.Attributes().Get("k8s.cronjob.name"); found {
+		if additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource); additionalResourceUuid == "" {
+			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("cronjob", cronJobName.Str()))
+		} else {
+			resource.Attributes().PutStr("k8s.cronjob.resourceuuid", additionalResourceUuid)
+		}
+	} else if jobName, found := resource.Attributes().Get("k8s.job.name"); found {
+		if additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource); additionalResourceUuid == "" {
+			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("job", jobName.Str()))
+		} else {
+			resource.Attributes().PutStr("k8s.job.resourceuuid", additionalResourceUuid)
+		}
+	}
+	kp.logger.Debug("#################### Ending Test for additional resourceuuid")
 }
 
 // processResource adds Pod metadata tags to resource based on pod association configuration
