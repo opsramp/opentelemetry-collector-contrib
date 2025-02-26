@@ -196,6 +196,20 @@ func (kp *kubernetesprocessor) addAdditionalResourceUuid(ctx context.Context, re
 			resource.Attributes().PutStr("k8s.job.resourceuuid", additionalResourceUuid)
 			kp.logger.Debug("Found resourceuuid for job", zap.Any("job", jobName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
 		}
+	}
+
+	if dpResUUID, found := resource.Attributes().Get("k8s.deployment.resourceuuid"); found {
+		kp.logger.Debug("#################### Found deployment resourceuuid", zap.Any("deployment", dpResUUID.Str()))
+	} else if rsResUUID, found := resource.Attributes().Get("k8s.replicaset.resourceuuid"); found {
+		kp.logger.Debug("#################### Found replicaset resourceuuid", zap.Any("replicaset", rsResUUID.Str()))
+	} else if ssResUUID, found := resource.Attributes().Get("k8s.statefulset.resourceuuid"); found {
+		kp.logger.Debug("#################### Found statefulset resourceuuid", zap.Any("statefulset", ssResUUID.Str()))
+	} else if dsResUUID, found := resource.Attributes().Get("k8s.daemonset.resourceuuid"); found {
+		kp.logger.Debug("#################### Found daemonset resourceuuid", zap.Any("daemonset", dsResUUID.Str()))
+	} else if cronJobResUUID, found := resource.Attributes().Get("k8s.cronjob.resourceuuid"); found {
+		kp.logger.Debug("#################### Found cronjob resourceuuid", zap.Any("cronjob", cronJobResUUID.Str()))
+	} else if jobResUUID, found := resource.Attributes().Get("k8s.job.resourceuuid"); found {
+		kp.logger.Debug("#################### Found job resourceuuid", zap.Any("job", jobResUUID.Str()))
 	} else {
 		kp.logger.Debug("#################### No additional resourceuuid found")
 	}
