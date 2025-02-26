@@ -146,74 +146,92 @@ func (kp *kubernetesprocessor) processLogs(ctx context.Context, ld plog.Logs) (p
 
 // function to add resourceuuid to the resource
 func (kp *kubernetesprocessor) addAdditionalResourceUuid(ctx context.Context, resource pcommon.Resource) {
-	kp.logger.Debug("#################### Starting Test for additional resourceuuid")
+	kp.logger.Error("#################### Starting Test for additional resourceuuid")
 	var additionalResourceUuid string
+
 	if dpName, found := resource.Attributes().Get("k8s.deployment.name"); found {
-		kp.logger.Debug("#################### Found deployment name", zap.Any("deployment", dpName.Str()))
-		if additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource); additionalResourceUuid == "" {
-			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("deployment", dpName.Str()))
-		} else {
+		kp.logger.Error("#################### Found deployment name", zap.Any("deployment", dpName.Str()))
+		additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource)
+		if additionalResourceUuid != "" {
 			resource.Attributes().PutStr("k8s.deployment.resourceuuid", additionalResourceUuid)
-			kp.logger.Debug("Found resourceuuid for deployment", zap.Any("deployment", dpName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
+			kp.logger.Error("Found resourceuuid for deployment", zap.Any("deployment", dpName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
+			return
 		}
-	} else if rsName, found := resource.Attributes().Get("k8s.replicaset.name"); found {
-		kp.logger.Debug("#################### Found replicaset name", zap.Any("replicaset", rsName.Str()))
-		if additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource); additionalResourceUuid == "" {
-			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("replicaset", rsName.Str()))
-		} else {
-			resource.Attributes().PutStr("k8s.replicaset.resourceuuid", additionalResourceUuid)
-			kp.logger.Debug("Found resourceuuid for replicaset", zap.Any("replicaset", rsName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
-		}
-	} else if ssName, found := resource.Attributes().Get("k8s.statefulset.name"); found {
-		kp.logger.Debug("#################### Found statefulset name", zap.Any("statefulset", ssName.Str()))
-		if additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource); additionalResourceUuid == "" {
-			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("statefulset", ssName.Str()))
-		} else {
-			resource.Attributes().PutStr("k8s.statefulset.resourceuuid", additionalResourceUuid)
-			kp.logger.Debug("Found resourceuuid for statefulset", zap.Any("statefulset", ssName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
-		}
-	} else if dsName, found := resource.Attributes().Get("k8s.daemonset.name"); found {
-		kp.logger.Debug("#################### Found daemonset name", zap.Any("daemonset", dsName.Str()))
-		if additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource); additionalResourceUuid == "" {
-			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("daemonset", dsName.Str()))
-		} else {
-			resource.Attributes().PutStr("k8s.daemonset.resourceuuid", additionalResourceUuid)
-			kp.logger.Debug("Found resourceuuid for daemonset", zap.Any("daemonset", dsName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
-		}
-	} else if cronJobName, found := resource.Attributes().Get("k8s.cronjob.name"); found {
-		kp.logger.Debug("#################### Found cronjob name", zap.Any("cronjob", cronJobName.Str()))
-		if additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource); additionalResourceUuid == "" {
-			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("cronjob", cronJobName.Str()))
-		} else {
-			resource.Attributes().PutStr("k8s.cronjob.resourceuuid", additionalResourceUuid)
-			kp.logger.Debug("Found resourceuuid for cronjob", zap.Any("cronjob", cronJobName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
-		}
-	} else if jobName, found := resource.Attributes().Get("k8s.job.name"); found {
-		kp.logger.Debug("#################### Found job name", zap.Any("job", jobName.Str()))
-		if additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource); additionalResourceUuid == "" {
-			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("job", jobName.Str()))
-		} else {
-			resource.Attributes().PutStr("k8s.job.resourceuuid", additionalResourceUuid)
-			kp.logger.Debug("Found resourceuuid for job", zap.Any("job", jobName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
-		}
+		kp.logger.Error("opsramp resourceuuid not found in redis", zap.Any("deployment", dpName.Str()))
 	}
 
-	if dpResUUID, found := resource.Attributes().Get("k8s.deployment.resourceuuid"); found {
-		kp.logger.Debug("#################### Found deployment resourceuuid", zap.Any("deployment", dpResUUID.Str()))
-	} else if rsResUUID, found := resource.Attributes().Get("k8s.replicaset.resourceuuid"); found {
-		kp.logger.Debug("#################### Found replicaset resourceuuid", zap.Any("replicaset", rsResUUID.Str()))
-	} else if ssResUUID, found := resource.Attributes().Get("k8s.statefulset.resourceuuid"); found {
-		kp.logger.Debug("#################### Found statefulset resourceuuid", zap.Any("statefulset", ssResUUID.Str()))
-	} else if dsResUUID, found := resource.Attributes().Get("k8s.daemonset.resourceuuid"); found {
-		kp.logger.Debug("#################### Found daemonset resourceuuid", zap.Any("daemonset", dsResUUID.Str()))
-	} else if cronJobResUUID, found := resource.Attributes().Get("k8s.cronjob.resourceuuid"); found {
-		kp.logger.Debug("#################### Found cronjob resourceuuid", zap.Any("cronjob", cronJobResUUID.Str()))
-	} else if jobResUUID, found := resource.Attributes().Get("k8s.job.resourceuuid"); found {
-		kp.logger.Debug("#################### Found job resourceuuid", zap.Any("job", jobResUUID.Str()))
-	} else {
-		kp.logger.Debug("#################### No additional resourceuuid found")
+	if rsName, found := resource.Attributes().Get("k8s.replicaset.name"); found {
+		kp.logger.Error("#################### Found replicaset name", zap.Any("replicaset", rsName.Str()))
+		additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource)
+		if additionalResourceUuid != "" {
+			resource.Attributes().PutStr("k8s.replicaset.resourceuuid", additionalResourceUuid)
+			kp.logger.Error("Found resourceuuid for replicaset", zap.Any("replicaset", rsName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
+			return
+		}
+		kp.logger.Error("opsramp resourceuuid not found in redis", zap.Any("replicaset", rsName.Str()))
 	}
-	kp.logger.Debug("#################### Ending Test for additional resourceuuid")
+
+	if ssName, found := resource.Attributes().Get("k8s.statefulset.name"); found {
+		kp.logger.Error("#################### Found statefulset name", zap.Any("statefulset", ssName.Str()))
+		additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource)
+		if additionalResourceUuid != "" {
+			resource.Attributes().PutStr("k8s.statefulset.resourceuuid", additionalResourceUuid)
+			kp.logger.Error("Found resourceuuid for statefulset", zap.Any("statefulset", ssName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
+			return
+		}
+		kp.logger.Error("opsramp resourceuuid not found in redis", zap.Any("statefulset", ssName.Str()))
+	}
+
+	if dsName, found := resource.Attributes().Get("k8s.daemonset.name"); found {
+		kp.logger.Error("#################### Found daemonset name", zap.Any("daemonset", dsName.Str()))
+		additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource)
+		if additionalResourceUuid != "" {
+			resource.Attributes().PutStr("k8s.daemonset.resourceuuid", additionalResourceUuid)
+			kp.logger.Error("Found resourceuuid for daemonset", zap.Any("daemonset", dsName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
+			return
+		}
+		kp.logger.Error("opsramp resourceuuid not found in redis", zap.Any("daemonset", dsName.Str()))
+	}
+
+	if cronJobName, found := resource.Attributes().Get("k8s.cronjob.name"); found {
+		kp.logger.Error("#################### Found cronjob name", zap.Any("cronjob", cronJobName.Str()))
+		additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource)
+		if additionalResourceUuid != "" {
+			resource.Attributes().PutStr("k8s.cronjob.resourceuuid", additionalResourceUuid)
+			kp.logger.Error("Found resourceuuid for cronjob", zap.Any("cronjob", cronJobName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
+			return
+		}
+		kp.logger.Error("opsramp resourceuuid not found in redis", zap.Any("cronjob", cronJobName.Str()))
+	}
+
+	if jobName, found := resource.Attributes().Get("k8s.job.name"); found {
+		kp.logger.Error("#################### Found job name", zap.Any("job", jobName.Str()))
+		additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource)
+		if additionalResourceUuid != "" {
+			resource.Attributes().PutStr("k8s.job.resourceuuid", additionalResourceUuid)
+			kp.logger.Error("Found resourceuuid for job", zap.Any("job", jobName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
+			return
+		}
+		kp.logger.Error("opsramp resourceuuid not found in redis", zap.Any("job", jobName.Str()))
+	}
+
+	//if dpResUUID, found := resource.Attributes().Get("k8s.deployment.resourceuuid"); found {
+	//	kp.logger.Error("#################### Found deployment resourceuuid", zap.Any("deployment", dpResUUID.Str()))
+	//} else if rsResUUID, found := resource.Attributes().Get("k8s.replicaset.resourceuuid"); found {
+	//	kp.logger.Error("#################### Found replicaset resourceuuid", zap.Any("replicaset", rsResUUID.Str()))
+	//} else if ssResUUID, found := resource.Attributes().Get("k8s.statefulset.resourceuuid"); found {
+	//	kp.logger.Error("#################### Found statefulset resourceuuid", zap.Any("statefulset", ssResUUID.Str()))
+	//} else if dsResUUID, found := resource.Attributes().Get("k8s.daemonset.resourceuuid"); found {
+	//	kp.logger.Error("#################### Found daemonset resourceuuid", zap.Any("daemonset", dsResUUID.Str()))
+	//} else if cronJobResUUID, found := resource.Attributes().Get("k8s.cronjob.resourceuuid"); found {
+	//	kp.logger.Error("#################### Found cronjob resourceuuid", zap.Any("cronjob", cronJobResUUID.Str()))
+	//} else if jobResUUID, found := resource.Attributes().Get("k8s.job.resourceuuid"); found {
+	//	kp.logger.Error("#################### Found job resourceuuid", zap.Any("job", jobResUUID.Str()))
+	//} else {
+	//	kp.logger.Error("#################### No additional resourceuuid found")
+	//}
+	kp.logger.Error("#################### No additional resourceuuid found")
+	kp.logger.Error("#################### Ending Test for additional resourceuuid")
 }
 
 // processResource adds Pod metadata tags to resource based on pod association configuration
