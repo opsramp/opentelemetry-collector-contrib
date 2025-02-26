@@ -149,41 +149,55 @@ func (kp *kubernetesprocessor) addAdditionalResourceUuid(ctx context.Context, re
 	kp.logger.Debug("#################### Starting Test for additional resourceuuid")
 	var additionalResourceUuid string
 	if dpName, found := resource.Attributes().Get("k8s.deployment.name"); found {
+		kp.logger.Debug("#################### Found deployment name", zap.Any("deployment", dpName.Str()))
 		if additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource); additionalResourceUuid == "" {
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("deployment", dpName.Str()))
 		} else {
 			resource.Attributes().PutStr("k8s.deployment.resourceuuid", additionalResourceUuid)
+			kp.logger.Debug("Found resourceuuid for deployment", zap.Any("deployment", dpName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
 		}
 	} else if rsName, found := resource.Attributes().Get("k8s.replicaset.name"); found {
+		kp.logger.Debug("#################### Found replicaset name", zap.Any("replicaset", rsName.Str()))
 		if additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource); additionalResourceUuid == "" {
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("replicaset", rsName.Str()))
 		} else {
 			resource.Attributes().PutStr("k8s.replicaset.resourceuuid", additionalResourceUuid)
+			kp.logger.Debug("Found resourceuuid for replicaset", zap.Any("replicaset", rsName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
 		}
 	} else if ssName, found := resource.Attributes().Get("k8s.statefulset.name"); found {
+		kp.logger.Debug("#################### Found statefulset name", zap.Any("statefulset", ssName.Str()))
 		if additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource); additionalResourceUuid == "" {
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("statefulset", ssName.Str()))
 		} else {
 			resource.Attributes().PutStr("k8s.statefulset.resourceuuid", additionalResourceUuid)
+			kp.logger.Debug("Found resourceuuid for statefulset", zap.Any("statefulset", ssName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
 		}
 	} else if dsName, found := resource.Attributes().Get("k8s.daemonset.name"); found {
+		kp.logger.Debug("#################### Found daemonset name", zap.Any("daemonset", dsName.Str()))
 		if additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource); additionalResourceUuid == "" {
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("daemonset", dsName.Str()))
 		} else {
 			resource.Attributes().PutStr("k8s.daemonset.resourceuuid", additionalResourceUuid)
+			kp.logger.Debug("Found resourceuuid for daemonset", zap.Any("daemonset", dsName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
 		}
 	} else if cronJobName, found := resource.Attributes().Get("k8s.cronjob.name"); found {
+		kp.logger.Debug("#################### Found cronjob name", zap.Any("cronjob", cronJobName.Str()))
 		if additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource); additionalResourceUuid == "" {
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("cronjob", cronJobName.Str()))
 		} else {
 			resource.Attributes().PutStr("k8s.cronjob.resourceuuid", additionalResourceUuid)
+			kp.logger.Debug("Found resourceuuid for cronjob", zap.Any("cronjob", cronJobName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
 		}
 	} else if jobName, found := resource.Attributes().Get("k8s.job.name"); found {
+		kp.logger.Debug("#################### Found job name", zap.Any("job", jobName.Str()))
 		if additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource); additionalResourceUuid == "" {
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("job", jobName.Str()))
 		} else {
 			resource.Attributes().PutStr("k8s.job.resourceuuid", additionalResourceUuid)
+			kp.logger.Debug("Found resourceuuid for job", zap.Any("job", jobName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
 		}
+	} else {
+		kp.logger.Debug("#################### No additional resourceuuid found")
 	}
 	kp.logger.Debug("#################### Ending Test for additional resourceuuid")
 }
