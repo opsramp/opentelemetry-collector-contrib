@@ -413,7 +413,10 @@ func (kp *kubernetesprocessor) processTraceResources(ctx context.Context, resour
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("statefulset", ssname.Str()))
 		}
 	} else {
-		if resourceUuid = kp.redisConfig.ClusterUid; resourceUuid == "" {
+		resourceUuid = kp.redisConfig.ClusterUid
+		if resourceUuid != "" {
+			resourceName = kp.redisConfig.ClusterName
+		} else {
 			kp.logger.Debug("opsramp resourceuuid not found", zap.Any("clustername", kp.redisConfig.ClusterName))
 		}
 	}
@@ -424,8 +427,6 @@ func (kp *kubernetesprocessor) processTraceResources(ctx context.Context, resour
 	if resourceName != "" {
 		resource.Attributes().PutStr("resourceName", resourceName)
 	}
-	kp.logger.Error("Found trace resourceuuid", zap.Any("resourceuuid", resourceUuid))
-	kp.logger.Error("Found trace resourceName", zap.Any("resourceName", resourceName))
 }
 
 // function to add resourceuuid to the resource
@@ -436,7 +437,6 @@ func (kp *kubernetesprocessor) addAdditionalResourceUuid(ctx context.Context, re
 		additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, dpName, "deployment")
 		if additionalResourceUuid != "" {
 			resource.Attributes().PutStr("k8s.deployment.resourceUUID", additionalResourceUuid)
-			kp.logger.Error("Found additional resourceuuid for deployment", zap.Any("deployment", dpName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
 			return
 		}
 	}
@@ -445,7 +445,6 @@ func (kp *kubernetesprocessor) addAdditionalResourceUuid(ctx context.Context, re
 		additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, rsName, "replicaset")
 		if additionalResourceUuid != "" {
 			resource.Attributes().PutStr("k8s.replicaset.resourceUUID", additionalResourceUuid)
-			kp.logger.Error("Found additional resourceuuid for replicaset", zap.Any("replicaset", rsName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
 			return
 		}
 	}
@@ -454,7 +453,6 @@ func (kp *kubernetesprocessor) addAdditionalResourceUuid(ctx context.Context, re
 		additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, ssName, "statefulset")
 		if additionalResourceUuid != "" {
 			resource.Attributes().PutStr("k8s.statefulset.resourceUUID", additionalResourceUuid)
-			kp.logger.Error("Found additional resourceuuid for statefulset", zap.Any("statefulset", ssName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
 			return
 		}
 	}
@@ -463,7 +461,6 @@ func (kp *kubernetesprocessor) addAdditionalResourceUuid(ctx context.Context, re
 		additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, dsName, "daemonset")
 		if additionalResourceUuid != "" {
 			resource.Attributes().PutStr("k8s.daemonset.resourceUUID", additionalResourceUuid)
-			kp.logger.Error("Found additional resourceuuid for daemonset", zap.Any("daemonset", dsName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
 			return
 		}
 	}
