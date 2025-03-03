@@ -312,19 +312,19 @@ func (kp *kubernetesprocessor) processopsrampResources(ctx context.Context, reso
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("nodename", nodename.Str()))
 		}
 	} else if dpname, found := resource.Attributes().Get("k8s.deployment.name"); found {
-		if resourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, dpname); resourceUuid == "" {
+		if resourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, dpname, "deployment"); resourceUuid == "" {
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("deployment", dpname.Str()))
 		}
 	} else if dsname, found := resource.Attributes().Get("k8s.daemonset.name"); found {
-		if resourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, dsname); resourceUuid == "" {
+		if resourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, dsname, "daemonset"); resourceUuid == "" {
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("daemonset", dsname.Str()))
 		}
 	} else if rsname, found := resource.Attributes().Get("k8s.replicaset.name"); found {
-		if resourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, rsname); resourceUuid == "" {
+		if resourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, rsname, "replicaset"); resourceUuid == "" {
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("replicaset", rsname.Str()))
 		}
 	} else if ssname, found := resource.Attributes().Get("k8s.statefulset.name"); found {
-		if resourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, ssname); resourceUuid == "" {
+		if resourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, ssname, "statefulset"); resourceUuid == "" {
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("statefulset", ssname.Str()))
 		}
 	} else {
@@ -381,7 +381,7 @@ func (kp *kubernetesprocessor) processTraceResources(ctx context.Context, resour
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("nodename", nodename.Str()))
 		}
 	} else if dpname, found := resource.Attributes().Get("k8s.deployment.name"); found {
-		resourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, dpname)
+		resourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, dpname, "deployment")
 		if resourceUuid != "" {
 			resourceName = dpname.Str()
 			resource.Attributes().PutStr("k8s.deployment.resourceUUID", resourceUuid)
@@ -389,7 +389,7 @@ func (kp *kubernetesprocessor) processTraceResources(ctx context.Context, resour
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("deployment", dpname.Str()))
 		}
 	} else if dsname, found := resource.Attributes().Get("k8s.daemonset.name"); found {
-		resourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, dsname)
+		resourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, dsname, "daemonset")
 		if resourceUuid != "" {
 			resourceName = dsname.Str()
 			resource.Attributes().PutStr("k8s.daemonset.resourceUUID", resourceUuid)
@@ -397,7 +397,7 @@ func (kp *kubernetesprocessor) processTraceResources(ctx context.Context, resour
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("daemonset", dsname.Str()))
 		}
 	} else if rsname, found := resource.Attributes().Get("k8s.replicaset.name"); found {
-		resourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, rsname)
+		resourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, rsname, "replicaset")
 		if resourceUuid != "" {
 			resourceName = rsname.Str()
 			resource.Attributes().PutStr("k8s.replicaset.resourceUUID", resourceUuid)
@@ -405,7 +405,7 @@ func (kp *kubernetesprocessor) processTraceResources(ctx context.Context, resour
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("replicaset", rsname.Str()))
 		}
 	} else if ssname, found := resource.Attributes().Get("k8s.statefulset.name"); found {
-		resourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, ssname)
+		resourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, ssname, "statefulset")
 		if resourceUuid != "" {
 			resourceName = ssname.Str()
 			resource.Attributes().PutStr("k8s.statefulset.resourceUUID", resourceUuid)
@@ -433,7 +433,7 @@ func (kp *kubernetesprocessor) addAdditionalResourceUuid(ctx context.Context, re
 	var additionalResourceUuid string
 
 	if dpName, found := resource.Attributes().Get("k8s.deployment.name"); found {
-		additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, dpName)
+		additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, dpName, "deployment")
 		if additionalResourceUuid != "" {
 			resource.Attributes().PutStr("k8s.deployment.resourceUUID", additionalResourceUuid)
 			kp.logger.Error("Found additional resourceuuid for deployment", zap.Any("deployment", dpName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
@@ -442,7 +442,7 @@ func (kp *kubernetesprocessor) addAdditionalResourceUuid(ctx context.Context, re
 	}
 
 	if rsName, found := resource.Attributes().Get("k8s.replicaset.name"); found {
-		additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, rsName)
+		additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, rsName, "replicaset")
 		if additionalResourceUuid != "" {
 			resource.Attributes().PutStr("k8s.replicaset.resourceUUID", additionalResourceUuid)
 			kp.logger.Error("Found additional resourceuuid for replicaset", zap.Any("replicaset", rsName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
@@ -451,7 +451,7 @@ func (kp *kubernetesprocessor) addAdditionalResourceUuid(ctx context.Context, re
 	}
 
 	if ssName, found := resource.Attributes().Get("k8s.statefulset.name"); found {
-		additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, ssName)
+		additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, ssName, "statefulset")
 		if additionalResourceUuid != "" {
 			resource.Attributes().PutStr("k8s.statefulset.resourceUUID", additionalResourceUuid)
 			kp.logger.Error("Found additional resourceuuid for statefulset", zap.Any("statefulset", ssName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
@@ -460,7 +460,7 @@ func (kp *kubernetesprocessor) addAdditionalResourceUuid(ctx context.Context, re
 	}
 
 	if dsName, found := resource.Attributes().Get("k8s.daemonset.name"); found {
-		additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, dsName)
+		additionalResourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, dsName, "daemonset")
 		if additionalResourceUuid != "" {
 			resource.Attributes().PutStr("k8s.daemonset.resourceUUID", additionalResourceUuid)
 			kp.logger.Error("Found additional resourceuuid for daemonset", zap.Any("daemonset", dsName.Str()), zap.Any("resourceuuid", additionalResourceUuid))
@@ -508,7 +508,7 @@ func (op *kubernetesprocessor) GetResourceUuidUsingPodMoid(ctx context.Context, 
 	return
 }
 
-func (op *kubernetesprocessor) GetResourceUuidUsingWorkloadMoid(ctx context.Context, resource pcommon.Resource, workloadName pcommon.Value) (resourceUuid string) {
+func (op *kubernetesprocessor) GetResourceUuidUsingWorkloadMoid(ctx context.Context, resource pcommon.Resource, workloadName pcommon.Value, workloadType string) (resourceUuid string) {
 	var namespace pcommon.Value
 	var found bool
 
@@ -519,8 +519,15 @@ func (op *kubernetesprocessor) GetResourceUuidUsingWorkloadMoid(ctx context.Cont
 	workloadMoid := moid.NewMoid(op.redisConfig.ClusterName).WithNamespaceName(namespace.Str())
 
 	var workloadMoidKey string
-	workloadMoidKey = workloadMoid.WithReplicasetName(workloadName.Str()).ReplicaSetMoid()
-
+	if workloadType == "deployment" {
+		workloadMoidKey = workloadMoid.WithDeploymentName(workloadName.Str()).DeploymentMoid()
+	} else if workloadType == "replicaset" {
+		workloadMoidKey = workloadMoid.WithReplicasetName(workloadName.Str()).ReplicaSetMoid()
+	} else if workloadType == "daemonset" {
+		workloadMoidKey = workloadMoid.WithDaemonsetName(workloadName.Str()).DaemonSetMoid()
+	} else if workloadType == "statefulset" {
+		workloadMoidKey = workloadMoid.WithStatefulsetName(workloadName.Str()).StatefulSetMoid()
+	}
 	if workloadMoidKey == "" {
 		return
 	}
@@ -529,35 +536,6 @@ func (op *kubernetesprocessor) GetResourceUuidUsingWorkloadMoid(ctx context.Cont
 	op.logger.Debug("redis KV ", zap.Any("key", workloadMoidKey), zap.Any("value", resourceUuid))
 	return
 }
-
-//func (op *kubernetesprocessor) GetResourceUuidUsingWorkloadMoid(ctx context.Context, resource pcommon.Resource) (resourceUuid string) {
-//	var namespace, rsname, dsname, ssname, dpname pcommon.Value
-//	var found bool
-//
-//	if namespace, found = resource.Attributes().Get("k8s.namespace.name"); !found {
-//		return
-//	}
-//
-//	workloadMoid := moid.NewMoid(op.redisConfig.ClusterName).WithNamespaceName(namespace.Str())
-//
-//	var workloadMoidKey string
-//	if rsname, found = resource.Attributes().Get("k8s.replicaset.name"); found {
-//		workloadMoidKey = workloadMoid.WithReplicasetName(rsname.Str()).ReplicaSetMoid()
-//	} else if dsname, found = resource.Attributes().Get("k8s.daemonset.name"); found {
-//		workloadMoidKey = workloadMoid.WithDaemonsetName(dsname.Str()).DaemonSetMoid()
-//	} else if ssname, found = resource.Attributes().Get("k8s.statefulset.name"); found {
-//		workloadMoidKey = workloadMoid.WithStatefulsetName(ssname.Str()).StatefulSetMoid()
-//	} else if dpname, found = resource.Attributes().Get("k8s.deployment.name"); found {
-//		workloadMoidKey = workloadMoid.WithDeploymentName(dpname.Str()).DeploymentMoid()
-//	}
-//	if workloadMoidKey == "" {
-//		return
-//	}
-//
-//	resourceUuid = op.redisClient.GetUuidValueInString(ctx, workloadMoidKey)
-//	op.logger.Debug("redis KV ", zap.Any("key", workloadMoidKey), zap.Any("value", resourceUuid))
-//	return
-//}
 
 func (op *kubernetesprocessor) GetResourceUuidUsingResourceNodeMoid(ctx context.Context, resource pcommon.Resource) (resourceUuid string) {
 	var nodename pcommon.Value
