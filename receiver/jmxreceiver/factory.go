@@ -1,7 +1,4 @@
-// Copyright The OpenTelemetry Authors
-// SPDX-License-Identifier: Apache-2.0
-
-package jmxreceiver // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver"
+package jmxreceiver
 
 import (
 	"context"
@@ -28,8 +25,7 @@ func NewFactory() receiver.Factory {
 
 func createDefaultConfig() component.Config {
 	return &Config{
-		JARPath:            "/opt/opentelemetry-java-contrib-jmx-metrics.jar",
-		CollectionInterval: 10 * time.Second,
+		Applications: make(map[string]ApplicationConfig),
 		OTLPExporterConfig: otlpExporterConfig{
 			Endpoint: otlpEndpoint,
 			TimeoutSettings: exporterhelper.TimeoutConfig{
