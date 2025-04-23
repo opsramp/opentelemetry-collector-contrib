@@ -1,7 +1,15 @@
-package jmxreceiver
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package jmxreceiver // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver"
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -12,15 +20,11 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// type ApplicationConfig struct {
-// 	JARPath            string            `mapstructure:"jar_path"`
-// 	Endpoint           string            `mapstructure:"endpoint"`
-// 	TargetSystem       string            `mapstructure:"target_system"`
-// 	CollectionInterval time.Duration     `mapstructure:"collection_interval"`
-// 	ResourceAttributes map[string]string `mapstructure:"resource_attributes"`
-// 	LogLevel           string            `mapstructure:"log_level"`
+type Config struct {
+	Applications       map[string]ApplicationConfig `mapstructure:"applications"`
+	OTLPExporterConfig otlpExporterConfig           `mapstructure:"otlp"`
+}
 
-// }
 type ApplicationConfig struct {
 	// The path for the JMX Metric Gatherer uber JAR (/opt/opentelemetry-java-contrib-jmx-metrics.jar by default).
 	JARPath string `mapstructure:"jar_path"`
@@ -64,11 +68,6 @@ type ApplicationConfig struct {
 	LogLevel string `mapstructure:"log_level"`
 }
 
-type Config struct {
-	Applications       map[string]ApplicationConfig `mapstructure:"applications"`
-	OTLPExporterConfig otlpExporterConfig           `mapstructure:"otlp"`
-}
-
 type otlpExporterConfig struct {
 	Endpoint        string                       `mapstructure:"endpoint"`
 	TimeoutSettings exporterhelper.TimeoutConfig `mapstructure:",squash"`
@@ -89,6 +88,130 @@ func (oec otlpExporterConfig) headersToString() string {
 	}
 	headerString = headerString[0 : len(headerString)-1]
 	return headerString
+}
+
+func (c *ApplicationConfig) parseProperties(logger *zap.Logger) []string {
+	parsed := make([]string, 0, 1)
+
+	logLevel := "info"
+	if len(c.LogLevel) > 0 {
+		logLevel = strings.ToLower(c.LogLevel)
+	} else if logger != nil {
+		logLevel = getZapLoggerLevelEquivalent(logger)
+	}
+
+	parsed = append(parsed, "-Dorg.slf4j.simpleLogger.defaultLogLevel="+logLevel)
+	// Sorted for testing and reproducibility
+	sort.Strings(parsed)
+	return parsed
+}
+
+var logLevelTranslator = map[zapcore.Level]string{
+	zap.DebugLevel:  "debug",
+	zap.InfoLevel:   "info",
+	zap.WarnLevel:   "warn",
+	zap.ErrorLevel:  "error",
+	zap.DPanicLevel: "error",
+	zap.PanicLevel:  "error",
+	zap.FatalLevel:  "error",
+}
+
+var zapLevels = []zapcore.Level{
+	zap.DebugLevel,
+	zap.InfoLevel,
+	zap.WarnLevel,
+	zap.ErrorLevel,
+	zap.DPanicLevel,
+	zap.PanicLevel,
+	zap.FatalLevel,
+}
+
+func getZapLoggerLevelEquivalent(logger *zap.Logger) string {
+	var loggerLevel *zapcore.Level
+	for i, level := range zapLevels {
+		if testLevel(logger, level) {
+			loggerLevel = &zapLevels[i]
+			break
+		}
+	}
+
+	// Couldn't get log level from logger default logger level to info
+	if loggerLevel == nil {
+		return "info"
+	}
+
+	return logLevelTranslator[*loggerLevel]
+}
+
+func (c *ApplicationConfig) parseClasspath() string {
+	var classPathElems []string
+
+	// Add JMX JAR to classpath
+	classPathElems = append(classPathElems, c.JARPath)
+
+	// Add additional JARs if any
+	classPathElems = append(classPathElems, c.AdditionalJars...)
+
+	// Join them
+	return strings.Join(classPathElems, ":")
+}
+
+func hashFile(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, f); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+func (c *Config) validateJar(supportedJarDetails map[string]supportedJar, jar string) error {
+	hash, err := hashFile(jar)
+	if err != nil {
+		return fmt.Errorf("error hashing file: %w", err)
+	}
+
+	jarDetails, ok := supportedJarDetails[hash]
+	if !ok {
+		return errors.New("jar hash does not match known versions")
+	}
+	if jarDetails.addedValidation != nil {
+		if err = jarDetails.addedValidation(c, jarDetails); err != nil {
+			return fmt.Errorf("jar failed validation: %w", err)
+		}
+	}
+
+	return nil
+}
+
+var (
+	validLogLevels     = map[string]struct{}{"trace": {}, "debug": {}, "info": {}, "warn": {}, "error": {}, "off": {}}
+	validTargetSystems = map[string]struct{}{
+		"activemq": {}, "cassandra": {}, "hbase": {}, "hadoop": {},
+		"jetty": {}, "jvm": {}, "kafka": {}, "kafka-consumer": {}, "kafka-producer": {}, "solr": {}, "tomcat": {}, "wildfly": {},
+	}
+)
+
+var AdditionalTargetSystems = "n/a"
+
+// Separated into two functions for tests
+func init() {
+	initAdditionalTargetSystems()
+}
+
+func initAdditionalTargetSystems() {
+	if AdditionalTargetSystems != "n/a" {
+		additionalTargets := strings.Split(AdditionalTargetSystems, ",")
+		for _, t := range additionalTargets {
+			validTargetSystems[t] = struct{}{}
+		}
+	}
 }
 
 func (c *Config) Validate() error {
@@ -119,8 +242,6 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-var validLogLevels = map[string]struct{}{"trace": {}, "debug": {}, "info": {}, "warn": {}, "error": {}, "off": {}}
-
 func listKeys(presenceMap map[string]struct{}) string {
 	list := make([]string, 0, len(presenceMap))
 	for k := range presenceMap {
@@ -130,71 +251,6 @@ func listKeys(presenceMap map[string]struct{}) string {
 	return strings.Join(list, ", ")
 }
 
-func (c *ApplicationConfig) parseProperties(logger *zap.Logger) []string {
-	parsed := make([]string, 0, 1)
-
-	logLevel := "info"
-	if len(c.LogLevel) > 0 {
-		logLevel = strings.ToLower(c.LogLevel)
-	} else if logger != nil {
-		logLevel = getZapLoggerLevelEquivalent(logger)
-	}
-
-	parsed = append(parsed, "-Dorg.slf4j.simpleLogger.defaultLogLevel="+logLevel)
-	// Sorted for testing and reproducibility
-	sort.Strings(parsed)
-	return parsed
-}
-
-func (c *ApplicationConfig) parseClasspath() string {
-	var classPathElems []string
-
-	// Add JMX JAR to classpath
-	classPathElems = append(classPathElems, c.JARPath)
-
-	// Add additional JARs if any
-	classPathElems = append(classPathElems, c.AdditionalJars...)
-
-	// Join them
-	return strings.Join(classPathElems, ":")
-}
-
-var zapLevels = []zapcore.Level{
-	zap.DebugLevel,
-	zap.InfoLevel,
-	zap.WarnLevel,
-	zap.ErrorLevel,
-	zap.DPanicLevel,
-	zap.PanicLevel,
-	zap.FatalLevel,
-}
-var logLevelTranslator = map[zapcore.Level]string{
-	zap.DebugLevel:  "debug",
-	zap.InfoLevel:   "info",
-	zap.WarnLevel:   "warn",
-	zap.ErrorLevel:  "error",
-	zap.DPanicLevel: "error",
-	zap.PanicLevel:  "error",
-	zap.FatalLevel:  "error",
-}
-
 func testLevel(logger *zap.Logger, level zapcore.Level) bool {
 	return logger.Check(level, "_") != nil
-}
-
-func getZapLoggerLevelEquivalent(logger *zap.Logger) string {
-	var loggerLevel *zapcore.Level
-	for i, level := range zapLevels {
-		if testLevel(logger, level) {
-			loggerLevel = &zapLevels[i]
-			break
-		}
-	}
-
-	// Couldn't get log level from logger default logger level to info
-	if loggerLevel == nil {
-		return "info"
-	}
-
-	return logLevelTranslator[*loggerLevel]
 }

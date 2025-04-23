@@ -1,9 +1,13 @@
-package jmxreceiver
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package jmxreceiver // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver"
 
 import (
 	"context"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"sort"
 	"strconv"
@@ -19,6 +23,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver/internal/subprocess"
 )
 
+// jmxMainClass the class containing the main function for the JMX Metric Gatherer JAR
 const jmxMainClass = "io.opentelemetry.contrib.jmxmetrics.JmxMetrics"
 
 type jmxMetricReceiver struct {
@@ -46,7 +51,7 @@ func newJMXMetricReceiver(
 }
 
 func (jmx *jmxMetricReceiver) Start(ctx context.Context, host component.Host) error {
-	jmx.logger.Info("starting JMX Receiver")
+	jmx.logger.Debug("starting JMX Receiver")
 
 	ctx, jmx.cancel = context.WithCancel(ctx)
 
@@ -170,57 +175,47 @@ func (jmx *jmxMetricReceiver) buildOTLPReceiver() (receiver.Metrics, error) {
 	return factory.CreateMetrics(context.Background(), params, config, jmx.nextConsumer)
 }
 
-// func (jmx *jmxMetricReceiver) buildJMXMetricGathererConfig() (string, error) {
-// 	config := make(map[string]string)
-// 	for appName, appConfig := range jmx.config.Applications {
-// 		prefix := appName + "."
-// 		config[prefix+"otel.exporter.otlp.endpoint"] = jmx.config.OTLPExporterConfig.Endpoint
-// 		config[prefix+"otel.exporter.otlp.timeout"] = strconv.FormatInt(jmx.config.OTLPExporterConfig.TimeoutSettings.Timeout.Milliseconds(), 10)
-// 		config[prefix+"otel.jmx.interval.milliseconds"] = strconv.FormatInt(appConfig.CollectionInterval.Milliseconds(), 10)
-// 		config[prefix+"otel.jmx.service.url"] = appConfig.Endpoint
-// 		config[prefix+"otel.jmx.target.system"] = appConfig.TargetSystem
-// 		config[prefix+"otel.metrics.exporter"] = "otlp"
-// 		if len(appConfig.ResourceAttributes) > 0 {
-// 			attributes := make([]string, 0, len(appConfig.ResourceAttributes))
-// 			for k, v := range appConfig.ResourceAttributes {
-// 				attributes = append(attributes, fmt.Sprintf("%s=%s", k, v))
-// 			}
-// 			sort.Strings(attributes)
-// 			config[prefix+"otel.resource.attributes"] = strings.Join(attributes, ",")
-// 		}
-// 	}
-// 	content := make([]string, 0, len(config))
-// 	for k, v := range config {
-// 		safeKey := strings.ReplaceAll(k, "=", "\\=")
-// 		safeKey = strings.ReplaceAll(safeKey, ":", "\\:")
-// 		safeKey = strings.ReplaceAll(safeKey, " ", "")
-// 		safeKey = strings.ReplaceAll(safeKey, "\t", "")
-// 		safeKey = strings.ReplaceAll(safeKey, "\n", "")
-// 		safeValue := strings.ReplaceAll(v, "\\", "\\\\")
-// 		safeValue = strings.ReplaceAll(safeValue, "\n", "\\n")
-// 		content = append(content, fmt.Sprintf("%s = %s", safeKey, safeValue))
-// 	}
-// 	sort.Strings(content)
-//		return strings.Join(content, "\n"), nil
-//	}
 func (jmx *jmxMetricReceiver) buildJMXMetricGathererConfig() (string, error) {
 	config := make(map[string]map[string]string)
+	var errors []error
+
 	for appName, appConfig := range jmx.config.Applications {
-		//	prefix := appName + "."
 		if _, exists := config[appName]; !exists {
 			config[appName] = make(map[string]string)
 		}
+		parsed, err := url.Parse(appConfig.Endpoint)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("failed to parse endpoint %q: %w", appConfig.Endpoint, err))
+			continue
+		}
+
+		if !(parsed.Scheme == "service" && strings.HasPrefix(parsed.Opaque, "jmx:")) {
+			host, portStr, err := net.SplitHostPort(appConfig.Endpoint)
+			if err != nil {
+				errors = append(errors, fmt.Errorf("failed to parse endpoint %q: %w", appConfig.Endpoint, err))
+				continue
+			}
+			port, err := strconv.ParseInt(portStr, 10, 0)
+			if err != nil {
+				errors = append(errors, fmt.Errorf("failed to parse port in endpoint %q: %w", appConfig.Endpoint, err))
+				continue
+			}
+			appConfig.Endpoint = fmt.Sprintf("service:jmx:rmi:///jndi/rmi://%v:%d/jmxrmi", host, port)
+		}
+
+		config[appName]["otel.jmx.service.url"] = appConfig.Endpoint
+		config[appName]["otel.jmx.interval.milliseconds"] = strconv.FormatInt(appConfig.CollectionInterval.Milliseconds(), 10)
+		config[appName]["otel.jmx.target.system"] = appConfig.TargetSystem
 
 		endpoint := jmx.config.OTLPExporterConfig.Endpoint
 		if !strings.HasPrefix(endpoint, "http") {
 			endpoint = "http://" + endpoint
 		}
+
+		config[appName]["otel.metrics.exporter"] = "otlp"
 		config[appName]["otel.exporter.otlp.endpoint"] = endpoint
 		config[appName]["otel.exporter.otlp.timeout"] = strconv.FormatInt(jmx.config.OTLPExporterConfig.TimeoutSettings.Timeout.Milliseconds(), 10)
-		config[appName]["otel.jmx.interval.milliseconds"] = strconv.FormatInt(appConfig.CollectionInterval.Milliseconds(), 10)
-		config[appName]["otel.jmx.service.url"] = appConfig.Endpoint
-		config[appName]["otel.jmx.target.system"] = appConfig.TargetSystem
-		config[appName]["otel.metrics.exporter"] = "otlp"
+
 		if len(appConfig.ResourceAttributes) > 0 {
 			attributes := make([]string, 0, len(appConfig.ResourceAttributes))
 			for k, v := range appConfig.ResourceAttributes {
@@ -230,6 +225,8 @@ func (jmx *jmxMetricReceiver) buildJMXMetricGathererConfig() (string, error) {
 			config[appName]["otel.resource.attributes"] = strings.Join(attributes, ",")
 		}
 	}
+
+	jmx.logger.Info("Errors parsing JMX endpoints", zap.Errors("errors", errors))
 
 	var content []string
 	for appName, appConfig := range config {
