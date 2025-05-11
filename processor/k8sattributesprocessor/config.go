@@ -147,18 +147,11 @@ func (cfg *Config) Validate() error {
 	}
 
 	if cfg.RedisConfig.PrimaryCacheEvictionTime == 0 {
-		cfg.RedisConfig.PrimaryCacheEvictionTime = cache.DEFAULT_CACHE_EXPIRATION_INTERVAL
+		cfg.RedisConfig.PrimaryCacheEvictionTime = cache.DEFAULT_PRIMARY_CACHE_EXPIRATION_INTERVAL
 	}
 
 	if cfg.RedisConfig.SecondaryCacheEvictionTime == 0 {
-		cfg.RedisConfig.SecondaryCacheEvictionTime = cache.DEFAULT_CACHE_EXPIRATION_INTERVAL
-	}
-
-	if cfg.RedisConfig.PrimaryCacheSize == 0 {
-		cfg.RedisConfig.PrimaryCacheSize = cache.DEFAULT_CACHE_SIZE
-	}
-	if cfg.RedisConfig.SecondaryCacheSize == 0 {
-		cfg.RedisConfig.SecondaryCacheSize = cache.DEFAULT_CACHE_SIZE
+		cfg.RedisConfig.SecondaryCacheEvictionTime = cache.DEFAULT_SECONDARY_CACHE_EXPIRATION_INTERVAL
 	}
 	return nil
 }

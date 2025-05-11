@@ -28,8 +28,6 @@ type OpsrampRedisConfig struct {
 	ClusterName                string        `mapstructure:"clusterName"`
 	ClusterUid                 string        `mapstructure:"clusterUid"`
 	NodeName                   string        `mapstructure:"nodeName"`
-	PrimaryCacheSize           int           `mapstructure:"primaryCacheSize"`
-	SecondaryCacheSize         int           `mapstructure:"secondaryCacheSize"`
 	PrimaryCacheEvictionTime   time.Duration `mapstructure:"primaryCacheEvictionTime"`
 	SecondaryCacheEvictionTime time.Duration `mapstructure:"secondaryCacheEvictionTime"`
 }
@@ -104,56 +102,35 @@ func (c *Client) TestConnection(ctx context.Context) error {
 
 func (c *Client) GetUuidValueInString(ctx context.Context, key string) string {
 	logger := c.logger
-	primaryCache := c.PrimaryCache
-	secondaryCache := c.SecondaryCache
-
-	// Initialize primary cache if nil
-	if primaryCache == nil {
-		logger.Debug("Primary cache is nil, creating a new one with default 5 min timeout")
-		primaryCache = cache.NewSyncMapWithExpiry(c.PrimaryCacheEvictionTime)
-	}
-
-	// Initialize secondary cache if nil
-	if secondaryCache == nil {
-		logger.Debug("Secondary cache is nil, creating a new one with default 5 min timeout")
-		secondaryCache = cache.NewSyncMapWithExpiry(c.SecondaryCacheEvictionTime)
-	}
-
 	// Check primary cache
-	if primaryCache != nil {
-		if val, ok, _, _ := primaryCache.Load(key); ok {
+	if c.PrimaryCache != nil {
+		if val, ok, _, _ := c.PrimaryCache.Load(key); ok {
 			logger.Debug("Got value from PrimaryCache", zap.Any("key", key), zap.Any("value", val))
 			return val.(string)
 		}
-	} else {
-		logger.Debug("Primary cache is nil, skipping check")
-		return ""
 	}
-
 	logger.Debug("Failed to fetch the key from primary cache", zap.Any("key", key))
 	// Check secondary cache
-	if secondaryCache != nil {
-		if _, ok, _, _ := secondaryCache.Load(key); ok {
+	if c.SecondaryCache != nil {
+		if _, ok, _, _ := c.SecondaryCache.Load(key); ok {
 			logger.Debug("Key exists in SecondaryCache", zap.Any("key", key))
 			return ""
 		}
-	} else {
-		logger.Debug("Secondary cache is nil, skipping check")
-		return ""
 	}
-
 	logger.Debug("Failed to fetch the key from secondary cache", zap.Any("key", key))
-
 	// Query Redis if enabled
 	if c.Enabled {
 		val, err := c.GoClient.Get(ctx, key).Result()
 		if err == goredis.Nil {
 			logger.Debug("Key does not exist in Redis", zap.Any("key", key))
-			secondaryCache.Store(key, "", c.SecondaryCacheEvictionTime, c.SecondaryCacheEvictionTime)
-			return ""
+			if c.SecondaryCache != nil {
+				c.SecondaryCache.Store(key, "", c.SecondaryCacheEvictionTime, c.SecondaryCacheEvictionTime)
+			}
 		} else if err != nil {
 			logger.Error("Failed to fetch the key from Redis", zap.Error(err))
-			secondaryCache.Store(key, "", c.SecondaryCacheEvictionTime, c.SecondaryCacheEvictionTime)
+			if c.SecondaryCache != nil {
+				c.SecondaryCache.Store(key, "", c.SecondaryCacheEvictionTime, c.SecondaryCacheEvictionTime)
+			}
 			return ""
 		}
 
@@ -172,10 +149,10 @@ func (c *Client) GetUuidValueInString(ctx context.Context, key string) string {
 		}
 
 		value := redisData.ResourceUuid
-		if value == "" {
-			secondaryCache.Store(key, value, c.PrimaryCacheEvictionTime, c.PrimaryCacheEvictionTime)
-		} else {
-			primaryCache.Store(key, value, c.PrimaryCacheEvictionTime, c.PrimaryCacheEvictionTime)
+		if value == "" && c.SecondaryCache != nil {
+			c.SecondaryCache.Store(key, value, c.SecondaryCacheEvictionTime, c.SecondaryCacheEvictionTime)
+		} else if c.PrimaryCache != nil {
+			c.PrimaryCache.Store(key, value, c.PrimaryCacheEvictionTime, c.PrimaryCacheEvictionTime)
 		}
 		return value
 	}

@@ -86,13 +86,13 @@ func (kp *kubernetesprocessor) Start(_ context.Context, host component.Host) err
 	primaryCache := cache.NewSyncMapWithExpiry(kp.redisConfig.PrimaryCacheEvictionTime)
 	if primaryCache == nil {
 		kp.logger.Error("Failed to initilize the primary cache")
-		return nil
+		return fmt.Errorf("failed to initialize the primary cache")
 	}
 
 	secondaryCache := cache.NewSyncMapWithExpiry(kp.redisConfig.SecondaryCacheEvictionTime)
 	if secondaryCache == nil {
 		kp.logger.Error("Failed to initilize the secondary cache")
-		return nil
+		return fmt.Errorf("failed to initialize the primary cache")
 	}
 	kp.redisClient = redis.NewClient(kp.logger, primaryCache, secondaryCache, kp.redisConfig.PrimaryCacheEvictionTime, kp.redisConfig.SecondaryCacheEvictionTime, kp.redisConfig.RedisHost, kp.redisConfig.RedisPort, kp.redisConfig.RedisPass)
 

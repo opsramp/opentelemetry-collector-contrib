@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	DEFAULT_CACHE_EXPIRATION_INTERVAL = 5 * time.Minute
-	DEFAULT_CACHE_SIZE                = 256
+	DEFAULT_PRIMARY_CACHE_EXPIRATION_INTERVAL   = 5 * time.Minute
+	DEFAULT_SECONDARY_CACHE_EXPIRATION_INTERVAL = 2 * time.Minute
 )
 
 type entry struct {
