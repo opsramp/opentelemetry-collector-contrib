@@ -5,7 +5,6 @@ import (
 	"time"
 )
 
-
 type entry struct {
 	value       interface{}
 	expiryTime  time.Time
