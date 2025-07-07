@@ -117,7 +117,9 @@ func (kr *k8sobjectsreceiver) startListWatchObjects(ctx context.Context, objects
 	for {
 		select {
 		case <-ticker.C:
-			close(stopperChanNew)
+			if stopperChanNew != nil {
+				close(stopperChanNew)
+			}
 			cancel()
 			stopperChanNew = make(chan struct{})
 			cancelCtx, cancel = context.WithCancel(ctx)
@@ -137,11 +139,16 @@ func (kr *k8sobjectsreceiver) startListWatchObjects(ctx context.Context, objects
 						}
 					}
 				}
-				kr.setting.Logger.Info(" timer waiting for all pull operations to finish before starting watch", zap.String("resource", object.gvr.String()))
-				pullWQ.Wait()
-				kr.setting.Logger.Info("timer waiting over for all pull operations and starting watch", zap.String("resource", object.gvr.String()))
-				close(pullBarrier)
 			}
+			kr.setting.Logger.Info("timer waiting for all pull operations to finish before starting watch")
+			pullWQ.Wait()
+			kr.setting.Logger.Info("timer waiting over for all pull operations and starting watch")
+			close(pullBarrier)
+			//send a final log for the end of the pull operation
+			pullEndLog := createResourcePullEndLog(nil)
+			obsCtx := kr.obsrecv.StartLogsOp(ctx)
+			err := kr.consumer.ConsumeLogs(obsCtx, pullEndLog)
+			kr.obsrecv.EndLogsOp(obsCtx, metadata.Type.String(), pullEndLog.LogRecordCount(), err)
 		case <-stopperChan:
 			cancel()
 			if stopperChanNew != nil {
@@ -440,8 +447,7 @@ func (kr *k8sobjectsreceiver) resourcePullWithPagination(ctx context.Context, co
 		continueToken = objects.GetContinue()
 		if continueToken == "" {
 			//send one watch event for the end of the list with type "PullEnd" and kind in the object should be the config.name, send this as log
-			//send one watch event for the end of the list with type "PullEnd" and kind in the object should be the config.name, send this as log
-			pullEndLog := createPullEndLog(config)
+			pullEndLog := createResourcePullEndLog(config)
 			obsCtx := kr.obsrecv.StartLogsOp(ctx)
 			err = kr.consumer.ConsumeLogs(obsCtx, pullEndLog)
 			kr.obsrecv.EndLogsOp(obsCtx, metadata.Type.String(), pullEndLog.LogRecordCount(), err)
