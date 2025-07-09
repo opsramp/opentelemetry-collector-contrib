@@ -1,0 +1,36 @@
+type: alertmetricsextractor
+
+status:
+  class: processor
+  stability:
+    alpha: [metrics]
+  distributions: [contrib]
+  codeowners:
+    active: [opsramp-team]
+
+tests:
+  config:
+
+telemetry:
+  metrics:
+    processor_alertmetricsextractor_metrics_extracted:
+      enabled: true
+      description: Number of distinct metrics extracted from alert definitions
+      unit: "1"
+      sum:
+        value_type: int
+        monotonic: true
+    processor_alertmetricsextractor_alerts_processed:
+      enabled: true
+      description: Number of alert definitions processed
+      unit: "1"
+      sum:
+        value_type: int
+        monotonic: true
+    processor_alertmetricsextractor_configmap_updates:
+      enabled: true
+      description: Number of ConfigMap updates performed
+      unit: "1"
+      sum:
+        value_type: int
+        monotonic: true

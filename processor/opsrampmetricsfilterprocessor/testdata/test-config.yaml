@@ -1,0 +1,70 @@
+receivers:
+  # Prometheus receiver to scrape metrics
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'test-metrics'
+          scrape_interval: 10s
+          static_configs:
+            - targets: ['localhost:8080']  # Your metrics endpoint
+  
+  # OTLP receiver for testing
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Your Alert Metrics Extractor Processor
+  alertmetricsextractor:
+    alert_definitions_configmap_name: "opsramp-alert-user-config"
+    alert_definitions_configmap_key: "alert-definitions.yaml"
+    namespace: "opsramp-agent"
+  
+  # Batch processor for performance
+  batch:
+    timeout: 1s
+    send_batch_size: 100
+
+exporters:
+  # Debug exporter to see filtered metrics in logs
+  debug:
+    verbosity: detailed
+    sampling_initial: 10
+    sampling_thereafter: 10
+  
+  # Logging exporter (backup)
+  logging:
+    loglevel: info
+    sampling_initial: 2
+    sampling_thereafter: 500
+  
+  # Prometheus exporter
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: "filtered"
+  
+  # File exporter for debugging
+  file:
+    path: "./filtered-metrics.json"
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  
+  pipelines:
+    metrics/filtered:
+      receivers: [prometheus, otlp]
+      processors: [alertmetricsextractor, batch]
+      exporters: [debug, prometheus, file]
+  
+  telemetry:
+    logs:
+      level: "info"
+    metrics:
+      address: 0.0.0.0:8888
