@@ -12,7 +12,7 @@ This processor reads alert definitions from a Kubernetes ConfigMap, parses PromQ
 processors:
   alertmetricsextractor:
     # Name of the ConfigMap containing alert definitions
-    alert_definitions_configmap_name: "opsramp-agent-config"
+    alert_configmap_name: "opsramp-agent-config"
     
     # Key in the ConfigMap containing the alert definitions YAML
     alert_definitions_configmap_key: "alert-definitions.yaml"
@@ -25,7 +25,7 @@ processors:
 
 | Parameter | Type | Default | Required | Description |
 |-----------|------|---------|----------|-------------|
-| `alert_definitions_configmap_name` | string | `opsramp-agent-config` | Yes | Name of the ConfigMap containing alert definitions |
+| `alert_configmap_name` | string | `opsramp-agent-config` | Yes | Name of the ConfigMap containing alert definitions |
 | `alert_definitions_configmap_key` | string | `alert-definitions.yaml` | Yes | Key in the ConfigMap containing alert definitions YAML |
 | `namespace` | string | `default` | Yes | Kubernetes namespace where the ConfigMap is located |
 
@@ -122,7 +122,7 @@ receivers:
 
 processors:
   alertmetricsextractor:
-    alert_definitions_configmap_name: "opsramp-agent-config"
+    alert_configmap_name: "opsramp-agent-config"
     alert_definitions_configmap_key: "alert-definitions.yaml"
     namespace: "monitoring"
   

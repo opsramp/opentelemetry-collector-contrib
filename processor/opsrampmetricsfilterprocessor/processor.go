@@ -175,16 +175,16 @@ func (fp *filterProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 func (fp *filterProcessor) loadAlertDefinitions() error {
 	configMap, err := fp.client.CoreV1().ConfigMaps(fp.config.Namespace).Get(
 		context.TODO(),
-		fp.config.AlertDefinitionsConfigMapName,
+		fp.config.AlertConfigMapName,
 		metav1.GetOptions{},
 	)
 	if err != nil {
-		return fmt.Errorf("failed to get ConfigMap %s/%s: %w", fp.config.Namespace, fp.config.AlertDefinitionsConfigMapName, err)
+		return fmt.Errorf("failed to get ConfigMap %s/%s: %w", fp.config.Namespace, fp.config.AlertConfigMapName, err)
 	}
 
-	alertDefData, exists := configMap.Data[fp.config.AlertDefinitionsConfigMapKey]
+	alertDefData, exists := configMap.Data[fp.config.AlertConfigMapKey]
 	if !exists {
-		return fmt.Errorf("key %s not found in ConfigMap %s/%s", fp.config.AlertDefinitionsConfigMapKey, fp.config.Namespace, fp.config.AlertDefinitionsConfigMapName)
+		return fmt.Errorf("key %s not found in ConfigMap %s/%s", fp.config.AlertConfigMapKey, fp.config.Namespace, fp.config.AlertConfigMapName)
 	}
 
 	var alertDefs AlertDefinitions
@@ -276,7 +276,7 @@ func (fp *filterProcessor) doWatch() {
 	watcher, err := fp.client.CoreV1().ConfigMaps(fp.config.Namespace).Watch(
 		context.TODO(),
 		metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("metadata.name=%s", fp.config.AlertDefinitionsConfigMapName),
+			FieldSelector: fmt.Sprintf("metadata.name=%s", fp.config.AlertConfigMapName),
 		},
 	)
 	if err != nil {
@@ -286,7 +286,7 @@ func (fp *filterProcessor) doWatch() {
 	defer watcher.Stop()
 
 	fp.logger.Info("Started watching ConfigMap for changes",
-		zap.String("configmap", fp.config.AlertDefinitionsConfigMapName),
+		zap.String("configmap", fp.config.AlertConfigMapName),
 		zap.String("namespace", fp.config.Namespace))
 
 	for {

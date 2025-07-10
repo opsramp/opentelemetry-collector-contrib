@@ -21,9 +21,9 @@ func TestCreateDefaultConfig(t *testing.T) {
 
 func TestCreateProcessor(t *testing.T) {
 	cfg := &Config{
-		AlertDefinitionsConfigMapName: "test-config",
-		AlertDefinitionsConfigMapKey:  "alert-definitions.yaml",
-		Namespace:                     "test-namespace",
+		AlertConfigMapName: "test-config",
+		AlertConfigMapKey:  "alert-definitions.yaml",
+		Namespace:          "test-namespace",
 	}
 
 	// This test will fail in CI/testing environment without Kubernetes cluster
@@ -49,33 +49,33 @@ func TestValidateConfig(t *testing.T) {
 		{
 			name: "valid config",
 			config: &Config{
-				AlertDefinitionsConfigMapName: "test-config",
-				AlertDefinitionsConfigMapKey:  "alert-definitions.yaml",
-				Namespace:                     "test-namespace",
+				AlertConfigMapName: "test-config",
+				AlertConfigMapKey:  "alert-definitions.yaml",
+				Namespace:          "test-namespace",
 			},
 			wantErr: false,
 		},
 		{
 			name: "missing configmap name",
 			config: &Config{
-				AlertDefinitionsConfigMapKey: "alert-definitions.yaml",
-				Namespace:                    "test-namespace",
+				AlertConfigMapKey: "alert-definitions.yaml",
+				Namespace:         "test-namespace",
 			},
 			wantErr: true,
 		},
 		{
 			name: "missing configmap key",
 			config: &Config{
-				AlertDefinitionsConfigMapName: "test-config",
-				Namespace:                     "test-namespace",
+				AlertConfigMapName: "test-config",
+				Namespace:          "test-namespace",
 			},
 			wantErr: true,
 		},
 		{
 			name: "missing namespace",
 			config: &Config{
-				AlertDefinitionsConfigMapName: "test-config",
-				AlertDefinitionsConfigMapKey:  "alert-definitions.yaml",
+				AlertConfigMapName: "test-config",
+				AlertConfigMapKey:  "alert-definitions.yaml",
 			},
 			wantErr: true,
 		},

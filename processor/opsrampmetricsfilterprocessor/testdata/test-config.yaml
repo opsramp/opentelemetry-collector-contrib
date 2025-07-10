@@ -19,7 +19,7 @@ receivers:
 processors:
   # Your Alert Metrics Extractor Processor
   alertmetricsextractor:
-    alert_definitions_configmap_name: "opsramp-alert-user-config"
+    alert_configmap_name: "opsramp-alert-user-config"
     alert_definitions_configmap_key: "alert-definitions.yaml"
     namespace: "opsramp-agent"
   
