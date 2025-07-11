@@ -6,6 +6,7 @@ package opsrampmetricsfilterprocessor // import "github.com/open-telemetry/opent
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -94,6 +95,7 @@ func newFilterProcessor(settings processor.Settings, config *Config, nextConsume
 	// Initial load of alert definitions
 	if err := fp.loadAlertDefinitions(); err != nil {
 		fp.logger.Error("Failed to load initial alert definitions", zap.Error(err))
+		// Don't return error here, just log it and continue
 	}
 
 	// Start watching for ConfigMap changes
@@ -104,7 +106,19 @@ func newFilterProcessor(settings processor.Settings, config *Config, nextConsume
 
 // Start starts the processor
 func (fp *filterProcessor) Start(ctx context.Context, host component.Host) error {
-	fp.logger.Info("Starting alert metrics extractor processor")
+	fp.logger.Info("Starting alert metrics extractor processor",
+		zap.String("configmap_name", fp.config.AlertConfigMapName),
+		zap.String("configmap_key", fp.config.AlertConfigMapKey),
+		zap.String("namespace", fp.config.Namespace))
+
+	// Log the current state of the metrics map
+	fp.metricsMutex.RLock()
+	currentMetricsCount := len(fp.metricsMap)
+	fp.metricsMutex.RUnlock()
+
+	fp.logger.Info("Processor started with metrics configuration",
+		zap.Int("metrics_count", currentMetricsCount))
+
 	return nil
 }
 
@@ -125,19 +139,41 @@ func (fp *filterProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 	fp.metricsMutex.RLock()
 	defer fp.metricsMutex.RUnlock()
 
-	// If no metrics are configured, pass all metrics through
-	if len(fp.metricsMap) == 0 {
+	// Count incoming metrics
+	totalIncomingMetrics := 0
+	for i := 0; i < md.ResourceMetrics().Len(); i++ {
+		rm := md.ResourceMetrics().At(i)
+		for j := 0; j < rm.ScopeMetrics().Len(); j++ {
+			sm := rm.ScopeMetrics().At(j)
+			totalIncomingMetrics += sm.Metrics().Len()
+		}
+	}
+
+	// Early return if no metrics to process
+	if totalIncomingMetrics == 0 {
+		fp.logger.Debug("No incoming metrics to process")
 		return fp.nextConsumer.ConsumeMetrics(ctx, md)
+	}
+
+	// If no metrics are configured for filtering, drop all metrics
+	if len(fp.metricsMap) == 0 {
+		fp.logger.Info("No metrics filter configured, dropping all metrics",
+			zap.Int("dropped_metrics", totalIncomingMetrics))
+		// Return empty metrics to effectively drop all metrics
+		return fp.nextConsumer.ConsumeMetrics(ctx, pmetric.NewMetrics())
 	}
 
 	// Create a new metrics object to hold filtered metrics
 	filteredMetrics := pmetric.NewMetrics()
+	totalFilteredMetrics := 0
 
 	// Iterate through all resource metrics
 	for i := 0; i < md.ResourceMetrics().Len(); i++ {
 		rm := md.ResourceMetrics().At(i)
 		filteredRM := filteredMetrics.ResourceMetrics().AppendEmpty()
 		rm.Resource().CopyTo(filteredRM.Resource())
+
+		resourceHasMetrics := false
 
 		// Iterate through all scope metrics
 		for j := 0; j < rm.ScopeMetrics().Len(); j++ {
@@ -150,22 +186,42 @@ func (fp *filterProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 			for k := 0; k < sm.Metrics().Len(); k++ {
 				metric := sm.Metrics().At(k)
 				metricName := metric.Name()
+				// Convert dots to underscores for Prometheus compatibility
+				metricName = strings.ReplaceAll(metricName, ".", "_")
 
 				// Check if this metric should be included
 				if fp.metricsMap[metricName] {
 					filteredMetric := filteredSM.Metrics().AppendEmpty()
 					metric.CopyTo(filteredMetric)
 					hasMetrics = true
+					resourceHasMetrics = true
+					totalFilteredMetrics++
 				}
 			}
 
 			// Remove the scope metrics if no metrics were added
 			if !hasMetrics {
-				filteredRM.ScopeMetrics().RemoveIf(func(sm pmetric.ScopeMetrics) bool {
-					return sm.Scope().Name() == sm.Scope().Name()
+				filteredRM.ScopeMetrics().RemoveIf(func(scopeMetrics pmetric.ScopeMetrics) bool {
+					return scopeMetrics.Scope().Name() == sm.Scope().Name()
 				})
 			}
 		}
+
+		// Remove the resource metrics if no metrics were added
+		if !resourceHasMetrics {
+			filteredMetrics.ResourceMetrics().RemoveIf(func(rm pmetric.ResourceMetrics) bool {
+				return true // Remove this empty resource metrics
+			})
+		}
+	}
+
+	fp.logger.Info("Metrics filtering completed",
+		zap.Int("incoming_metrics", totalIncomingMetrics),
+		zap.Int("filtered_metrics", totalFilteredMetrics),
+		zap.Int("configured_filter_count", len(fp.metricsMap)))
+
+	if totalFilteredMetrics == 0 {
+		fp.logger.Warn("No metrics passed through the filter - check configuration")
 	}
 
 	return fp.nextConsumer.ConsumeMetrics(ctx, filteredMetrics)
@@ -173,22 +229,35 @@ func (fp *filterProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 
 // loadAlertDefinitions loads alert definitions from the ConfigMap
 func (fp *filterProcessor) loadAlertDefinitions() error {
+	fp.logger.Info("Loading alert definitions from ConfigMap",
+		zap.String("configmap", fp.config.AlertConfigMapName),
+		zap.String("namespace", fp.config.Namespace),
+		zap.String("key", fp.config.AlertConfigMapKey))
+
 	configMap, err := fp.client.CoreV1().ConfigMaps(fp.config.Namespace).Get(
 		context.TODO(),
 		fp.config.AlertConfigMapName,
 		metav1.GetOptions{},
 	)
 	if err != nil {
+		fp.logger.Error("Failed to get ConfigMap",
+			zap.String("configmap", fp.config.AlertConfigMapName),
+			zap.String("namespace", fp.config.Namespace),
+			zap.Error(err))
 		return fmt.Errorf("failed to get ConfigMap %s/%s: %w", fp.config.Namespace, fp.config.AlertConfigMapName, err)
 	}
 
 	alertDefData, exists := configMap.Data[fp.config.AlertConfigMapKey]
 	if !exists {
+		fp.logger.Error("Alert definitions key not found in ConfigMap",
+			zap.String("key", fp.config.AlertConfigMapKey),
+			zap.Strings("available_keys", getKeys(configMap.Data)))
 		return fmt.Errorf("key %s not found in ConfigMap %s/%s", fp.config.AlertConfigMapKey, fp.config.Namespace, fp.config.AlertConfigMapName)
 	}
 
 	var alertDefs AlertDefinitions
 	if err := yaml.Unmarshal([]byte(alertDefData), &alertDefs); err != nil {
+		fp.logger.Error("Failed to unmarshal alert definitions", zap.Error(err))
 		return fmt.Errorf("failed to unmarshal alert definitions: %w", err)
 	}
 
@@ -208,9 +277,9 @@ func (fp *filterProcessor) loadAlertDefinitions() error {
 	fp.metricsMap = newMetricsMap
 	fp.metricsMutex.Unlock()
 
-	fp.logger.Info("Loaded alert definitions",
-		zap.Int("total_metrics", len(newMetricsMap)),
-		zap.Strings("metrics", fp.getMetricsList(newMetricsMap)))
+	fp.logger.Info("Successfully loaded alert definitions",
+		zap.Int("alert_definitions", len(alertDefs.AlertDefinitions)),
+		zap.Int("unique_metrics", len(newMetricsMap)))
 
 	return nil
 }
@@ -315,11 +384,11 @@ func (fp *filterProcessor) doWatch() {
 	}
 }
 
-// getMetricsList returns a slice of metric names from the map (for logging)
-func (fp *filterProcessor) getMetricsList(metricsMap map[string]bool) []string {
-	var metrics []string
-	for metric := range metricsMap {
-		metrics = append(metrics, metric)
+// getKeys returns a slice of keys from a map[string]string (for logging)
+func getKeys(data map[string]string) []string {
+	var keys []string
+	for key := range data {
+		keys = append(keys, key)
 	}
-	return metrics
+	return keys
 }

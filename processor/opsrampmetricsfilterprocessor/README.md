@@ -6,28 +6,37 @@ The Alert Metrics Extractor Processor is a filtering processor that dynamically 
 
 This processor reads alert definitions from a Kubernetes ConfigMap, parses PromQL expressions to extract raw metric names, maintains a thread-safe global map of distinct metrics, and filters incoming metrics to only allow those present in the map. It watches for ConfigMap changes and updates the filtering rules in real-time.
 
+**Key Feature**: Automatically converts OpenTelemetry metric names (with dots) to Prometheus-compatible format (with underscores) to ensure proper matching between incoming metrics and PromQL expressions.
+
+## Use Cases
+
+- **Metric Cost Optimization**: Reduce data ingestion costs by only forwarding metrics that are actively used in alerts
+- **Performance Improvement**: Decrease processing overhead by filtering out unused metrics early in the pipeline
+- **Dynamic Filtering**: Automatically adapt filtering rules when alert definitions change
+- **Multi-tenant Environments**: Filter metrics based on tenant-specific alert configurations
+
 ## Configuration
 
 ```yaml
 processors:
-  alertmetricsextractor:
+  opsrampmetricsfilter:
     # Name of the ConfigMap containing alert definitions
-    alert_configmap_name: "opsramp-agent-config"
+    alert_configmap_name: "opsramp-alert-user-config"
     
     # Key in the ConfigMap containing the alert definitions YAML
     alert_definitions_configmap_key: "alert-definitions.yaml"
     
     # Kubernetes namespace where the ConfigMap is located
-    namespace: "default"
+    namespace: "opsramp-agent"
 ```
 
 ### Configuration Parameters
 
 | Parameter | Type | Default | Required | Description |
 |-----------|------|---------|----------|-------------|
-| `alert_configmap_name` | string | `opsramp-agent-config` | Yes | Name of the ConfigMap containing alert definitions |
+| `alert_configmap_name` | string | `opsramp-alert-user-config` | Yes | Name of the ConfigMap containing alert definitions |
 | `alert_definitions_configmap_key` | string | `alert-definitions.yaml` | Yes | Key in the ConfigMap containing alert definitions YAML |
-| `namespace` | string | `default` | Yes | Kubernetes namespace where the ConfigMap is located |
+| `namespace` | string | `opsramp-agent` | Yes | Kubernetes namespace where the ConfigMap is located |
 
 ## How It Works
 
@@ -51,7 +60,11 @@ processors:
 
 4. **Metric Filtering**
    - For each incoming metric batch in the pipeline:
-     - Checks if metric name exists in the global map
+     - **Early Return**: If no metrics are incoming, returns immediately without processing
+     - **Drop All**: If no alert definitions are configured, drops all metrics (sends empty batch to exporter)
+     - **Prometheus Compatibility**: Converts metric names from OpenTelemetry format (dots) to Prometheus format (underscores)
+       - Example: `k8s.pod.cpu.usage` → `k8s_pod_cpu_usage`
+     - Checks if the converted metric name exists in the global map
      - **Allows through**: Metrics present in alert definitions
      - **Filters out**: Metrics not referenced in any alert
    - Passes filtered metrics to the next consumer/exporter
@@ -60,6 +73,20 @@ processors:
    - Continuously watches the ConfigMap for changes
    - When ConfigMap is modified, re-extracts metrics and updates the global map
    - All subsequent filtering uses the updated rules
+
+## Prometheus Compatibility
+
+⚠️ **Important**: This processor automatically converts OpenTelemetry metric names to Prometheus-compatible format by replacing dots (`.`) with underscores (`_`). This ensures that metrics extracted from PromQL expressions (which use underscore notation) correctly match the incoming OpenTelemetry metrics (which may use dot notation).
+
+### Metric Name Conversion Examples
+
+| OpenTelemetry Format | Prometheus Format | Match Result |
+|---------------------|------------------|--------------|
+| `k8s.pod.cpu.usage` | `k8s_pod_cpu_usage` | ✅ Matches |
+| `system.disk.io.read.bytes` | `system_disk_io_read_bytes` | ✅ Matches |
+| `http_requests_total` | `http_requests_total` | ✅ Matches (no change needed) |
+
+Without this conversion, OpenTelemetry metrics with dots would not match PromQL expressions that reference them with underscores, causing all metrics to be filtered out.
 
 ### Alert Definitions Format
 
@@ -121,10 +148,10 @@ receivers:
             - role: node
 
 processors:
-  alertmetricsextractor:
-    alert_configmap_name: "opsramp-agent-config"
+  opsrampmetricsfilter:
+    alert_configmap_name: "opsramp-alert-user-config"
     alert_definitions_configmap_key: "alert-definitions.yaml"
-    namespace: "monitoring"
+    namespace: "opsramp-agent"
   
   batch:
     timeout: 1s
@@ -137,7 +164,7 @@ service:
   pipelines:
     metrics/filtered:
       receivers: [prometheus]
-      processors: [alertmetricsextractor, batch]
+      processors: [opsrampmetricsfilter, batch]
       exporters: [prometheusremotewrite]
 ```
 
@@ -147,8 +174,8 @@ service:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: opsramp-agent-config
-  namespace: monitoring
+  name: opsramp-alert-user-config
+  namespace: opsramp-agent
 data:
   alert-definitions.yaml: |
     alertDefinitions:
@@ -173,15 +200,42 @@ The processor ensures thread-safe operation through:
 - **Exclusive Writes**: ConfigMap updates acquire exclusive write access to update the map
 - **Atomic Operations**: Map updates are atomic to prevent race conditions
 
+## Filtering Behavior
+
+### When No Alert Definitions Are Configured
+
+The processor implements a **"drop-all"** approach when no alert definitions are available:
+
+| Scenario | Behavior | Rationale |
+|----------|----------|-----------|
+| ConfigMap not found | **Drops all metrics** | No alert definitions = no metrics needed |
+| ConfigMap key missing | **Drops all metrics** | No alert definitions = no metrics needed |
+| Empty alert definitions | **Drops all metrics** | No expressions = no metrics to extract |
+| Invalid PromQL expressions | **Drops all metrics** | Cannot extract metrics from invalid expressions |
+| ConfigMap deleted | **Drops all metrics** | Alert definitions no longer available |
+
+This behavior ensures that:
+- **Cost optimization**: No unnecessary metrics are sent to expensive storage/monitoring systems
+- **Performance**: Minimal resource usage when no filtering rules are defined
+- **Fail-safe operation**: Prevents accidental metric flooding when configuration is missing
+
+### Early Return Optimizations
+
+The processor includes several optimizations to skip unnecessary processing:
+
+- **No incoming metrics**: Returns immediately if the incoming metric batch is empty
+- **No configured filters**: Drops all metrics without iterating through them
+- **Empty metric names**: Skips metrics with empty names during filtering
+
 ## Error Handling
 
 | Error Type | Behavior | Log Level |
 |------------|----------|-----------|
-| ConfigMap not found | Processor continues with empty map (filters all metrics) | Error |
+| ConfigMap not found | Processor continues with empty map (drops all metrics) | Error |
 | Invalid YAML | Processor continues with previous map | Error |
 | PromQL parse error | Skips that expression, continues with others | Warning |
 | Kubernetes API error | Retries with exponential backoff | Error |
-| ConfigMap deleted | Clears metrics map (filters all metrics) | Warning |
+| ConfigMap deleted | Clears metrics map (drops all metrics) | Warning |
 
 ## Performance Considerations
 
@@ -199,16 +253,35 @@ The processor ensures thread-safe operation through:
    - Check if ConfigMap exists and is accessible
    - Verify alert definitions contain valid PromQL expressions
    - Check processor logs for parsing errors
+   - **Most Common**: Ensure your PromQL expressions use underscore notation (e.g., `k8s_pod_cpu_usage` not `k8s.pod.cpu.usage`)
+   - **New behavior**: If no alert definitions are configured, ALL metrics are dropped by design
 
-2. **ConfigMap changes not detected**
+2. **All metrics being dropped unexpectedly**
+   - **ConfigMap missing**: Verify the ConfigMap exists in the specified namespace
+   - **Key missing**: Check that the `alert_definitions_configmap_key` matches the actual key in the ConfigMap
+   - **Empty definitions**: Ensure the ConfigMap contains valid alert definitions with PromQL expressions
+   - **Invalid expressions**: Check processor logs for PromQL parsing errors
+   - This is the expected behavior when no valid alert definitions are found
+
+3. **OpenTelemetry metrics not matching PromQL expressions**
+   - This is automatically handled by the processor's dot-to-underscore conversion
+   - If still having issues, verify the converted metric names in debug logs
+   - Ensure your alert expressions use standard Prometheus naming conventions
+
+4. **ConfigMap changes not detected**
    - Ensure proper RBAC permissions for ConfigMap access
    - Check if ConfigMap is in the correct namespace
    - Verify Kubernetes watch connection
 
-3. **Some metrics still filtered**
+5. **Some metrics still filtered**
    - Check if metric names match exactly (case-sensitive)
    - Verify PromQL expressions reference the expected metrics
    - Enable debug logging to see extracted metric names
+
+6. **Metrics not reaching Prometheus remote write**
+   - This was a common issue before the dot-to-underscore conversion was implemented
+   - Ensure you're using the latest version of the processor
+   - Check logs for "Metrics filtering completed" to see if metrics are being filtered correctly
 
 ### Debug Logging
 
@@ -225,6 +298,26 @@ This will show:
 - Extracted metric names from each alert expression
 - ConfigMap watch events
 - Filtering decisions for each metric
+- Dot-to-underscore conversion details
+
+### Typical Log Output
+
+```
+2024-01-15T10:30:00Z info Loading alert definitions from ConfigMap configmap=opsramp-alert-user-config namespace=opsramp-agent
+2024-01-15T10:30:00Z info Successfully loaded alert definitions alert_definitions=2 unique_metrics=15
+2024-01-15T10:30:05Z info Metrics filtering completed incoming_metrics=1250 filtered_metrics=15 configured_filter_count=15
+```
+
+**When no alert definitions are configured:**
+```
+2024-01-15T10:30:00Z error Failed to get ConfigMap configmap=opsramp-alert-user-config namespace=opsramp-agent error="configmaps \"opsramp-alert-user-config\" not found"
+2024-01-15T10:30:05Z info No metrics filter configured, dropping all metrics dropped_metrics=1250
+```
+
+**When no incoming metrics:**
+```
+2024-01-15T10:30:05Z debug No incoming metrics to process
+```
 
 ## RBAC Requirements
 
@@ -234,7 +327,7 @@ The processor requires the following Kubernetes permissions:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: otelcol-alertmetricsextractor
+  name: otelcol-opsrampmetricsfilter
 rules:
 - apiGroups: [""]
   resources: ["configmaps"]

@@ -1,0 +1,32 @@
+receivers:
+  # Mock receiver for testing
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  opsrampmetricsfilter:
+    alert_configmap_name: "test-alert-config"
+    alert_definitions_configmap_key: "alert-definitions.yaml"
+    namespace: "test-namespace"
+  
+  batch:
+    timeout: 1s
+
+exporters:
+  debug:
+    verbosity: detailed
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [opsrampmetricsfilter, batch]
+      exporters: [debug]
+  
+  telemetry:
+    logs:
+      level: debug
+    metrics:
+      address: 0.0.0.0:8888
