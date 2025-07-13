@@ -5,6 +5,7 @@ package opsrampmetricsfilterprocessor
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
@@ -53,7 +54,7 @@ func TestValidateConfig(t *testing.T) {
 		errMsg  string
 	}{
 		{
-			name: "valid config",
+			name: "valid config with all fields",
 			config: &Config{
 				AlertConfigMapName: "test-config",
 				AlertConfigMapKey:  "alert-definitions.yaml",
@@ -62,42 +63,48 @@ func TestValidateConfig(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "missing configmap name",
-			config: &Config{
-				AlertConfigMapKey: "alert-definitions.yaml",
-				Namespace:         "test-namespace",
-			},
-			wantErr: true,
-			errMsg:  "alert_configmap_name is required",
+			name:    "empty config uses defaults",
+			config:  &Config{},
+			wantErr: false,
 		},
 		{
-			name: "missing configmap key",
+			name: "partial config with configmap name only",
 			config: &Config{
-				AlertConfigMapName: "test-config",
-				Namespace:          "test-namespace",
+				AlertConfigMapName: "my-config",
 			},
-			wantErr: true,
-			errMsg:  "alert_definitions_configmap_key is required",
+			wantErr: false,
 		},
 		{
-			name: "missing namespace",
+			name: "partial config with key only",
 			config: &Config{
-				AlertConfigMapName: "test-config",
-				AlertConfigMapKey:  "alert-definitions.yaml",
+				AlertConfigMapKey: "my-alerts.yaml",
 			},
-			wantErr: true,
-			errMsg:  "namespace is required",
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Store original namespace env
+			originalNS := os.Getenv("NAMESPACE")
+			defer func() {
+				if originalNS != "" {
+					os.Setenv("NAMESPACE", originalNS)
+				} else {
+					os.Unsetenv("NAMESPACE")
+				}
+			}()
+
 			err := tt.config.Validate()
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errMsg)
 			} else {
 				assert.NoError(t, err)
+				// Verify defaults are set
+				assert.NotEmpty(t, tt.config.AlertConfigMapName)
+				assert.NotEmpty(t, tt.config.AlertConfigMapKey)
+				assert.NotEmpty(t, tt.config.Namespace)
 			}
 		})
 	}
@@ -327,4 +334,55 @@ func TestNoIncomingMetricsEarlyReturn(t *testing.T) {
 
 	// Should have no resource metrics (same as input)
 	assert.Equal(t, 0, receivedMetrics.ResourceMetrics().Len())
+}
+
+func TestNamespaceFromEnvironment(t *testing.T) {
+	// Store original namespace env
+	originalNS := os.Getenv("NAMESPACE")
+	defer func() {
+		if originalNS != "" {
+			os.Setenv("NAMESPACE", originalNS)
+		} else {
+			os.Unsetenv("NAMESPACE")
+		}
+	}()
+
+	tests := []struct {
+		name              string
+		envValue          string
+		expectedNamespace string
+	}{
+		{
+			name:              "namespace from environment",
+			envValue:          "production",
+			expectedNamespace: "production",
+		},
+		{
+			name:              "fallback to default when env not set",
+			envValue:          "",
+			expectedNamespace: "opsramp-agent",
+		},
+		{
+			name:              "namespace from environment overrides default",
+			envValue:          "staging",
+			expectedNamespace: "staging",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set environment variable
+			if tt.envValue != "" {
+				os.Setenv("NAMESPACE", tt.envValue)
+			} else {
+				os.Unsetenv("NAMESPACE")
+			}
+
+			config := &Config{}
+			err := config.Validate()
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expectedNamespace, config.Namespace)
+		})
+	}
 }

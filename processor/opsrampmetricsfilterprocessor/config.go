@@ -4,20 +4,25 @@
 package opsrampmetricsfilterprocessor // import "github.com/open-telemetry/opentelemetry-collector-contrib/processor/opsrampmetricsfilterprocessor"
 
 import (
-	"fmt"
+	"os"
 
 	"go.opentelemetry.io/collector/component"
+	"go.uber.org/zap"
 )
 
 // Config defines configuration for the Alert Metrics Extractor processor.
 type Config struct {
 	// AlertConfigMapName is the name of the ConfigMap containing alert definitions
-	AlertConfigMapName string `mapstructure:"alert_configmap_name"`
+	// Optional: defaults to "opsramp-alert-user-config"
+	AlertConfigMapName string `mapstructure:"alert_definitions_configmap_name"`
 
 	// AlertConfigMapKey is the key in the ConfigMap containing alert definitions YAML
-	AlertConfigMapKey string `mapstructure:"alert_definitions_configmap_key"`
+	// Optional: defaults to "alert-definitions.yaml"
+	AlertConfigMapKey string `mapstructure:"alert_definitions_key"`
 
 	// Namespace is the Kubernetes namespace where ConfigMaps are located
+	// This is automatically populated from the NAMESPACE environment variable
+	// Users should not set this field directly
 	Namespace string `mapstructure:"namespace"`
 }
 
@@ -25,16 +30,24 @@ var _ component.Config = (*Config)(nil)
 
 // Validate checks if the processor configuration is valid
 func (cfg *Config) Validate() error {
+	// Set defaults if not provided
 	if cfg.AlertConfigMapName == "" {
-		return fmt.Errorf("alert_configmap_name is required")
+		cfg.AlertConfigMapName = "opsramp-alert-user-config"
 	}
 
 	if cfg.AlertConfigMapKey == "" {
-		return fmt.Errorf("alert_definitions_configmap_key is required")
+		cfg.AlertConfigMapKey = "alert-definitions.yaml"
 	}
 
+	// Set namespace from environment variable if not already set
 	if cfg.Namespace == "" {
-		return fmt.Errorf("namespace is required")
+		cfg.Namespace = os.Getenv("NAMESPACE")
+		// check namespace through log
+		zap.L().Debug("#### Using namespace from environment variable", zap.String("namespace", cfg.Namespace))
+		if cfg.Namespace == "" {
+			zap.L().Debug("#### NAMESPACE environment variable not set, using default namespace")
+			cfg.Namespace = "opsramp-agent"
+		}
 	}
 
 	return nil

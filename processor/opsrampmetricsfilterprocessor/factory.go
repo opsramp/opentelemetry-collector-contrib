@@ -13,12 +13,10 @@ import (
 
 const (
 	// The value of "type" key in configuration.
-	typeStr = "alertmetricsextractor"
+	typeStr = "opsrampmetricsfilter"
 	// The stability level of the processor.
 	stability = component.StabilityLevelAlpha
 )
-
-var processorCapabilities = consumer.Capabilities{MutatesData: true}
 
 // NewFactory returns a new factory for the Alert Metrics Extractor processor.
 func NewFactory() processor.Factory {
@@ -44,6 +42,11 @@ func createMetricsProcessor(
 	nextConsumer consumer.Metrics,
 ) (processor.Metrics, error) {
 	oCfg := cfg.(*Config)
+
+	// Validate and set defaults
+	if err := oCfg.Validate(); err != nil {
+		return nil, err
+	}
 
 	return newFilterProcessor(set, oCfg, nextConsumer)
 }

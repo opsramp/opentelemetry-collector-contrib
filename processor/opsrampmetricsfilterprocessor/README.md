@@ -17,26 +17,45 @@ This processor reads alert definitions from a Kubernetes ConfigMap, parses PromQ
 
 ## Configuration
 
+The processor can be configured with minimal or detailed configuration. All parameters are optional with sensible defaults.
+
+### Minimal Configuration
+
 ```yaml
 processors:
   opsrampmetricsfilter:
-    # Name of the ConfigMap containing alert definitions
-    alert_configmap_name: "opsramp-alert-user-config"
+    # Uses all default values
+```
+
+### Detailed Configuration
+
+```yaml
+processors:
+  opsrampmetricsfilter:
+    # Optional: Name of the ConfigMap containing alert definitions
+    alert_definitions_configmap_name: "opsramp-alert-user-config"
     
-    # Key in the ConfigMap containing the alert definitions YAML
-    alert_definitions_configmap_key: "alert-definitions.yaml"
+    # Optional: Key in the ConfigMap containing the alert definitions YAML
+    alert_definitions_key: "alert-definitions.yaml"
     
-    # Kubernetes namespace where the ConfigMap is located
-    namespace: "opsramp-agent"
+    # Note: namespace is automatically read from NAMESPACE environment variable
 ```
 
 ### Configuration Parameters
 
 | Parameter | Type | Default | Required | Description |
 |-----------|------|---------|----------|-------------|
-| `alert_configmap_name` | string | `opsramp-alert-user-config` | Yes | Name of the ConfigMap containing alert definitions |
-| `alert_definitions_configmap_key` | string | `alert-definitions.yaml` | Yes | Key in the ConfigMap containing alert definitions YAML |
-| `namespace` | string | `opsramp-agent` | Yes | Kubernetes namespace where the ConfigMap is located |
+| `alert_definitions_configmap_name` | string | `opsramp-alert-user-config` | No | Name of the ConfigMap containing alert definitions |
+| `alert_definitions_key` | string | `alert-definitions.yaml` | No | Key in the ConfigMap containing alert definitions YAML |
+| `namespace` | string | From `NAMESPACE` env var, fallback to `opsramp-agent` | No | Kubernetes namespace where the ConfigMap is located (auto-populated) |
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NAMESPACE` | Kubernetes namespace where ConfigMaps are located | `opsramp-agent` |
+
+The processor automatically reads the namespace from the `NAMESPACE` environment variable, which is typically set by Kubernetes when running as a pod. If the environment variable is not set, it falls back to the default namespace `opsramp-agent`.
 
 ## How It Works
 
@@ -149,8 +168,8 @@ receivers:
 
 processors:
   opsrampmetricsfilter:
-    alert_configmap_name: "opsramp-alert-user-config"
-    alert_definitions_configmap_key: "alert-definitions.yaml"
+    alert_definitions_configmap_name: "opsramp-alert-user-config"
+    alert_definitions_key: "alert-definitions.yaml"
     namespace: "opsramp-agent"
   
   batch:
@@ -258,7 +277,7 @@ The processor includes several optimizations to skip unnecessary processing:
 
 2. **All metrics being dropped unexpectedly**
    - **ConfigMap missing**: Verify the ConfigMap exists in the specified namespace
-   - **Key missing**: Check that the `alert_definitions_configmap_key` matches the actual key in the ConfigMap
+   - **Key missing**: Check that the `alert_definitions_key` matches the actual key in the ConfigMap
    - **Empty definitions**: Ensure the ConfigMap contains valid alert definitions with PromQL expressions
    - **Invalid expressions**: Check processor logs for PromQL parsing errors
    - This is the expected behavior when no valid alert definitions are found
