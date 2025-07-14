@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"go.opentelemetry.io/collector/component"
-	"go.uber.org/zap"
 )
 
 // Config defines configuration for the Alert Metrics Extractor processor.
@@ -42,10 +41,7 @@ func (cfg *Config) Validate() error {
 	// Set namespace from environment variable if not already set
 	if cfg.Namespace == "" {
 		cfg.Namespace = os.Getenv("NAMESPACE")
-		// check namespace through log
-		zap.L().Debug("#### Using namespace from environment variable", zap.String("namespace", cfg.Namespace))
 		if cfg.Namespace == "" {
-			zap.L().Debug("#### NAMESPACE environment variable not set, using default namespace")
 			cfg.Namespace = "opsramp-agent"
 		}
 	}
