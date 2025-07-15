@@ -13,6 +13,7 @@ import (
 
 // EventXML is the rendered xml of an event.
 type EventXML struct {
+	Original         string      `xml:"-"`
 	EventID          EventID     `xml:"System>EventID"`
 	Provider         Provider    `xml:"System>Provider"`
 	Computer         string      `xml:"System>Computer"`

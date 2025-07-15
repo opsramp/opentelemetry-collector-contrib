@@ -15,24 +15,26 @@ import (
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
+	semconv "go.opentelemetry.io/otel/semconv/v1.27.0"
 )
 
 // Input is an operator that creates entries using the windows event log api.
 type Input struct {
 	helper.InputOperator
-	bookmark         Bookmark
-	subscription     Subscription
-	buffer           Buffer
-	channel          string
-	maxReads         int
-	startAt          string
-	raw              bool
-	excludeProviders []string
-	pollInterval     time.Duration
-	persister        operator.Persister
-	publisherCache   publisherCache
-	cancel           context.CancelFunc
-	wg               sync.WaitGroup
+	bookmark                 Bookmark
+	subscription             Subscription
+	buffer                   Buffer
+	channel                  string
+	maxReads                 int
+	startAt                  string
+	raw                      bool
+	includeLogRecordOriginal bool
+	excludeProviders         []string
+	pollInterval             time.Duration
+	persister                operator.Persister
+	publisherCache           publisherCache
+	cancel                   context.CancelFunc
+	wg                       sync.WaitGroup
 }
 
 // Start will start reading events from a subscription.
@@ -207,6 +209,10 @@ func (i *Input) sendEvent(ctx context.Context, eventXML EventXML) {
 
 	entry.Timestamp = eventXML.parseTimestamp()
 	entry.Severity = eventXML.parseRenderedSeverity()
+
+	if i.includeLogRecordOriginal {
+		entry.AddAttribute(string(semconv.LogRecordOriginalKey), eventXML.Original)
+	}
 	i.Write(ctx, entry)
 }
 
