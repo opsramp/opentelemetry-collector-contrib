@@ -35,6 +35,43 @@ type EventXML struct {
 }
 
 // parseTimestamp will parse the timestamp of the event.
+func parseTimestamp(ts string) time.Time {
+	if timestamp, err := time.Parse(time.RFC3339Nano, ts); err == nil {
+		return timestamp
+	}
+	return time.Now()
+}
+
+// parseRenderedSeverity will parse the severity of the event.
+func parseSeverity(renderedLevel, level string) entry.Severity {
+	switch renderedLevel {
+	case "":
+		switch level {
+		case "1":
+			return entry.Fatal
+		case "2":
+			return entry.Error
+		case "3":
+			return entry.Warn
+		case "4":
+			return entry.Info
+		default:
+			return entry.Default
+		}
+	case "Critical":
+		return entry.Fatal
+	case "Error":
+		return entry.Error
+	case "Warning":
+		return entry.Warn
+	case "Information":
+		return entry.Info
+	default:
+		return entry.Default
+	}
+}
+
+// parseTimestamp will parse the timestamp of the event.
 func (e *EventXML) parseTimestamp() time.Time {
 	if timestamp, err := time.Parse(time.RFC3339Nano, e.TimeCreated.SystemTime); err == nil {
 		return timestamp
@@ -182,6 +219,7 @@ func unmarshalEventXML(bytes []byte) (EventXML, error) {
 	if err := xml.Unmarshal(bytes, &eventXML); err != nil {
 		return EventXML{}, fmt.Errorf("failed to unmarshal xml bytes into event: %w (%s)", err, string(bytes))
 	}
+	eventXML.Original = string(bytes)
 	return eventXML, nil
 }
 
@@ -262,4 +300,67 @@ func (e Execution) asMap() map[string]any {
 	}
 
 	return result
+}
+
+// formattedBody will parse a body from the event.
+func formattedBody(e *EventXML) map[string]any {
+	message, details := e.parseMessage()
+
+	level := e.RenderedLevel
+	if level == "" {
+		level = e.Level
+	}
+
+	task := e.RenderedTask
+	if task == "" {
+		task = e.Task
+	}
+
+	opcode := e.RenderedOpcode
+	if opcode == "" {
+		opcode = e.Opcode
+	}
+
+	keywords := e.RenderedKeywords
+	if keywords == nil {
+		keywords = e.Keywords
+	}
+
+	body := map[string]any{
+		"event_id": map[string]any{
+			"qualifiers": e.EventID.Qualifiers,
+			"id":         e.EventID.ID,
+		},
+		"provider": map[string]any{
+			"name":         e.Provider.Name,
+			"guid":         e.Provider.GUID,
+			"event_source": e.Provider.EventSourceName,
+		},
+		"system_time": e.TimeCreated.SystemTime,
+		"computer":    e.Computer,
+		"channel":     e.Channel,
+		"record_id":   e.RecordID,
+		"level":       level,
+		"message":     message,
+		"task":        task,
+		"opcode":      opcode,
+		"keywords":    keywords,
+		"event_data":  parseEventData(e.EventData),
+	}
+
+	if len(details) > 0 {
+		body["details"] = details
+	}
+
+	if e.Security != nil && e.Security.UserID != "" {
+		body["security"] = map[string]any{
+			"user_id": e.Security.UserID,
+		}
+	}
+
+	if e.Execution != nil {
+		body["execution"] = e.Execution.asMap()
+	}
+
+	return body
 }

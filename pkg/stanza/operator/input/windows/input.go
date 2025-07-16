@@ -182,38 +182,57 @@ func (i *Input) processEvent(ctx context.Context, event Event) {
 			"Failed to open event source, respective log entries cannot be formatted",
 			zap.String("provider", simpleEvent.Provider.Name), zap.Error(openPublisherErr))
 	}
-
 	if !publisher.Valid() {
-		i.sendEvent(ctx, simpleEvent)
+		i.sendEvent(ctx, &simpleEvent)
 		return
 	}
 
 	formattedEvent, err := event.RenderFormatted(i.buffer, publisher)
 	if err != nil {
 		i.Logger().Error("Failed to render formatted event", zap.Error(err))
-		i.sendEvent(ctx, simpleEvent)
+		i.sendEvent(ctx, &simpleEvent)
 		return
 	}
 
-	i.sendEvent(ctx, formattedEvent)
+	i.Logger().Debug(
+		"Suresh - Debug stage 3 (formattedEvent) ",
+		zap.Any("formattedEvent", formattedEvent))
+	i.sendEvent(ctx, &formattedEvent)
 }
 
-// sendEvent will send EventXML as an entry to the operator's output.
-func (i *Input) sendEvent(ctx context.Context, eventXML EventXML) {
-	body := eventXML.parseBody()
-	entry, err := i.NewEntry(body)
-	if err != nil {
-		i.Logger().Error("Failed to create entry", zap.Error(err))
-		return
+func (i *Input) sendEvent(ctx context.Context, eventXML *EventXML) error {
+	var body any = eventXML.Original
+	if !i.raw {
+		body = formattedBody(eventXML)
 	}
 
-	entry.Timestamp = eventXML.parseTimestamp()
-	entry.Severity = eventXML.parseRenderedSeverity()
+	e, err := i.NewEntry(body)
+	if err != nil {
+		return fmt.Errorf("create entry: %w", err)
+	}
+
+	e.Timestamp = parseTimestamp(eventXML.TimeCreated.SystemTime)
+	e.Severity = parseSeverity(eventXML.RenderedLevel, eventXML.Level)
+	i.Logger().Debug("@@@@@@@Debug Suresh --> XML Body ->:", zap.Any("eventXML", eventXML))
+
+	i.Logger().Debug("@@@@@@@Debug Suresh --> before set -> Sending event -> includeLogRecordOriginal:",
+		zap.Bool("includeLogRecordOriginal", i.includeLogRecordOriginal),
+	)
+
+	i.includeLogRecordOriginal = true // @debug purpose only ... Default to true for all events
 
 	if i.includeLogRecordOriginal {
-		entry.AddAttribute(string(semconv.LogRecordOriginalKey), eventXML.Original)
+		e.AddAttribute(string(semconv.LogRecordOriginalKey), eventXML.Original)
+		i.Logger().Debug("@@@@@@@Debug Suresh --> after set -> Sending event -> includeLogRecordOriginal:",
+			zap.Bool("includeLogRecordOriginal", i.includeLogRecordOriginal),
+		)
 	}
-	i.Write(ctx, entry)
+
+	i.Logger().Debug("@@@@@@@Debug Suresh --> last set -> Sending event -> entry:",
+		zap.Any("entry", e),
+	)
+
+	return i.Write(ctx, e)
 }
 
 func (i *Input) sendEventRaw(ctx context.Context, eventRaw EventRaw) {

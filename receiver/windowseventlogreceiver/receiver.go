@@ -27,4 +27,6 @@ func createDefaultConfig() component.Config {
 type WindowsLogConfig struct {
 	InputConfig        windows.Config `mapstructure:",squash"`
 	adapter.BaseConfig `mapstructure:",squash"`
+
+	IncludeLogRecordOriginal bool `mapstructure:"include_log_record_original"`
 }
