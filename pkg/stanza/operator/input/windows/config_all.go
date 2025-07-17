@@ -35,5 +35,5 @@ type Config struct {
 	PollInterval             time.Duration `mapstructure:"poll_interval,omitempty"`
 	Raw                      bool          `mapstructure:"raw,omitempty"`
 	ExcludeProviders         []string      `mapstructure:"exclude_providers,omitempty"`
-	IncludeLogRecordOriginal bool          `mapstructure:"include_log_record_original,omitempty"`
+	IncludeLogRecordOriginal *bool         `mapstructure:"include_log_record_original,omitempty"`
 }

@@ -28,7 +28,7 @@ type Input struct {
 	maxReads                 int
 	startAt                  string
 	raw                      bool
-	includeLogRecordOriginal bool
+	includeLogRecordOriginal *bool
 	excludeProviders         []string
 	pollInterval             time.Duration
 	persister                operator.Persister
@@ -213,18 +213,16 @@ func (i *Input) sendEvent(ctx context.Context, eventXML *EventXML) error {
 
 	e.Timestamp = parseTimestamp(eventXML.TimeCreated.SystemTime)
 	e.Severity = parseSeverity(eventXML.RenderedLevel, eventXML.Level)
-	i.Logger().Debug("@@@@@@@Debug Suresh --> XML Body ->:", zap.Any("eventXML", eventXML))
 
-	i.Logger().Debug("@@@@@@@Debug Suresh --> before set -> Sending event -> includeLogRecordOriginal:",
-		zap.Bool("includeLogRecordOriginal", i.includeLogRecordOriginal),
+	i.Logger().Debug("@@@@@@@Debug Suresh --> XML Body ->",
+		zap.Any("eventXML", eventXML),
+		zap.Bool("isLogRecordOriginalEnabled => ", i.isLogRecordOriginalEnabled()),
 	)
 
-	i.includeLogRecordOriginal = true // @debug purpose only ... Default to true for all events
-
-	if i.includeLogRecordOriginal {
+	if i.isLogRecordOriginalEnabled() {
 		e.AddAttribute(string(semconv.LogRecordOriginalKey), eventXML.Original)
 		i.Logger().Debug("@@@@@@@Debug Suresh --> after set -> Sending event -> includeLogRecordOriginal:",
-			zap.Bool("includeLogRecordOriginal", i.includeLogRecordOriginal),
+			zap.Any("includeLogRecordOriginal", i.includeLogRecordOriginal),
 		)
 	}
 
@@ -271,4 +269,13 @@ func (i *Input) updateBookmarkOffset(ctx context.Context, event Event) {
 		i.Logger().Error("failed to set offsets", zap.Error(err))
 		return
 	}
+}
+
+func (i *Input) isLogRecordOriginalEnabled() bool {
+	// If includeLogRecordOriginal is nil, default to true
+	if i.includeLogRecordOriginal == nil {
+		return true
+	}
+	// Otherwise, return the value of includeLogRecordOriginal
+	return *i.includeLogRecordOriginal
 }

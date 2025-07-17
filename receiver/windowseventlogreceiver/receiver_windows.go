@@ -40,5 +40,13 @@ func (f ReceiverType) BaseConfig(cfg component.Config) adapter.BaseConfig {
 
 // InputConfig unmarshals the input operator
 func (f ReceiverType) InputConfig(cfg component.Config) operator.Config {
-	return operator.NewConfig(&cfg.(*WindowsLogConfig).InputConfig)
+	windowsCfg := &cfg.(*WindowsLogConfig).InputConfig
+
+	val := true
+	if cfg.(*WindowsLogConfig).IncludeLogRecordOriginal != nil {
+		val = *cfg.(*WindowsLogConfig).IncludeLogRecordOriginal
+	}
+	windowsCfg.IncludeLogRecordOriginal = &val
+
+	return operator.NewConfig(windowsCfg)
 }
