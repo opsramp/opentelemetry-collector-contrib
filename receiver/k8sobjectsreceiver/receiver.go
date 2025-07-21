@@ -109,7 +109,6 @@ func (kr *k8sobjectsreceiver) startListWatchObjects(ctx context.Context, objects
 	// Start a ticker for the list watch mode
 	ticker := newTicker(ctx, interval)
 	defer ticker.Stop()
-	var pullWQ sync.WaitGroup
 
 	stopperChanNew := make(chan struct{})
 	cancelCtx, cancel := context.WithCancel(ctx)
@@ -124,6 +123,9 @@ func (kr *k8sobjectsreceiver) startListWatchObjects(ctx context.Context, objects
 			stopperChanNew = make(chan struct{})
 			cancelCtx, cancel = context.WithCancel(ctx)
 			pullBarrier := make(chan struct{})
+
+			// Create a new WaitGroup for each cycle
+			var pullWQ sync.WaitGroup
 
 			for _, object := range objects {
 				if object.Mode == ListWatchMode {
@@ -143,12 +145,13 @@ func (kr *k8sobjectsreceiver) startListWatchObjects(ctx context.Context, objects
 			kr.setting.Logger.Info("timer waiting for all pull operations to finish before starting watch")
 			pullWQ.Wait()
 			kr.setting.Logger.Info("timer waiting over for all pull operations and starting watch")
-			close(pullBarrier)
 			//send a final log for the end of the pull operation
 			pullEndLog := createResourcePullEndLog(nil)
 			obsCtx := kr.obsrecv.StartLogsOp(ctx)
 			err := kr.consumer.ConsumeLogs(obsCtx, pullEndLog)
 			kr.obsrecv.EndLogsOp(obsCtx, metadata.Type.String(), pullEndLog.LogRecordCount(), err)
+			//Notify to start watch
+			close(pullBarrier)
 		case <-stopperChan:
 			cancel()
 			if stopperChanNew != nil {
