@@ -193,10 +193,6 @@ func (i *Input) processEvent(ctx context.Context, event Event) {
 		i.sendEvent(ctx, &simpleEvent)
 		return
 	}
-
-	i.Logger().Debug(
-		"Suresh - Debug stage 3 (formattedEvent) ",
-		zap.Any("formattedEvent", formattedEvent))
 	i.sendEvent(ctx, &formattedEvent)
 }
 
@@ -214,22 +210,9 @@ func (i *Input) sendEvent(ctx context.Context, eventXML *EventXML) error {
 	e.Timestamp = parseTimestamp(eventXML.TimeCreated.SystemTime)
 	e.Severity = parseSeverity(eventXML.RenderedLevel, eventXML.Level)
 
-	i.Logger().Debug("@@@@@@@Debug Suresh --> XML Body ->",
-		zap.Any("eventXML", eventXML),
-		zap.Bool("isLogRecordOriginalEnabled => ", i.isLogRecordOriginalEnabled()),
-	)
-
 	if i.isLogRecordOriginalEnabled() {
 		e.AddAttribute(string(semconv.LogRecordOriginalKey), eventXML.Original)
-		i.Logger().Debug("@@@@@@@Debug Suresh --> after set -> Sending event -> includeLogRecordOriginal:",
-			zap.Any("includeLogRecordOriginal", i.includeLogRecordOriginal),
-		)
 	}
-
-	i.Logger().Debug("@@@@@@@Debug Suresh --> last set -> Sending event -> entry:",
-		zap.Any("entry", e),
-	)
-
 	return i.Write(ctx, e)
 }
 

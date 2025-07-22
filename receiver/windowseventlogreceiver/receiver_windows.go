@@ -42,11 +42,11 @@ func (f ReceiverType) BaseConfig(cfg component.Config) adapter.BaseConfig {
 func (f ReceiverType) InputConfig(cfg component.Config) operator.Config {
 	windowsCfg := &cfg.(*WindowsLogConfig).InputConfig
 
-	val := true
+	isEnableRecordOrg := true
 	if cfg.(*WindowsLogConfig).IncludeLogRecordOriginal != nil {
-		val = *cfg.(*WindowsLogConfig).IncludeLogRecordOriginal
+		isEnableRecordOrg = *cfg.(*WindowsLogConfig).IncludeLogRecordOriginal
 	}
-	windowsCfg.IncludeLogRecordOriginal = &val
+	windowsCfg.IncludeLogRecordOriginal = &isEnableRecordOrg
 
 	return operator.NewConfig(windowsCfg)
 }
