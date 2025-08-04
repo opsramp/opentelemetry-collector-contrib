@@ -38,15 +38,19 @@ func (f ReceiverType) BaseConfig(cfg component.Config) adapter.BaseConfig {
 	return cfg.(*WindowsLogConfig).BaseConfig
 }
 
-// InputConfig unmarshals the input operator
+// InputConfig unmarshal the input operator
 func (f ReceiverType) InputConfig(cfg component.Config) operator.Config {
 	windowsCfg := &cfg.(*WindowsLogConfig).InputConfig
 
-	isEnableRecordOrg := true
-	if cfg.(*WindowsLogConfig).IncludeLogRecordOriginal != nil {
-		isEnableRecordOrg = *cfg.(*WindowsLogConfig).IncludeLogRecordOriginal
+	isEnableAdditionAttr := true
+	if cfg.(*WindowsLogConfig).IsReqAdditionalAttr != nil {
+		isEnableAdditionAttr = *cfg.(*WindowsLogConfig).IsReqAdditionalAttr
 	}
-	windowsCfg.IncludeLogRecordOriginal = &isEnableRecordOrg
+	windowsCfg.IsReqAdditionalAttr = &isEnableAdditionAttr
+
+	// Set persister type from base config to windows config
+	baseCfg := &cfg.(*WindowsLogConfig).BaseConfig
+	windowsCfg.PersisterType = baseCfg.PersisterType
 
 	return operator.NewConfig(windowsCfg)
 }

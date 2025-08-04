@@ -18,6 +18,9 @@ type BaseConfig struct {
 	StorageID      *component.ID        `mapstructure:"storage"`
 	RetryOnFailure consumerretry.Config `mapstructure:"retry_on_failure"`
 
+	PersisterType string `mapstructure:"persister_type"` // "file" or "leveldb"
+	PersisterPath string `mapstructure:"persister_path"` // "user-defined path for persister storage path"
+
 	// currently not configurable by users, but available for benchmarking
 	numWorkers    int
 	maxBatchSize  uint

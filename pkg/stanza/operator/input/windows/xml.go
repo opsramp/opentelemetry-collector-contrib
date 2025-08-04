@@ -266,11 +266,12 @@ type Execution struct {
 	ProcessID uint `xml:"ProcessID,attr"`
 	ThreadID  uint `xml:"ThreadID,attr"`
 	// These remaining fields are all optional for execution info
-	ProcessorID   *uint `xml:"ProcessorID,attr"`
-	SessionID     *uint `xml:"SessionID,attr"`
-	KernelTime    *uint `xml:"KernelTime,attr"`
-	UserTime      *uint `xml:"UserTime,attr"`
-	ProcessorTime *uint `xml:"ProcessorTime,attr"`
+	ProcessorID   *uint  `xml:"ProcessorID,attr"`
+	SessionID     *uint  `xml:"SessionID,attr"`
+	KernelTime    *uint  `xml:"KernelTime,attr"`
+	UserTime      *uint  `xml:"UserTime,attr"`
+	ProcessorTime *uint  `xml:"ProcessorTime,attr"`
+	RecordID      uint64 `xml:"System>EventRecordID"`
 }
 
 func (e Execution) asMap() map[string]any {

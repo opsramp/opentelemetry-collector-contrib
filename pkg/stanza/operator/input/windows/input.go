@@ -8,6 +8,7 @@ package windows // import "github.com/open-telemetry/opentelemetry-collector-con
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,47 +16,33 @@ import (
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
-	semconv "go.opentelemetry.io/otel/semconv/v1.27.0"
 )
 
 // Input is an operator that creates entries using the windows event log api.
-type Input struct {
-	helper.InputOperator
-	bookmark                 Bookmark
-	subscription             Subscription
-	buffer                   Buffer
-	channel                  string
-	maxReads                 int
-	startAt                  string
-	raw                      bool
-	includeLogRecordOriginal *bool
-	excludeProviders         []string
-	pollInterval             time.Duration
-	persister                operator.Persister
-	publisherCache           publisherCache
-	cancel                   context.CancelFunc
-	wg                       sync.WaitGroup
-}
+type (
+	Input struct {
+		helper.InputOperator
+		bookmark            Bookmark
+		subscription        Subscription
+		buffer              Buffer
+		channel             string
+		maxReads            int
+		startAt             string
+		raw                 bool
+		isReqAdditionalAttr *bool
+		excludeProviders    []string
+		pollInterval        time.Duration
+		persister           Persister
+		publisherCache      publisherCache
+		cancel              context.CancelFunc
+		wg                  sync.WaitGroup
+	}
+)
 
 // Start will start reading events from a subscription.
 func (i *Input) Start(persister operator.Persister) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	i.cancel = cancel
-
-	i.persister = persister
-
-	i.bookmark = NewBookmark()
-	offsetXML, err := i.getBookmarkOffset(ctx)
-	if err != nil {
-		i.Logger().Error("Failed to open bookmark, continuing without previous bookmark", zap.Error(err))
-		_ = i.persister.Delete(ctx, i.channel)
-	}
-
-	if offsetXML != "" {
-		if err := i.bookmark.Open(offsetXML); err != nil {
-			return fmt.Errorf("failed to open bookmark: %w", err)
-		}
-	}
 
 	i.subscription = NewSubscription()
 	if err := i.subscription.Open(i.channel, i.startAt, i.bookmark); err != nil {
@@ -128,52 +115,109 @@ func (i *Input) read(ctx context.Context) int {
 		return 0
 	}
 
-	for n, event := range events {
-		i.processEvent(ctx, event)
-		if len(events) == n+1 {
-			i.updateBookmarkOffset(ctx, event)
+	pstartedAtObj := time.Now().Local()
+	pstartedAt := pstartedAtObj.Format("2006-01-02 15:04:05.000")
+
+	for eI, event := range events {
+		simpleEvent, err := event.RenderSimple(i.buffer)
+		if err != nil {
+			i.Logger().Error("Failed to render simple event", zap.Error(err))
+			event.Close()
+			continue
+		}
+
+		recordID := simpleEvent.RecordID
+		dedupKey := fmt.Sprintf("dedup_%d", recordID)
+		i.Logger().Debug("@@@ Suresh - stage 1 --- Processing event", zap.Any("pstartedAt", pstartedAt), zap.Int("current loop id:", eI), zap.Any("process started at ", time.Now().Local().Format("2006-01-02 15:04:05.000")), zap.Uint64("record_id", recordID), zap.String("channel", i.channel))
+
+		// Deduplication: check if this record was already processed
+		exists, dCheckErr := i.persister.Get(ctx, dedupKey)
+		if dCheckErr != nil {
+			i.Logger().Error("Failed to check deduplication key", zap.Error(dCheckErr))
+			event.Close()
+			continue
+		}
+		i.Logger().Debug("@@@ Suresh - stage 2 --- Checking deduplication", zap.Any("pstartedAt", pstartedAt), zap.Int("current loop id:", eI), zap.Any("process started at ", time.Now().Local().Format("2006-01-02 15:04:05.000")), zap.Uint64("record_id", recordID), zap.String("dedup_key", dedupKey), zap.Any("exists", exists))
+
+		if exists != nil {
+			i.Logger().Debug("Duplicate event, skipping", zap.Uint64("record_id", recordID))
+			event.Close()
+			continue
+		}
+
+		i.Logger().Debug("@@@ Suresh - stage 3 --- Processing event with simple", zap.Any("pstartedAt", pstartedAt), zap.Int("current loop id:", eI), zap.Any("process started at ", time.Now().Local().Format("2006-01-02 15:04:05.000")), zap.Uint64("record_id", recordID), zap.String("channel", i.channel))
+
+		// Skip empty events
+		if recordID == 0 && simpleEvent.Provider.Name == "" {
+			i.Logger().Debug("Skipping empty event")
+			event.Close()
+			continue
+		}
+
+		i.Logger().Debug("@@Suresh - Reading event", zap.Any("pstartedAt", pstartedAt), zap.Int("current loop id:", eI), zap.Any("process started at ", time.Now().Local().Format("2006-01-02 15:04:05.000")), zap.Uint64("record_id", recordID), zap.String("channel", i.channel))
+
+		err1 := i.processEventWithSimple(ctx, event, &simpleEvent)
+		if err1 == nil {
+			i.updateBookmarkOffset(ctx, event, recordID)
+			// Persist processed RecordID for deduplication
+			if err := i.persister.Set(ctx, dedupKey, []byte("1")); err != nil {
+				i.Logger().Error("Failed to persist deduplication key", zap.Error(err))
+			}
+			i.Logger().Debug("@@@ Suresh - Processed successfully, updating bookmark", zap.Any("pstartedAt", pstartedAt), zap.Int("current loop id:", eI), zap.Any("process started at ", time.Now().Local().Format("2006-01-02 15:04:05.000")), zap.Uint64("record_id", recordID))
+		} else {
+			i.Logger().Error("Failed to process event", zap.Any("pstartedAt", pstartedAt), zap.Int("current loop id:", eI), zap.Any("process started at ", time.Now().Local().Format("2006-01-02 15:04:05.000")), zap.Uint64("record_id", recordID), zap.Error(err))
 		}
 		event.Close()
 	}
+
+	processDuration := time.Now().Local().Sub(pstartedAtObj).Milliseconds()
+	i.Logger().Debug(
+		"@@@ Suresh - Finished processing events",
+		zap.Any("pstartedAt", pstartedAt),
+		zap.Any("process finished at ", time.Now().Local().Format("2006-01-02 15:04:05.000")),
+		zap.Any("process_duration_ms", processDuration),
+	)
 
 	return len(events)
 }
 
 // processEvent will process and send an event retrieved from windows event log.
-func (i *Input) processEvent(ctx context.Context, event Event) {
+func (i *Input) processEvent(ctx context.Context, event Event) error {
+	i.Logger().Debug("@@@ Suresh - Processing event, stag 1:", zap.Any("i", i))
+
 	if i.raw {
-		if len(i.excludeProviders) > 0 {
-			simpleEvent, err := event.RenderSimple(i.buffer)
-			if err != nil {
-				i.Logger().Error("Failed to render simple event", zap.Error(err))
-				return
-			}
-
-			for _, excludeProvider := range i.excludeProviders {
-				if simpleEvent.Provider.Name == excludeProvider {
-					return
-				}
-			}
-		}
-
 		rawEvent, err := event.RenderRaw(i.buffer)
+		i.Logger().Debug("@@@ Suresh - Processing event, stag 1.1:", zap.Any("i", i))
 		if err != nil {
 			i.Logger().Error("Failed to render raw event", zap.Error(err))
-			return
+			return err
 		}
+		i.Logger().Debug("@@@ Suresh - Processing event, stag 1.2:", zap.Any("i", i))
 		i.sendEventRaw(ctx, rawEvent)
-		return
-	}
-	simpleEvent, err := event.RenderSimple(i.buffer)
-	if err != nil {
-		i.Logger().Error("Failed to render simple event", zap.Error(err))
-		return
+		return nil
 	}
 
-	for _, excludeProvider := range i.excludeProviders {
-		if simpleEvent.Provider.Name == excludeProvider {
-			return
+	i.Logger().Debug("@@@ Suresh - Processing event, stag 2:", zap.Any("i", i))
+
+	isExcluded := func(providerName string) bool {
+		for _, excludeProvider := range i.excludeProviders {
+			if providerName == excludeProvider {
+				return true
+			}
 		}
+		return false
+	}
+
+	i.Logger().Debug("@@@ Suresh - Processing event, stag 3:", zap.Any("i", i))
+	simpleEvent, err := event.RenderSimple(i.buffer)
+	i.Logger().Debug("@@@ Suresh - Processing event --> inside raw, simpleEvent", zap.Any("simpleEvent", simpleEvent), zap.Error(err))
+	if err != nil {
+		i.Logger().Error("Failed to render simple event", zap.Error(err))
+		return err
+	}
+	if isExcluded(simpleEvent.Provider.Name) {
+		i.Logger().Debug("@@@ Suresh - Processing event --> inside isExcluded", zap.Any("simpleEvent.Provider.Name", simpleEvent.Provider.Name), zap.Any("check -=--- isExcluded", isExcluded(simpleEvent.Provider.Name)))
+		return nil
 	}
 
 	publisher, openPublisherErr := i.publisherCache.get(simpleEvent.Provider.Name)
@@ -183,17 +227,15 @@ func (i *Input) processEvent(ctx context.Context, event Event) {
 			zap.String("provider", simpleEvent.Provider.Name), zap.Error(openPublisherErr))
 	}
 	if !publisher.Valid() {
-		i.sendEvent(ctx, &simpleEvent)
-		return
+		return i.sendEvent(ctx, &simpleEvent)
 	}
 
 	formattedEvent, err := event.RenderFormatted(i.buffer, publisher)
 	if err != nil {
 		i.Logger().Error("Failed to render formatted event", zap.Error(err))
-		i.sendEvent(ctx, &simpleEvent)
-		return
+		return i.sendEvent(ctx, &simpleEvent)
 	}
-	i.sendEvent(ctx, &formattedEvent)
+	return i.sendEvent(ctx, &formattedEvent)
 }
 
 func (i *Input) sendEvent(ctx context.Context, eventXML *EventXML) error {
@@ -203,15 +245,30 @@ func (i *Input) sendEvent(ctx context.Context, eventXML *EventXML) error {
 	}
 
 	e, err := i.NewEntry(body)
+	i.Logger().Debug("@@@@ Suresh - stage 1-- Sending event", zap.Any("entry", e), zap.Any("body", body), zap.Error(err))
 	if err != nil {
-		return fmt.Errorf("create entry: %w", err)
+		i.Logger().Error("sendEvent -> Failed to create new entry", zap.Error(err))
+		return err
 	}
 
 	e.Timestamp = parseTimestamp(eventXML.TimeCreated.SystemTime)
 	e.Severity = parseSeverity(eventXML.RenderedLevel, eventXML.Level)
 
-	if i.isLogRecordOriginalEnabled() {
-		e.AddAttribute(string(semconv.LogRecordOriginalKey), eventXML.Original)
+	eventData, er := i.ExtractEventData(eventXML.EventData)
+	i.Logger().Debug("Suresh - stage 2- Debugging -- **** inside --- i.isAdditionalAttrReq - Extracted event data", zap.Any("event_data", eventData), zap.Any("err", er))
+	if len(eventData) > 0 {
+		for eK, eD := range eventData {
+			eK = strings.ReplaceAll(strings.ToLower(eK), " ", "_")
+			if str, ok := eD.(string); ok {
+				e.AddAttribute(eK, str)
+			} else {
+				e.AddAttribute(eK, fmt.Sprintf("%v", eD))
+			}
+		}
+	}
+	if i.isAdditionalAttrReq() {
+		e.AddAttribute("log_record_original", eventXML.Original)
+		i.Logger().Debug("Suresh - stage 2- Debugging - Extracted event data", zap.Any("event_data", eventData), zap.Any("err", er))
 	}
 	return i.Write(ctx, e)
 }
@@ -235,30 +292,91 @@ func (i *Input) getBookmarkOffset(ctx context.Context) (string, error) {
 	return string(bytes), err
 }
 
-// updateBookmark will update the bookmark xml and save it in the offsets database.
-func (i *Input) updateBookmarkOffset(ctx context.Context, event Event) {
+// updateBookmarkOffset updates the bookmark xml and saves it in the offsets database.
+func (i *Input) updateBookmarkOffset(ctx context.Context, event Event, recordID uint64) {
 	if err := i.bookmark.Update(event); err != nil {
-		i.Logger().Error("Failed to update bookmark from event", zap.Error(err))
+		i.Logger().Error("Failed to update bookmark", zap.Error(err), zap.Uint64("record_id", recordID))
 		return
 	}
-
 	bookmarkXML, err := i.bookmark.Render(i.buffer)
 	if err != nil {
-		i.Logger().Error("Failed to render bookmark xml", zap.Error(err))
+		i.Logger().Error("Failed to render bookmark XML", zap.Error(err))
 		return
 	}
-
-	if err := i.persister.Set(ctx, i.channel, []byte(bookmarkXML)); err != nil {
-		i.Logger().Error("failed to set offsets", zap.Error(err))
+	if err = i.persister.Set(ctx, i.channel, []byte(bookmarkXML)); err != nil {
+		i.Logger().Error("Failed to persist bookmark offset", zap.Error(err), zap.Uint64("record_id", recordID))
 		return
 	}
 }
 
-func (i *Input) isLogRecordOriginalEnabled() bool {
-	// If includeLogRecordOriginal is nil, default to true
-	if i.includeLogRecordOriginal == nil {
+func (i *Input) isAdditionalAttrReq() bool {
+	if i.isReqAdditionalAttr == nil {
 		return true
 	}
-	// Otherwise, return the value of includeLogRecordOriginal
-	return *i.includeLogRecordOriginal
+	return *i.isReqAdditionalAttr
+}
+
+func (i *Input) ExtractEventData(eventData EventData) (map[string]any, error) {
+	result := make(map[string]any)
+	for _, data := range eventData.Data {
+		switch data.Name {
+		case "LogonType":
+			result["logon_type"] = data.Value
+		case "AccountDomain":
+			result["account_domain"] = data.Value
+		case "AccountName":
+			result["account_name"] = data.Value
+		case "SecurityID", "TargetUserSid", "SubjectUserSid":
+			result["security_id"] = data.Value
+		case "LogonID", "TargetLogonId", "SubjectLogonId":
+			result["logon_id"] = data.Value
+		case "TargetUserName":
+			result["user_name"] = data.Value
+		case "TargetDomainName", "WorkstationName":
+			result["domain_name"] = data.Value
+		}
+	}
+	return result, nil
+}
+
+func (i *Input) processEventWithSimple(ctx context.Context, event Event, simpleEvent *EventXML) error {
+	i.Logger().Debug("@@@ Suresh processEventWithSimple", zap.String("provider", simpleEvent.Provider.Name))
+
+	if i.raw {
+		rawEvent, err := event.RenderRaw(i.buffer)
+		if err != nil {
+			i.Logger().Error("Failed to render raw event", zap.Error(err))
+			return err
+		}
+		i.sendEventRaw(ctx, rawEvent)
+		return nil
+	}
+
+	isExcluded := func(providerName string) bool {
+		for _, excludeProvider := range i.excludeProviders {
+			if providerName == excludeProvider {
+				return true
+			}
+		}
+		return false
+	}
+
+	if isExcluded(simpleEvent.Provider.Name) {
+		i.Logger().Debug("Event skipped due to excluded provider", zap.String("provider", simpleEvent.Provider.Name))
+		return nil
+	}
+
+	publisher, err := i.publisherCache.get(simpleEvent.Provider.Name)
+	if err != nil || !publisher.Valid() {
+		i.Logger().Warn("Fallback to simple event due to invalid publisher", zap.Error(err))
+		return i.sendEvent(ctx, simpleEvent)
+	}
+
+	formattedEvent, err := event.RenderFormatted(i.buffer, publisher)
+	if err != nil {
+		i.Logger().Error("Failed to render formatted event", zap.Error(err))
+		return i.sendEvent(ctx, simpleEvent)
+	}
+
+	return i.sendEvent(ctx, &formattedEvent)
 }
