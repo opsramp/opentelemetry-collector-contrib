@@ -40,6 +40,7 @@ require (
 	golang.org/x/sys v0.26.0
 	golang.org/x/text v0.19.0
 	gonum.org/v1/gonum v0.15.1
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v2 v2.4.0
 )
 
