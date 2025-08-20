@@ -6,6 +6,9 @@ package matcher // import "github.com/open-telemetry/opentelemetry-collector-con
 import (
 	"errors"
 	"fmt"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"os"
 	"regexp"
 	"time"
@@ -212,41 +215,72 @@ type Matcher struct {
 func (m Matcher) MatchFiles() ([]string, error) {
 	var err, errs error
 
+	customLogger := initLogger()
+	customLogger.Debug("Starting file matching process")
+
 	files := m.cache.getFiles()
+	customLogger.Debug("Fetched files from cache", zap.Int("file_count", len(files)), zap.Strings("files", files))
 	if time.Since(m.cache.getLastUpdatedTime()) < m.refreshInterval {
+		customLogger.Debug("Cache is fresh, returning cached files", zap.Duration("age", time.Since(m.cache.getLastUpdatedTime())))
 		return files, nil
 	}
 
 	files, err = finder.FindFiles(m.include, m.exclude, m.maxAge)
+	customLogger.Debug("Files found after applying include/exclude and maxAge", zap.Int("file_count", len(files)), zap.Strings("files", files), zap.Error(err))
 	if err != nil {
 		errs = errors.Join(errs, err)
 	}
 
 	if len(files) == 0 {
+		customLogger.Debug("No files match the configured criteria", zap.Error(errs))
 		return files, errors.Join(fmt.Errorf("no files match the configured criteria"), errs)
 	}
 
 	if len(m.filterOpts) == 0 {
+		customLogger.Debug("No filter options provided, returning files", zap.Int("file_count", len(files)))
 		return files, errs
 	}
 
 	files, err = filter.Filter(files, m.regex, m.filterOpts...)
+	customLogger.Debug("Files after filtering", zap.Int("file_count", len(files)), zap.Strings("files", files), zap.Error(err))
 	if len(files) == 0 {
+		customLogger.Debug("No files left after filtering", zap.Error(err))
 		return files, errors.Join(err, errs)
 	}
 
 	if len(files) <= m.topN {
 		m.cache.update(files)
+		customLogger.Debug("Files count less than or equal to topN, updating cache and returning", zap.Int("file_count", len(files)), zap.Int("topN", m.topN))
 		return files, errors.Join(err, errs)
 	}
 
 	//topN will be 0 in case of orderingCriteria.sortBy is not provided.
 	//This means filteropts has only filtering and no sorting. In this case we should not filter topN files.
 	if m.topN > 0 && os.Getenv("OTEL_K8S_AGENT") == "TRUE" {
+		customLogger.Debug("Applying topN filter for OTEL_K8S_AGENT", zap.Int("topN", m.topN))
 		files = files[:m.topN]
 	}
 
 	m.cache.update(files)
+	customLogger.Debug("Final files after all filters and topN", zap.Int("file_count", len(files)), zap.Strings("files", files))
 
 	return files, errors.Join(err, errs)
+}
+
+func initLogger() *zap.Logger {
+	writer := &lumberjack.Logger{
+		Filename:   "/var/log/opsramp/debug.log", // or any path you prefer
+		MaxSize:    2,                            // megabytes
+		MaxBackups: 2,                            // number of old files to keep
+		MaxAge:     30,                           // days to keep
+		Compress:   true,                         // gzip
+	}
+
+	core := zapcore.NewCore(
+		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+		zapcore.AddSync(writer),
+		zap.DebugLevel,
+	)
+
+	return zap.New(core)
 }

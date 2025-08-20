@@ -112,8 +112,9 @@ func (m *Manager) startPoller(ctx context.Context) {
 	}()
 }
 
-// poll checks all the watched paths for new entries
 func (m *Manager) poll(ctx context.Context) {
+	m.set.Logger.Debug("Starting poll cycle", zap.Duration("poll_interval", m.pollInterval))
+
 	// Used to keep track of the number of batches processed in this poll cycle
 	batchesProcessed := 0
 
@@ -125,31 +126,38 @@ func (m *Manager) poll(ctx context.Context) {
 	m.set.Logger.Debug("matched files", zap.Strings("paths", matches))
 
 	for len(matches) > m.maxBatchFiles {
+		m.set.Logger.Debug("Processing batch", zap.Int("batch_size", m.maxBatchFiles), zap.Int("remaining_files", len(matches)))
 		m.consume(ctx, matches[:m.maxBatchFiles])
 
 		// If a maxBatches is set, check if we have hit the limit
 		if m.maxBatches != 0 {
 			batchesProcessed++
+			m.set.Logger.Debug("Batches processed", zap.Int("batchesProcessed", batchesProcessed))
 			if batchesProcessed >= m.maxBatches {
+				m.set.Logger.Debug("Max batches reached, returning from poll")
 				return
 			}
 		}
 
 		matches = matches[m.maxBatchFiles:]
 	}
+	m.set.Logger.Debug("Processing final batch", zap.Int("batch_size", len(matches)))
 	m.consume(ctx, matches)
 
 	// Any new files that appear should be consumed entirely
+	m.set.Logger.Debug("Setting FromBeginning to true for readerFactory")
 	m.readerFactory.FromBeginning = true
 	if m.persister != nil {
 		metadata := m.tracker.GetMetadata()
 		if metadata != nil {
+			m.set.Logger.Debug("Saving checkpoint metadata")
 			if err := checkpoint.Save(context.Background(), m.persister, metadata); err != nil {
 				m.set.Logger.Error("save offsets", zap.Error(err))
 			}
 		}
 	}
 	// rotate at end of every poll()
+	m.set.Logger.Debug("Ending poll cycle, rotating tracker")
 	m.tracker.EndPoll()
 }
 
