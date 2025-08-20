@@ -103,6 +103,7 @@ func (m *Manager) startPoller(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
+				m.set.Logger.Debug("Stopping poller due to context cancellation")
 				return
 			case <-globTicker.C:
 			}
