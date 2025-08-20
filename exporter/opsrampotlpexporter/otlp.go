@@ -25,7 +25,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"regexp"
 	"runtime"
 	"strings"
@@ -78,7 +77,7 @@ type opsrampOTLPExporter struct {
 	accessToken string
 }
 
-// Crete new exporter and start it. The exporter will begin connecting, but
+// Crete new exporter and start it. The exporter will begin connecting but
 // this function may return before the connection is established.
 func newExporter(cfg component.Config, set exporter.Settings) (*opsrampOTLPExporter, error) {
 	oCfg := cfg.(*Config)
@@ -279,22 +278,14 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 	if e.config.ExpirationSkip != 0 {
 		e.skipExpired(ld)
 	}
-	if ld.LogRecordCount() <= 0 {
+	if ld.ResourceLogs().Len() <= 0 {
 		return nil
-	}
-
-	if e.config.Masking != nil {
-		e.applyMasking(ld)
-	}
-
-	if e.config.ExpirationSkip != 0 {
-		e.skipExpired(ld)
 	}
 
 	req := plogotlp.NewExportRequestFromLogs(ld)
 
 	_, err := e.logExporter.Export(e.enhanceContext(context.Background()), req, e.callOptions...)
-	// trying to get a new access token in case of expiration
+	// trying to get new access token in case of expiration
 	if err != nil {
 		st := status.Convert(err)
 		if st.Code() == codes.Unauthenticated {
