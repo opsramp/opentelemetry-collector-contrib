@@ -104,6 +104,7 @@ func (m *Manager) startPoller(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				m.set.Logger.Debug("Stopping poller due to context cancellation")
+				os.Setenv("CTX_DONE", "true")
 				return
 			case <-globTicker.C:
 			}
@@ -115,6 +116,7 @@ func (m *Manager) startPoller(ctx context.Context) {
 
 func (m *Manager) poll(ctx context.Context) {
 	m.set.Logger.Debug("Starting poll cycle", zap.Duration("poll_interval", m.pollInterval))
+	os.Setenv("POLL_Started", "true")
 
 	// Used to keep track of the number of batches processed in this poll cycle
 	batchesProcessed := 0
