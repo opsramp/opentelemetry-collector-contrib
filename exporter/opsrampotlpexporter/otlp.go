@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
 	"net"
 	"net/http"
@@ -71,13 +72,14 @@ type opsrampOTLPExporter struct {
 
 	settings component.TelemetrySettings
 	mut      sync.Mutex
+	logger   *zap.Logger
 
 	// Default user-agent header.
 	userAgent   string
 	accessToken string
 }
 
-// Crete new exporter and start it. The exporter will begin connecting but
+// Crete new exporter and start it. The exporter will begin connecting, but
 // this function may return before the connection is established.
 func newExporter(cfg component.Config, set exporter.Settings) (*opsrampOTLPExporter, error) {
 	oCfg := cfg.(*Config)
@@ -265,9 +267,6 @@ func (e *opsrampOTLPExporter) pushMetrics(ctx context.Context, md pmetric.Metric
 }
 
 func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
-	logFile, _ := os.OpenFile("/var/log/opsramp/otel-log-collector.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	defer logFile.Close()
-	fmt.Fprintf(logFile, "Exporting logs: %d\n", ld.LogRecordCount())
 	if ld.LogRecordCount() <= 0 {
 		return nil
 	}
@@ -278,14 +277,25 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 	if e.config.ExpirationSkip != 0 {
 		e.skipExpired(ld)
 	}
-	if ld.ResourceLogs().Len() <= 0 {
+	if ld.LogRecordCount() <= 0 {
+		e.logger.Debug("No log records to export")
 		return nil
+	}
+
+	if e.config.Masking != nil {
+		e.logger.Debug("Applying masking to logs")
+		e.applyMasking(ld)
+	}
+
+	if e.config.ExpirationSkip != 0 {
+		e.logger.Debug("Skipping expired logs")
+		e.skipExpired(ld)
 	}
 
 	req := plogotlp.NewExportRequestFromLogs(ld)
 
 	_, err := e.logExporter.Export(e.enhanceContext(context.Background()), req, e.callOptions...)
-	// trying to get new access token in case of expiration
+	// trying to get a new access token in case of expiration
 	if err != nil {
 		st := status.Convert(err)
 		if st.Code() == codes.Unauthenticated {
