@@ -17,11 +17,11 @@ package opsrampotlpexporter // import "go.opentelemetry.io/collector/exporter/ot
 import (
 	"errors"
 	"fmt"
-	"time"
-
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configgrpc"
 	"go.opentelemetry.io/collector/config/configretry"
+	"time"
+
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 )
 
@@ -67,10 +67,10 @@ type Config struct {
 	exporterhelper.QueueConfig   `mapstructure:"sending_queue"`
 	configretry.BackOffConfig    `mapstructure:"retry_on_failure"`
 
-	Security                SecuritySettings         `mapstructure:"security"`
+	Security                SecuritySettings  `mapstructure:"security"`
 	configgrpc.ClientConfig `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct.
-	Masking                 []MaskingSettings        `mapstructure:"masking"`
-	ExpirationSkip          time.Duration            `mapstructure:"expiration_skip"`
+	Masking                 []MaskingSettings `mapstructure:"masking"`
+	ExpirationSkip          time.Duration     `mapstructure:"expiration_skip"`
 }
 
 var _ component.Config = (*Config)(nil)
@@ -85,5 +85,6 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("security settings has invalid configuration: %w", err)
 	}
 
+	fmt.Println()
 	return nil
 }
