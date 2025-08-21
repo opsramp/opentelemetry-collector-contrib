@@ -106,8 +106,8 @@ func (m *Manager) startPoller(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				customLogger := initLogger()
-				customLogger.Debug("Stopping poller due to context cancellation")
-				m.set.Logger.Debug("Stopping poller due to context cancellation")
+				customLogger.Debug("NEW Stopping poller due to context cancellation")
+				m.set.Logger.Debug("NEW Stopping poller due to context cancellation")
 				return
 			case <-globTicker.C:
 			}
@@ -296,11 +296,11 @@ func (m *Manager) instantiateTracker(persister operator.Persister) {
 
 func initLogger() *zap.Logger {
 	writer := &lumberjack.Logger{
-		Filename:   "/var/log/opsramp/check.log", // or any path you prefer
-		MaxSize:    2,                            // megabytes
-		MaxBackups: 2,                            // number of old files to keep
-		MaxAge:     30,                           // days to keep
-		Compress:   true,                         // gzip
+		Filename:   "/var/log/opsramp/output.log", // or any path you prefer
+		MaxSize:    2,                             // megabytes
+		MaxBackups: 2,                             // number of old files to keep
+		MaxAge:     30,                            // days to keep
+		Compress:   true,                          // gzip
 	}
 
 	core := zapcore.NewCore(
