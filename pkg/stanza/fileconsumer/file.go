@@ -6,6 +6,8 @@ package fileconsumer // import "github.com/open-telemetry/opentelemetry-collecto
 import (
 	"context"
 	"fmt"
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"os"
 	"sync"
 	"time"
@@ -103,8 +105,9 @@ func (m *Manager) startPoller(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
+				customLogger := initLogger()
+				customLogger.Debug("Stopping poller due to context cancellation")
 				m.set.Logger.Debug("Stopping poller due to context cancellation")
-				os.Setenv("CTX_DONE", "true")
 				return
 			case <-globTicker.C:
 			}
@@ -116,7 +119,6 @@ func (m *Manager) startPoller(ctx context.Context) {
 
 func (m *Manager) poll(ctx context.Context) {
 	m.set.Logger.Debug("Starting poll cycle", zap.Duration("poll_interval", m.pollInterval))
-	os.Setenv("POLL_Started", "true")
 
 	// Used to keep track of the number of batches processed in this poll cycle
 	batchesProcessed := 0
@@ -290,4 +292,22 @@ func (m *Manager) instantiateTracker(persister operator.Persister) {
 		t = tracker.NewFileTracker(m.set, m.maxBatchFiles, m.pollsToArchive, persister)
 	}
 	m.tracker = t
+}
+
+func initLogger() *zap.Logger {
+	writer := &lumberjack.Logger{
+		Filename:   "/var/log/opsramp/check.log", // or any path you prefer
+		MaxSize:    2,                            // megabytes
+		MaxBackups: 2,                            // number of old files to keep
+		MaxAge:     30,                           // days to keep
+		Compress:   true,                         // gzip
+	}
+
+	core := zapcore.NewCore(
+		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+		zapcore.AddSync(writer),
+		zap.DebugLevel,
+	)
+
+	return zap.New(core)
 }
