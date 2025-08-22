@@ -56,15 +56,24 @@ type Reader struct {
 
 // ReadToEnd will read until the end of the file
 func (r *Reader) ReadToEnd(ctx context.Context) {
+	r.set.Logger.Debug("ReadToEnd called", zap.String("filename", r.fileName))
+
 	if r.acquireFSLock {
+		r.set.Logger.Debug("Attempting to acquire file lock", zap.String("filename", r.fileName))
 		if !r.tryLockFile() {
+			r.set.Logger.Debug("failed to acquire file lock", zap.String("filename", r.fileName))
 			return
 		}
-		defer r.unlockFile()
+		defer func() {
+			r.set.Logger.Debug("Releasing file lock", zap.String("filename", r.fileName))
+			r.unlockFile()
+		}()
 	}
 
+	r.set.Logger.Debug("Compression was: ", zap.String("Compression", r.compression))
 	switch r.compression {
 	case "gzip":
+		r.set.Logger.Debug("Handling gzip compression", zap.String("filename", r.fileName))
 		// We need to create a gzip reader each time ReadToEnd is called because the underlying
 		// SectionReader can only read a fixed window (from previous offset to EOF).
 		info, err := r.file.Stat()
@@ -73,6 +82,7 @@ func (r *Reader) ReadToEnd(ctx context.Context) {
 			return
 		}
 		currentEOF := info.Size()
+		r.set.Logger.Debug("File stat obtained", zap.Int64("currentEOF", currentEOF))
 
 		// use a gzip Reader with an underlying SectionReader to pick up at the last
 		// offset of a gzip compressed file
@@ -83,17 +93,21 @@ func (r *Reader) ReadToEnd(ctx context.Context) {
 			}
 			return
 		} else {
+			r.set.Logger.Debug("gzip reader created successfully", zap.String("filename", r.fileName))
 			r.reader = gzipReader
 		}
 		// Offset tracking in an uncompressed file is based on the length of emitted tokens, but in this case
 		// we need to set the offset to the end of the file.
 		defer func() {
+			r.set.Logger.Debug("Setting offset to EOF after gzip read", zap.Int64("offset", currentEOF))
 			r.Offset = currentEOF
 		}()
 	default:
+		r.set.Logger.Debug("No compression or unsupported compression, using raw file", zap.String("filename", r.fileName))
 		r.reader = r.file
 	}
 
+	r.set.Logger.Debug("Seeking to offset", zap.Int64("offset", r.Offset))
 	if _, err := r.file.Seek(r.Offset, 0); err != nil {
 		r.set.Logger.Error("failed to seek", zap.Error(err))
 		return
@@ -101,17 +115,22 @@ func (r *Reader) ReadToEnd(ctx context.Context) {
 
 	defer func() {
 		if r.needsUpdateFingerprint {
+			r.set.Logger.Debug("Updating fingerprint", zap.String("filename", r.fileName))
 			r.updateFingerprint()
 		}
 	}()
 
 	if r.headerReader != nil {
+		r.set.Logger.Debug("Header reader present, reading header", zap.String("filename", r.fileName))
 		if r.readHeader(ctx) {
+			r.set.Logger.Debug("Header reading completed, returning", zap.String("filename", r.fileName))
 			return
 		}
 	}
 
+	r.set.Logger.Debug("Reading file contents", zap.String("filename", r.fileName))
 	r.readContents(ctx)
+	r.set.Logger.Debug("ReadToEnd completed", zap.String("filename", r.fileName))
 }
 
 func (r *Reader) readHeader(ctx context.Context) (doneReadingFile bool) {
@@ -176,6 +195,7 @@ func (r *Reader) readHeader(ctx context.Context) (doneReadingFile bool) {
 }
 
 func (r *Reader) readContents(ctx context.Context) {
+	r.set.Logger.Debug("Starting readContents", zap.String("filename", r.fileName), zap.Int64("offset", r.Offset))
 	// Create the scanner to read the contents of the file.
 	s := scanner.New(r, r.maxLogSize, r.initialBufferSize, r.Offset, r.contentSplitFunc)
 
@@ -183,6 +203,7 @@ func (r *Reader) readContents(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			r.set.Logger.Debug("Context cancelled in readContents", zap.String("filename", r.fileName))
 			return
 		default:
 		}
@@ -190,16 +211,20 @@ func (r *Reader) readContents(ctx context.Context) {
 		ok := s.Scan()
 		if !ok {
 			if err := s.Error(); err != nil {
-				r.set.Logger.Error("failed during scan", zap.Error(err))
+				r.set.Logger.Error("failed during scan", zap.Error(err), zap.String("filename", r.fileName))
 			} else if r.deleteAtEOF {
+				r.set.Logger.Debug("End of file reached, deleting file", zap.String("filename", r.fileName))
 				r.delete()
+			} else {
+				r.set.Logger.Debug("End of file reached, not deleting", zap.String("filename", r.fileName))
 			}
 			return
 		}
 
+		r.set.Logger.Debug("Scanned token", zap.Int("token_length", len(s.Bytes())), zap.Int64("pos", s.Pos()), zap.String("filename", r.fileName))
 		token, err := r.decoder.Decode(s.Bytes())
 		if err != nil {
-			r.set.Logger.Error("failed to decode token", zap.Error(err))
+			r.set.Logger.Error("failed to decode token", zap.Error(err), zap.Int64("pos", s.Pos()), zap.String("filename", r.fileName))
 			r.Offset = s.Pos() // move past the bad token or we may be stuck
 			continue
 		}
@@ -207,14 +232,17 @@ func (r *Reader) readContents(ctx context.Context) {
 		if r.includeFileRecordNum {
 			r.RecordNum++
 			r.FileAttributes[attrs.LogFileRecordNumber] = r.RecordNum
+			r.set.Logger.Debug("Incremented record number", zap.Int64("record_num", r.RecordNum), zap.String("filename", r.fileName))
 		}
 
+		r.set.Logger.Debug("Emitting token", zap.Int64("offset", r.Offset), zap.String("filename", r.fileName))
 		err = r.emitFunc(ctx, token, r.FileAttributes)
 		if err != nil {
-			r.set.Logger.Error("failed to process token", zap.Error(err))
+			r.set.Logger.Error("failed to process token", zap.Error(err), zap.String("filename", r.fileName))
 		}
 
 		r.Offset = s.Pos()
+		r.set.Logger.Debug("Updated offset after token", zap.Int64("offset", r.Offset), zap.String("filename", r.fileName))
 	}
 }
 

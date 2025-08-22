@@ -21,8 +21,8 @@ import (
 )
 
 var (
-	LogsOpsRampChannel   = make(chan plog.Logs, 1000)
-	EventsOpsRampChannel = make(chan plog.Logs, 100)
+	LogsOpsRampChannel    = make(chan plog.Logs, 1000)
+	EventsOpsRampChannel  = make(chan plog.Logs, 100)
 	MetricsOpsRampChannel = make(chan *pmetric.Metrics, 1000)
 )
 
@@ -84,7 +84,7 @@ func (s *debugExporter) pushMetrics(_ context.Context, md pmetric.Metrics) error
 	default:
 		s.logger.Info("#######opsrampdebugexporter - pushMetrics: failed sent to channel")
 	}
-	
+
 	if s.verbosity == configtelemetry.LevelBasic {
 		return nil
 	}
@@ -143,10 +143,10 @@ func (s *debugExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 		return nil
 	}
 
-	buf, err := s.logsMarshaler.MarshalLogs(ld)
-	if err != nil {
-		return err
-	}
-	s.logger.Info(string(buf))
+	//buf, err := s.logsMarshaler.MarshalLogs(ld)
+	//if err != nil {
+	//	return err
+	//}
+	//s.logger.Info(string(buf))
 	return nil
 }
