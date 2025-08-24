@@ -59,7 +59,7 @@ OUTER:
 			defer m.set.Logger.Debug("Completed Reading lost file", zap.String("path", lostReader.GetFileName()))
 			defer lostWG.Done()
 			m.telemetryBuilder.FileconsumerReadingFiles.Add(ctx, 1)
-			r.ReadToEnd(ctx)
+			r.ReadToEnd(ctx, true)
 			m.telemetryBuilder.FileconsumerReadingFiles.Add(ctx, -1)
 		}(lostReader)
 	}

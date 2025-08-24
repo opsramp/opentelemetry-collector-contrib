@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"time"
 
 	"go.opentelemetry.io/collector/component"
 	"go.uber.org/zap"
@@ -55,22 +56,32 @@ type Reader struct {
 }
 
 // ReadToEnd will read until the end of the file
-func (r *Reader) ReadToEnd(ctx context.Context) {
-	r.set.Logger.Debug("ReadToEnd called", zap.String("filename", r.fileName))
+func (r *Reader) ReadToEnd(ctx context.Context, readLostFiles bool) {
+	if readLostFiles {
+		r.set.Logger.Debug("ReadToEnd called", zap.String("filename", r.fileName))
+	}
 
 	if r.acquireFSLock {
-		r.set.Logger.Debug("Attempting to acquire file lock", zap.String("filename", r.fileName))
+		if readLostFiles {
+			r.set.Logger.Debug("Attempting to acquire file lock", zap.String("filename", r.fileName))
+		}
 		if !r.tryLockFile() {
-			r.set.Logger.Debug("failed to acquire file lock", zap.String("filename", r.fileName))
+			if readLostFiles {
+				r.set.Logger.Debug("failed to acquire file lock", zap.String("filename", r.fileName))
+			}
 			return
 		}
 		defer func() {
-			r.set.Logger.Debug("Releasing file lock", zap.String("filename", r.fileName))
+			if readLostFiles {
+				r.set.Logger.Debug("Releasing file lock", zap.String("filename", r.fileName))
+			}
 			r.unlockFile()
 		}()
 	}
 
-	r.set.Logger.Debug("Compression was: ", zap.String("Compression", r.compression))
+	if readLostFiles {
+		r.set.Logger.Debug("Compression was: ", zap.String("Compression", r.compression))
+	}
 	switch r.compression {
 	case "gzip":
 		r.set.Logger.Debug("Handling gzip compression", zap.String("filename", r.fileName))
@@ -103,11 +114,15 @@ func (r *Reader) ReadToEnd(ctx context.Context) {
 			r.Offset = currentEOF
 		}()
 	default:
-		r.set.Logger.Debug("No compression or unsupported compression, using raw file", zap.String("filename", r.fileName))
+		if readLostFiles {
+			r.set.Logger.Debug("No compression or unsupported compression, using raw file", zap.String("filename", r.fileName))
+		}
 		r.reader = r.file
 	}
 
-	r.set.Logger.Debug("Seeking to offset", zap.Int64("offset", r.Offset))
+	if readLostFiles {
+		r.set.Logger.Debug("Seeking to offset", zap.Int64("offset", r.Offset), zap.Any("r.reader", r.reader), zap.String("filename", r.fileName), zap.Bool("needsUpdateFingerprint", r.needsUpdateFingerprint))
+	}
 	if _, err := r.file.Seek(r.Offset, 0); err != nil {
 		r.set.Logger.Error("failed to seek", zap.Error(err))
 		return
@@ -236,7 +251,10 @@ func (r *Reader) readContents(ctx context.Context) {
 		}
 
 		r.set.Logger.Debug("Emitting token", zap.Int64("offset", r.Offset), zap.String("filename", r.fileName))
-		err = r.emitFunc(ctx, token, r.FileAttributes)
+
+		emitCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+		defer cancel()
+		err = r.emitFunc(emitCtx, token, r.FileAttributes)
 		if err != nil {
 			r.set.Logger.Error("failed to process token", zap.Error(err), zap.String("filename", r.fileName))
 		}

@@ -179,7 +179,7 @@ func (m *Manager) consume(ctx context.Context, paths []string) {
 		go func(r *reader.Reader) {
 			defer wg.Done()
 			m.telemetryBuilder.FileconsumerReadingFiles.Add(ctx, 1)
-			r.ReadToEnd(ctx)
+			r.ReadToEnd(ctx, false)
 			m.telemetryBuilder.FileconsumerReadingFiles.Add(ctx, -1)
 		}(r)
 	}
