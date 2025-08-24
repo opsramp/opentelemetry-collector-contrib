@@ -255,6 +255,7 @@ func (r *Reader) readContents(ctx context.Context) {
 		emitCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 		defer cancel()
 		err = r.emitFunc(emitCtx, token, r.FileAttributes)
+		r.set.Logger.Debug("Emit function returned", zap.Int64("offset", r.Offset), zap.String("filename", r.fileName), zap.Any("r.fileAttributes", r.FileAttributes))
 		if err != nil {
 			r.set.Logger.Error("failed to process token", zap.Error(err), zap.String("filename", r.fileName))
 		}
