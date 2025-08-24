@@ -252,7 +252,7 @@ func (r *Reader) readContents(ctx context.Context) {
 
 		r.set.Logger.Debug("Emitting token", zap.Int64("offset", r.Offset), zap.String("filename", r.fileName))
 
-		emitCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+		emitCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 		err = r.emitFunc(emitCtx, token, r.FileAttributes)
 		r.set.Logger.Debug("Emit function returned", zap.Int64("offset", r.Offset), zap.String("filename", r.fileName), zap.Any("r.fileAttributes", r.FileAttributes))
