@@ -5,6 +5,7 @@ package helper // import "github.com/open-telemetry/opentelemetry-collector-cont
 
 import (
 	"context"
+	"go.uber.org/zap"
 
 	"go.opentelemetry.io/collector/component"
 
@@ -63,17 +64,21 @@ type InputOperator struct {
 
 // NewEntry will create a new entry using the `attributes`, and `resource` configuration.
 func (i *InputOperator) NewEntry(value any) (*entry.Entry, error) {
+	i.Logger().Debug("Creating new entry", zap.Any("Value", value))
 	entry := entry.New()
 	entry.Body = value
 
 	if err := i.Attribute(entry); err != nil {
+		i.Logger().Debug("Failed to add attributes to entry", zap.Error(err))
 		return nil, errors.Wrap(err, "add attributes to entry")
 	}
 
 	if err := i.Identify(entry); err != nil {
+		i.Logger().Debug("Failed to add resource keys to entry", zap.Error(err))
 		return nil, errors.Wrap(err, "add resource keys to entry")
 	}
 
+	i.Logger().Debug("Successfully created new entry", zap.Any("Entry", entry))
 	return entry, nil
 }
 

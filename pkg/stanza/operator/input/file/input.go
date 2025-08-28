@@ -37,11 +37,14 @@ func (i *Input) Stop() error {
 }
 
 func (i *Input) emit(ctx context.Context, token []byte, attrs map[string]any) error {
+	i.Logger().Debug("emitting log line", zap.ByteString("line", token[:len(token)%10]))
+	defer i.Logger().Debug("emitted log line")
 	if len(token) == 0 {
 		return nil
 	}
 
 	ent, err := i.NewEntry(i.toBody(token))
+	i.Logger().Debug("created entry", zap.Any("entry", ent))
 	if err != nil {
 		return fmt.Errorf("create entry: %w", err)
 	}
