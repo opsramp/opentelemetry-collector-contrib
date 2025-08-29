@@ -48,6 +48,7 @@ func (mp *batchMemoryLimitProcessor) Capabilities() consumer.Capabilities {
 
 // Start is invoked during service startup.
 func (mp *batchMemoryLimitProcessor) Start(context.Context, component.Host) error {
+	mp.logger.Debug("Starting batch memory limit processor")
 	mp.goroutines.Add(1)
 	go mp.startProcessingCycle()
 	return nil
@@ -64,6 +65,7 @@ func (mp *batchMemoryLimitProcessor) Shutdown(context.Context) error {
 
 // ConsumeLogs implements LogsProcessor
 func (mp *batchMemoryLimitProcessor) ConsumeLogs(_ context.Context, ld plog.Logs) error {
+	mp.logger.Debug("Received logs", zap.Int("log_records", ld.LogRecordCount()))
 	mp.newItem <- ld
 	return nil
 }
@@ -107,10 +109,12 @@ func (mp *batchMemoryLimitProcessor) sendItems() {
 }
 
 func (mp *batchMemoryLimitProcessor) processItem(item plog.Logs) {
+	mp.logger.Debug("Processing item", zap.Int("log_records", item.LogRecordCount()))
 	sent, err := mp.batch.add(item)
 	if err != nil {
 		mp.logger.Warn("Sender failed", zap.Error(err))
 	}
+	mp.logger.Debug("Processed item", zap.Int("batched_log_records", mp.batch.getLogCount()))
 
 	if sent {
 		mp.stopTimer()

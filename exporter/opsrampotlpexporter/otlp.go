@@ -261,6 +261,7 @@ func (e *opsrampOTLPExporter) pushMetrics(ctx context.Context, md pmetric.Metric
 }
 
 func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
+	fmt.Println("Received logs for export:", ld.LogRecordCount())
 	if ld.LogRecordCount() <= 0 {
 		return nil
 	}
