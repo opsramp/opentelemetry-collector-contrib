@@ -154,6 +154,7 @@ func (c *Converter) OutChannel() <-chan plog.Logs {
 func (c *Converter) workerLoop() {
 	defer c.wg.Done()
 
+	c.set.Logger.Debug("Log converter worker started")
 	for entries := range c.workerChan {
 
 		resourceHashToIdx := make(map[uint64]int)
@@ -191,6 +192,7 @@ func (c *Converter) workerLoop() {
 		}
 
 		// Send plogs directly to flushChan
+		c.set.Logger.Debug("Worker sending batch of log entries to flush channel", zap.Int("entry_count", pLogs.LogRecordCount()))
 		c.flushChan <- pLogs
 	}
 }
@@ -200,7 +202,9 @@ func (c *Converter) flushLoop() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	c.set.Logger.Debug("Log converter flush loop started")
 	for pLogs := range c.flushChan {
+		c.set.Logger.Debug("Flush loop received batch of log entries", zap.Int("entry_count", pLogs.LogRecordCount()))
 		if err := c.flush(ctx, pLogs); err != nil {
 			c.set.Logger.Debug("Problem sending log entries",
 				zap.Error(err),
@@ -212,7 +216,7 @@ func (c *Converter) flushLoop() {
 // flush flushes provided plog.Logs entries onto a channel.
 func (c *Converter) flush(ctx context.Context, pLogs plog.Logs) error {
 	doneChan := ctx.Done()
-
+	c.set.Logger.Debug("Flushing log entries to output channel", zap.Int("entry_count", pLogs.LogRecordCount()))
 	select {
 	case <-doneChan:
 		return fmt.Errorf("flushing log entries interrupted, err: %w", ctx.Err())
@@ -232,6 +236,7 @@ func (c *Converter) Batch(e []*entry.Entry) error {
 	default:
 	}
 
+	c.set.Logger.Debug("Adding batch of entries to converter", zap.Int("entry_count", len(e)))
 	c.workerChan <- e
 	return nil
 }

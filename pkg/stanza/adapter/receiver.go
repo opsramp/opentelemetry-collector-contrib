@@ -88,6 +88,7 @@ func (r *receiver) emitterLoop() {
 	// emitter.OutChannel is closed on ctx.Done(), no need to handle ctx here
 	// instead we should drain and process the channel to let emitter cancel properly
 	for e := range r.emitter.OutChannel() {
+		r.set.Logger.Debug("Received batch of entries from emitter", zap.Int("entry_count", len(e)))
 		if err := r.converter.Batch(e); err != nil {
 			r.set.Logger.Error("Could not add entry to batch", zap.Error(err))
 		}
@@ -104,6 +105,7 @@ func (r *receiver) consumerLoop(ctx context.Context) {
 	// converter.OutChannel is closed on Shutdown before context is cancelled.
 	// Drain the channel and process events before exiting
 	for pLogs := range r.converter.OutChannel() {
+		r.set.Logger.Debug("Received batch of logs from converter", zap.Int("log_record_count", pLogs.LogRecordCount()))
 		obsrecvCtx := r.obsrecv.StartLogsOp(ctx)
 		logRecordCount := pLogs.LogRecordCount()
 

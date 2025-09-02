@@ -257,7 +257,7 @@ func (ltp *logsTransformProcessor) consumerLoop(ctx context.Context, wg *sync.Wa
 				ltp.set.Logger.Debug("converter channel got closed")
 				return
 			}
-
+			ltp.set.Logger.Debug("Received batch of logs from converter", zap.Int("log_record_count", pLogs.LogRecordCount()))
 			if err := ltp.consumer.ConsumeLogs(ctx, pLogs); err != nil {
 				ltp.set.Logger.Error("processor encountered an issue with next consumer", zap.Error(err))
 			}

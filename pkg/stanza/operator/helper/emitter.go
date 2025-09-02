@@ -5,6 +5,7 @@ package helper // import "github.com/open-telemetry/opentelemetry-collector-cont
 
 import (
 	"context"
+	"go.uber.org/zap"
 	"sync"
 	"time"
 
@@ -108,6 +109,7 @@ func (e *LogEmitter) OutChannelForWrite() chan []*entry.Entry {
 
 // Process will emit an entry to the output channel
 func (e *LogEmitter) Process(ctx context.Context, ent *entry.Entry) error {
+	e.Logger().Debug("Emitting entry in emitter")
 	if oldBatch := e.appendEntry(ent); len(oldBatch) > 0 {
 		e.flush(ctx, oldBatch)
 	}
@@ -120,11 +122,13 @@ func (e *LogEmitter) Process(ctx context.Context, ent *entry.Entry) error {
 func (e *LogEmitter) appendEntry(ent *entry.Entry) []*entry.Entry {
 	e.batchMux.Lock()
 	defer e.batchMux.Unlock()
+	e.Logger().Debug("Appending entry to batch", zap.Int("current_batch_size", len(e.batch)+1), zap.Uint("max_batch_size", e.maxBatchSize))
 
 	e.batch = append(e.batch, ent)
 	if uint(len(e.batch)) >= e.maxBatchSize {
 		var oldBatch []*entry.Entry
 		oldBatch, e.batch = e.batch, make([]*entry.Entry, 0, e.maxBatchSize)
+		e.Logger().Debug("Appended entry to batch", zap.Int("new_batch_size", len(oldBatch)))
 		return oldBatch
 	}
 
@@ -156,6 +160,7 @@ func (e *LogEmitter) flusher() {
 
 // flush flushes the provided batch to the log channel.
 func (e *LogEmitter) flush(ctx context.Context, batch []*entry.Entry) {
+	e.Logger().Debug("Flushing batch", zap.Int("batch_size", len(batch)))
 	select {
 	case e.logChan <- batch:
 	case <-ctx.Done():
