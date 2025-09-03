@@ -303,6 +303,7 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 				return err
 			}
 		}
+
 		return processError(err)
 	}
 	return nil
@@ -318,7 +319,15 @@ func (e *opsrampOTLPExporter) updateExpiredToken() error {
 	defer e.mut.Unlock()
 	e.accessToken = accessToken
 	if tokenRenewInProgress {
-		e.metadata.Set("Authorization", fmt.Sprintf("Bearer %s", e.accessToken))
+		// Create a new metadata map to avoid concurrent map access issues
+		newMetadata := metadata.New(nil)
+		for k, v := range e.metadata {
+			if k != "authorization" {
+				newMetadata[k] = v
+			}
+		}
+		newMetadata.Set("Authorization", fmt.Sprintf("Bearer %s", e.accessToken))
+		e.metadata = newMetadata
 	}
 	tokenRenewInProgress = false
 	return nil
@@ -328,7 +337,12 @@ func (e *opsrampOTLPExporter) enhanceContext(ctx context.Context) context.Contex
 	e.mut.Lock()
 	defer e.mut.Unlock()
 	if e.metadata.Len() > 0 {
-		return metadata.NewOutgoingContext(ctx, e.metadata)
+		// Create a copy of metadata to avoid concurrent access during gRPC validation
+		metadataCopy := metadata.New(nil)
+		for k, v := range e.metadata {
+			metadataCopy[k] = v
+		}
+		return metadata.NewOutgoingContext(ctx, metadataCopy)
 	}
 	return ctx
 }
