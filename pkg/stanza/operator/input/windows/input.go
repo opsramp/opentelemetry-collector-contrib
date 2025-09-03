@@ -22,20 +22,20 @@ import (
 type (
 	Input struct {
 		helper.InputOperator
-		bookmark            Bookmark
-		subscription        Subscription
-		buffer              Buffer
-		channel             string
-		maxReads            int
-		startAt             string
-		raw                 bool
-		isReqAdditionalAttr *bool
-		excludeProviders    []string
-		pollInterval        time.Duration
-		persister           Persister
-		publisherCache      publisherCache
-		cancel              context.CancelFunc
-		wg                  sync.WaitGroup
+		bookmark         Bookmark
+		subscription     Subscription
+		buffer           Buffer
+		channel          string
+		maxReads         int
+		startAt          string
+		raw              bool
+		ReqOrgAttr       *bool
+		excludeProviders []string
+		pollInterval     time.Duration
+		persister        Persister
+		publisherCache   publisherCache
+		cancel           context.CancelFunc
+		wg               sync.WaitGroup
 	}
 )
 
@@ -285,10 +285,10 @@ func (i *Input) updateBookmarkOffset(ctx context.Context, event Event, recordID 
 }
 
 func (i *Input) isAdditionalAttrReq() bool {
-	if i.isReqAdditionalAttr == nil {
-		return true
+	if i.ReqOrgAttr == nil {
+		return false
 	}
-	return *i.isReqAdditionalAttr
+	return *i.ReqOrgAttr
 }
 
 func (i *Input) ExtractEventData(eventData EventData) (map[string]any, error) {
@@ -350,6 +350,5 @@ func (i *Input) processEventWithSimple(ctx context.Context, event Event, simpleE
 		i.Logger().Error("Failed to render formatted event", zap.Error(err))
 		return i.sendEvent(ctx, simpleEvent)
 	}
-
 	return i.sendEvent(ctx, &formattedEvent)
 }

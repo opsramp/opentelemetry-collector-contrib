@@ -29,6 +29,6 @@ type (
 		InputConfig        windows.Config `mapstructure:",squash"`
 		adapter.BaseConfig `mapstructure:",squash"`
 
-		IsReqAdditionalAttr *bool `mapstructure:"is_req_additional_attr,omitempty"`
+		ReqOrgAttr *bool `mapstructure:"req_org_attr,omitempty; default: false"`
 	}
 )

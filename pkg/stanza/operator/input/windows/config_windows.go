@@ -55,15 +55,15 @@ func (c *Config) Build(set component.TelemetrySettings) (operator.Operator, erro
 	}
 
 	return &Input{
-		InputOperator:       inputOperator,
-		buffer:              NewBuffer(),
-		channel:             c.Channel,
-		maxReads:            c.MaxReads,
-		startAt:             c.StartAt,
-		pollInterval:        c.PollInterval,
-		raw:                 c.Raw,
-		isReqAdditionalAttr: c.IsReqAdditionalAttr,
-		excludeProviders:    c.ExcludeProviders,
-		persister:           persister,
+		InputOperator:    inputOperator,
+		buffer:           NewBuffer(),
+		channel:          c.Channel,
+		maxReads:         c.MaxReads,
+		startAt:          c.StartAt,
+		pollInterval:     c.PollInterval,
+		raw:              c.Raw,
+		ReqOrgAttr:       c.ReqOrgAttr,
+		excludeProviders: c.ExcludeProviders,
+		persister:        persister,
 	}, nil
 }

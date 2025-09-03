@@ -19,26 +19,26 @@ func NewConfig() *Config {
 // NewConfig will return an event log config with default values.
 func NewConfigWithID(operatorID string) *Config {
 	return &Config{
-		InputConfig:         helper.NewInputConfig(operatorID, operatorType),
-		MaxReads:            100,
-		StartAt:             "end",
-		PollInterval:        1 * time.Second,
-		IsReqAdditionalAttr: nil,
+		InputConfig:  helper.NewInputConfig(operatorID, operatorType),
+		MaxReads:     100,
+		StartAt:      "end",
+		PollInterval: 1 * time.Second,
+		ReqOrgAttr:   nil,
 	}
 }
 
 // Config is the configuration of a windows event log operator.
 type (
 	Config struct {
-		helper.InputConfig  `mapstructure:",squash"`
-		Channel             string        `mapstructure:"channel"`
-		MaxReads            int           `mapstructure:"max_reads,omitempty"`
-		StartAt             string        `mapstructure:"start_at,omitempty"`
-		PollInterval        time.Duration `mapstructure:"poll_interval,omitempty"`
-		Raw                 bool          `mapstructure:"raw,omitempty"`
-		ExcludeProviders    []string      `mapstructure:"exclude_providers,omitempty"`
-		IsReqAdditionalAttr *bool         `mapstructure:"is_req_additional_attr,omitempty"`
-		PersisterType       string        `mapstructure:"persister_type,omitempty"`
-		PersisterPath       string        `mapstructure:"persister_path,omitempty"` // path to the persister storage path
+		helper.InputConfig `mapstructure:",squash"`
+		Channel            string        `mapstructure:"channel"`
+		MaxReads           int           `mapstructure:"max_reads,omitempty"`
+		StartAt            string        `mapstructure:"start_at,omitempty"`
+		PollInterval       time.Duration `mapstructure:"poll_interval,omitempty"`
+		Raw                bool          `mapstructure:"raw,omitempty"`
+		ExcludeProviders   []string      `mapstructure:"exclude_providers,omitempty"`
+		ReqOrgAttr         *bool         `mapstructure:"req_org_attr,omitempty; default: false"`
+		PersisterType      string        `mapstructure:"persister_type,omitempty"`
+		PersisterPath      string        `mapstructure:"persister_path,omitempty"` // path to the persister storage path
 	}
 )

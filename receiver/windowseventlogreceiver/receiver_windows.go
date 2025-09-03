@@ -42,11 +42,11 @@ func (f ReceiverType) BaseConfig(cfg component.Config) adapter.BaseConfig {
 func (f ReceiverType) InputConfig(cfg component.Config) operator.Config {
 	windowsCfg := &cfg.(*WindowsLogConfig).InputConfig
 
-	isEnableAdditionAttr := true
-	if cfg.(*WindowsLogConfig).IsReqAdditionalAttr != nil {
-		isEnableAdditionAttr = *cfg.(*WindowsLogConfig).IsReqAdditionalAttr
+	isEnableAdditionAttr := false
+	if cfg.(*WindowsLogConfig).ReqOrgAttr != nil {
+		isEnableAdditionAttr = *cfg.(*WindowsLogConfig).ReqOrgAttr
 	}
-	windowsCfg.IsReqAdditionalAttr = &isEnableAdditionAttr
+	windowsCfg.ReqOrgAttr = &isEnableAdditionAttr
 
 	// Set persister type from base config to windows config
 	baseCfg := &cfg.(*WindowsLogConfig).BaseConfig
