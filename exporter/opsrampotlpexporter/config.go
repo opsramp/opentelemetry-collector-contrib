@@ -17,11 +17,11 @@ package opsrampotlpexporter // import "go.opentelemetry.io/collector/exporter/ot
 import (
 	"errors"
 	"fmt"
+	"time"
+
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configgrpc"
 	"go.opentelemetry.io/collector/config/configretry"
-	"time"
-
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 )
 
@@ -32,11 +32,21 @@ type MaskingSettings struct {
 	Placeholder string `mapstructure:"placeholder"`
 }
 
-type SecuritySettings struct {
-	OAuthServiceURL string `mapstructure:"oauth_service_url"`
-	ClientID        string `mapstructure:"client_id"`
-	ClientSecret    string `mapstructure:"client_secret"`
-}
+type (
+	SecuritySettings struct {
+		OAuthServiceURL     string             `mapstructure:"oauth_service_url"`
+		ClientID            string             `mapstructure:"client_id"`
+		ClientSecret        string             `mapstructure:"client_secret"`
+		OtelExporterSetting CustomtOtelSetting `mapstructure:"otel_exporter_setting"`
+	}
+
+	CustomtOtelSetting struct {
+		ReadBufferSize  int `mapstructure:"otel_exporter_read_buffer_size"`
+		WriteBufferSize int `mapstructure:"otel_exporter_write_buffer_size"`
+		GrpcMaxSendSize int `mapstructure:"grpc_max_call_send_msg_size"`
+		GrpcMaxRecvSize int `mapstructure:"grpc_max_call_recv_msg_size"`
+	}
+)
 
 type Credentials struct {
 	AccessToken string `json:"access_token"`
@@ -67,10 +77,10 @@ type Config struct {
 	exporterhelper.QueueConfig   `mapstructure:"sending_queue"`
 	configretry.BackOffConfig    `mapstructure:"retry_on_failure"`
 
-	Security                SecuritySettings  `mapstructure:"security"`
+	Security                SecuritySettings         `mapstructure:"security"`
 	configgrpc.ClientConfig `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct.
-	Masking                 []MaskingSettings `mapstructure:"masking"`
-	ExpirationSkip          time.Duration     `mapstructure:"expiration_skip"`
+	Masking                 []MaskingSettings        `mapstructure:"masking"`
+	ExpirationSkip          time.Duration            `mapstructure:"expiration_skip"`
 }
 
 var _ component.Config = (*Config)(nil)
@@ -85,6 +95,5 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("security settings has invalid configuration: %w", err)
 	}
 
-	fmt.Println()
 	return nil
 }
