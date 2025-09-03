@@ -128,8 +128,6 @@ func (i *Input) read(ctx context.Context) int {
 
 		recordID := simpleEvent.RecordID
 		dedupKey := fmt.Sprintf("dedup_%d", recordID)
-		i.Logger().Debug("@@@ Suresh - stage 1 --- Processing event", zap.Any("pstartedAt", pstartedAt), zap.Int("current loop id:", eI), zap.Any("process started at ", time.Now().Local().Format("2006-01-02 15:04:05.000")), zap.Uint64("record_id", recordID), zap.String("channel", i.channel))
-
 		// Deduplication: check if this record was already processed
 		exists, dCheckErr := i.persister.Get(ctx, dedupKey)
 		if dCheckErr != nil {
@@ -137,15 +135,11 @@ func (i *Input) read(ctx context.Context) int {
 			event.Close()
 			continue
 		}
-		i.Logger().Debug("@@@ Suresh - stage 2 --- Checking deduplication", zap.Any("pstartedAt", pstartedAt), zap.Int("current loop id:", eI), zap.Any("process started at ", time.Now().Local().Format("2006-01-02 15:04:05.000")), zap.Uint64("record_id", recordID), zap.String("dedup_key", dedupKey), zap.Any("exists", exists))
-
 		if exists != nil {
 			i.Logger().Debug("Duplicate event, skipping", zap.Uint64("record_id", recordID))
 			event.Close()
 			continue
 		}
-
-		i.Logger().Debug("@@@ Suresh - stage 3 --- Processing event with simple", zap.Any("pstartedAt", pstartedAt), zap.Int("current loop id:", eI), zap.Any("process started at ", time.Now().Local().Format("2006-01-02 15:04:05.000")), zap.Uint64("record_id", recordID), zap.String("channel", i.channel))
 
 		// Skip empty events
 		if recordID == 0 && simpleEvent.Provider.Name == "" {
@@ -154,8 +148,6 @@ func (i *Input) read(ctx context.Context) int {
 			continue
 		}
 
-		i.Logger().Debug("@@Suresh - Reading event", zap.Any("pstartedAt", pstartedAt), zap.Int("current loop id:", eI), zap.Any("process started at ", time.Now().Local().Format("2006-01-02 15:04:05.000")), zap.Uint64("record_id", recordID), zap.String("channel", i.channel))
-
 		err1 := i.processEventWithSimple(ctx, event, &simpleEvent)
 		if err1 == nil {
 			i.updateBookmarkOffset(ctx, event, recordID)
@@ -163,7 +155,6 @@ func (i *Input) read(ctx context.Context) int {
 			if err := i.persister.Set(ctx, dedupKey, []byte("1")); err != nil {
 				i.Logger().Error("Failed to persist deduplication key", zap.Error(err))
 			}
-			i.Logger().Debug("@@@ Suresh - Processed successfully, updating bookmark", zap.Any("pstartedAt", pstartedAt), zap.Int("current loop id:", eI), zap.Any("process started at ", time.Now().Local().Format("2006-01-02 15:04:05.000")), zap.Uint64("record_id", recordID))
 		} else {
 			i.Logger().Error("Failed to process event", zap.Any("pstartedAt", pstartedAt), zap.Int("current loop id:", eI), zap.Any("process started at ", time.Now().Local().Format("2006-01-02 15:04:05.000")), zap.Uint64("record_id", recordID), zap.Error(err))
 		}
@@ -172,33 +163,24 @@ func (i *Input) read(ctx context.Context) int {
 
 	processDuration := time.Now().Local().Sub(pstartedAtObj).Milliseconds()
 	i.Logger().Debug(
-		"@@@ Suresh - Finished processing events",
 		zap.Any("pstartedAt", pstartedAt),
 		zap.Any("process finished at ", time.Now().Local().Format("2006-01-02 15:04:05.000")),
 		zap.Any("process_duration_ms", processDuration),
 	)
-
 	return len(events)
 }
 
 // processEvent will process and send an event retrieved from windows event log.
 func (i *Input) processEvent(ctx context.Context, event Event) error {
-	i.Logger().Debug("@@@ Suresh - Processing event, stag 1:", zap.Any("i", i))
-
 	if i.raw {
 		rawEvent, err := event.RenderRaw(i.buffer)
-		i.Logger().Debug("@@@ Suresh - Processing event, stag 1.1:", zap.Any("i", i))
 		if err != nil {
 			i.Logger().Error("Failed to render raw event", zap.Error(err))
 			return err
 		}
-		i.Logger().Debug("@@@ Suresh - Processing event, stag 1.2:", zap.Any("i", i))
 		i.sendEventRaw(ctx, rawEvent)
 		return nil
 	}
-
-	i.Logger().Debug("@@@ Suresh - Processing event, stag 2:", zap.Any("i", i))
-
 	isExcluded := func(providerName string) bool {
 		for _, excludeProvider := range i.excludeProviders {
 			if providerName == excludeProvider {
@@ -207,16 +189,12 @@ func (i *Input) processEvent(ctx context.Context, event Event) error {
 		}
 		return false
 	}
-
-	i.Logger().Debug("@@@ Suresh - Processing event, stag 3:", zap.Any("i", i))
 	simpleEvent, err := event.RenderSimple(i.buffer)
-	i.Logger().Debug("@@@ Suresh - Processing event --> inside raw, simpleEvent", zap.Any("simpleEvent", simpleEvent), zap.Error(err))
 	if err != nil {
 		i.Logger().Error("Failed to render simple event", zap.Error(err))
 		return err
 	}
 	if isExcluded(simpleEvent.Provider.Name) {
-		i.Logger().Debug("@@@ Suresh - Processing event --> inside isExcluded", zap.Any("simpleEvent.Provider.Name", simpleEvent.Provider.Name), zap.Any("check -=--- isExcluded", isExcluded(simpleEvent.Provider.Name)))
 		return nil
 	}
 
@@ -245,7 +223,6 @@ func (i *Input) sendEvent(ctx context.Context, eventXML *EventXML) error {
 	}
 
 	e, err := i.NewEntry(body)
-	i.Logger().Debug("@@@@ Suresh - stage 1-- Sending event", zap.Any("entry", e), zap.Any("body", body), zap.Error(err))
 	if err != nil {
 		i.Logger().Error("sendEvent -> Failed to create new entry", zap.Error(err))
 		return err
@@ -255,7 +232,6 @@ func (i *Input) sendEvent(ctx context.Context, eventXML *EventXML) error {
 	e.Severity = parseSeverity(eventXML.RenderedLevel, eventXML.Level)
 
 	eventData, er := i.ExtractEventData(eventXML.EventData)
-	i.Logger().Debug("Suresh - stage 2- Debugging -- **** inside --- i.isAdditionalAttrReq - Extracted event data", zap.Any("event_data", eventData), zap.Any("err", er))
 	if len(eventData) > 0 {
 		for eK, eD := range eventData {
 			eK = strings.ReplaceAll(strings.ToLower(eK), " ", "_")
@@ -268,7 +244,6 @@ func (i *Input) sendEvent(ctx context.Context, eventXML *EventXML) error {
 	}
 	if i.isAdditionalAttrReq() {
 		e.AddAttribute("log_record_original", eventXML.Original)
-		i.Logger().Debug("Suresh - stage 2- Debugging - Extracted event data", zap.Any("event_data", eventData), zap.Any("err", er))
 	}
 	return i.Write(ctx, e)
 }
@@ -340,8 +315,6 @@ func (i *Input) ExtractEventData(eventData EventData) (map[string]any, error) {
 }
 
 func (i *Input) processEventWithSimple(ctx context.Context, event Event, simpleEvent *EventXML) error {
-	i.Logger().Debug("@@@ Suresh processEventWithSimple", zap.String("provider", simpleEvent.Provider.Name))
-
 	if i.raw {
 		rawEvent, err := event.RenderRaw(i.buffer)
 		if err != nil {
