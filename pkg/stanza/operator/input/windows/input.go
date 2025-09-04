@@ -160,13 +160,6 @@ func (i *Input) read(ctx context.Context) int {
 		}
 		event.Close()
 	}
-
-	processDuration := time.Now().Local().Sub(pstartedAtObj).Milliseconds()
-	i.Logger().Debug(
-		zap.Any("pstartedAt", pstartedAt),
-		zap.Any("process finished at ", time.Now().Local().Format("2006-01-02 15:04:05.000")),
-		zap.Any("process_duration_ms", processDuration),
-	)
 	return len(events)
 }
 
@@ -231,7 +224,7 @@ func (i *Input) sendEvent(ctx context.Context, eventXML *EventXML) error {
 	e.Timestamp = parseTimestamp(eventXML.TimeCreated.SystemTime)
 	e.Severity = parseSeverity(eventXML.RenderedLevel, eventXML.Level)
 
-	eventData, er := i.ExtractEventData(eventXML.EventData)
+	eventData, _ := i.ExtractEventData(eventXML.EventData)
 	if len(eventData) > 0 {
 		for eK, eD := range eventData {
 			eK = strings.ReplaceAll(strings.ToLower(eK), " ", "_")
