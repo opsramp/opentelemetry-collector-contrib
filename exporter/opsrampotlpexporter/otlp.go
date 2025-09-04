@@ -55,6 +55,7 @@ import (
 var (
 	tokenRenewInProgress bool
 	credentials          Credentials
+	tokenMutex           sync.Mutex // Add mutex to protect global variables
 )
 
 type opsrampOTLPExporter struct {
@@ -111,11 +112,16 @@ type Person struct {
 }
 
 func getAuthToken(cfg SecuritySettings) (string, error) {
+	tokenMutex.Lock()
+	defer tokenMutex.Unlock()
+
 	if tokenRenewInProgress {
 		for tokenRenewInProgress {
-			time.Sleep(time.Second * 10)
+			tokenMutex.Unlock()
+			time.Sleep(time.Second * 1) // Reduced from 10s to 1s for better performance
+			tokenMutex.Lock()
 		}
-		tokenRenewInProgress = true
+		// Return the refreshed token, don't set tokenRenewInProgress again
 		return credentials.AccessToken, nil
 	}
 	tokenRenewInProgress = true
@@ -142,6 +148,7 @@ func getAuthToken(cfg SecuritySettings) (string, error) {
 	data.Set("grant_type", grantType)
 	request, err := http.NewRequest("POST", cfg.OAuthServiceURL, bytes.NewBufferString(data.Encode()))
 	if err != nil {
+		tokenRenewInProgress = false
 		return "", err
 	}
 	request.Header.Set("Accept", "application/json")
@@ -157,12 +164,15 @@ func getAuthToken(cfg SecuritySettings) (string, error) {
 	defer resp.Body.Close()
 	jsonResp, err := io.ReadAll(resp.Body)
 	if err != nil {
+		tokenRenewInProgress = false
 		return "", err
 	}
 
 	if err := json.Unmarshal(jsonResp, &credentials); err != nil {
+		tokenRenewInProgress = false
 		return "", err
 	}
+	tokenRenewInProgress = false
 	return credentials.AccessToken, nil
 }
 
@@ -303,7 +313,6 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 				return err
 			}
 		}
-
 		return processError(err)
 	}
 	return nil
@@ -312,24 +321,13 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 func (e *opsrampOTLPExporter) updateExpiredToken() error {
 	accessToken, err := getAuthToken(e.config.Security)
 	if err != nil {
-		tokenRenewInProgress = false
 		return err
 	}
 	e.mut.Lock()
 	defer e.mut.Unlock()
 	e.accessToken = accessToken
-	if tokenRenewInProgress {
-		// Create a new metadata map to avoid concurrent map access issues
-		newMetadata := metadata.New(nil)
-		for k, v := range e.metadata {
-			if k != "authorization" {
-				newMetadata[k] = v
-			}
-		}
-		newMetadata.Set("Authorization", fmt.Sprintf("Bearer %s", e.accessToken))
-		e.metadata = newMetadata
-	}
-	tokenRenewInProgress = false
+	// Always update the metadata when token is refreshed
+	e.metadata.Set("Authorization", fmt.Sprintf("Bearer %s", e.accessToken))
 	return nil
 }
 
@@ -337,12 +335,9 @@ func (e *opsrampOTLPExporter) enhanceContext(ctx context.Context) context.Contex
 	e.mut.Lock()
 	defer e.mut.Unlock()
 	if e.metadata.Len() > 0 {
-		// Create a copy of metadata to avoid concurrent access during gRPC validation
-		metadataCopy := metadata.New(nil)
-		for k, v := range e.metadata {
-			metadataCopy[k] = v
-		}
-		return metadata.NewOutgoingContext(ctx, metadataCopy)
+		// Create a copy of the metadata to avoid race conditions during gRPC validation
+		mdCopy := e.metadata.Copy()
+		return metadata.NewOutgoingContext(ctx, mdCopy)
 	}
 	return ctx
 }
