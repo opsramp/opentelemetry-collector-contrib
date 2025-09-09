@@ -131,7 +131,7 @@ func (m *Manager) poll(ctx context.Context) {
 		if m.maxBatches != 0 {
 			batchesProcessed++
 			if batchesProcessed >= m.maxBatches {
-				return
+				goto checkpointAndEnd
 			}
 		}
 
@@ -139,8 +139,17 @@ func (m *Manager) poll(ctx context.Context) {
 	}
 	m.consume(ctx, matches)
 
-	// Any new files that appear should be consumed entirely
-	m.readerFactory.FromBeginning = true
+checkpointAndEnd:
+	// Set FromBeginning to true only if any file is new (no offset exists)
+	m.readerFactory.FromBeginning = false
+	for _, path := range matches {
+		fp, _ := m.makeFingerprint(path)
+		if fp != nil && m.tracker.GetOpenFile(fp) == nil && m.tracker.GetClosedFile(fp) == nil {
+			m.readerFactory.FromBeginning = true
+			break
+		}
+	}
+
 	if m.persister != nil {
 		metadata := m.tracker.GetMetadata()
 		if metadata != nil {

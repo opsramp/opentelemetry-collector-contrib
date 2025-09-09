@@ -8,8 +8,10 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"go.opentelemetry.io/collector/component"
 	"go.uber.org/zap"
@@ -52,10 +54,18 @@ type Reader struct {
 	needsUpdateFingerprint bool
 	includeFileRecordNum   bool
 	compression            string
+
+	logger *zap.Logger
 }
 
 // ReadToEnd will read until the end of the file
 func (r *Reader) ReadToEnd(ctx context.Context) {
+	r.logger = initLogger()
+
+	start := time.Now()
+	totalRecords := 0
+	totalBytes := int64(0)
+
 	switch r.compression {
 	case "gzip":
 		// We need to create a gzip reader each time ReadToEnd is called because the underlying
@@ -98,6 +108,15 @@ func (r *Reader) ReadToEnd(ctx context.Context) {
 		}
 	}()
 
+	r.logger.Debug("REMOVE After debugg: Starting read",
+		zap.String("filename", r.fileName),
+		zap.Int64("offset", r.Offset),
+		zap.Int("fingerprint_size", r.fingerprintSize),
+		zap.Int("initialBufferSize", r.initialBufferSize),
+		zap.Int("maxLogSize", r.maxLogSize),
+		zap.String("scanned at ", time.Now().Format(time.RFC3339)),
+	)
+
 	s := scanner.New(r, r.maxLogSize, r.initialBufferSize, r.Offset, r.splitFunc)
 
 	// Iterate over the tokenized file, emitting entries as we go
@@ -118,12 +137,32 @@ func (r *Reader) ReadToEnd(ctx context.Context) {
 			return
 		}
 
+		duration := time.Since(start).Seconds()
+		if duration > 0 {
+			r.logger.Debug("receiver --- poll stats",
+				zap.String("file", r.fileName),
+				zap.String("started at", start.Format(time.RFC3339Nano)),
+				zap.String("ended at", time.Now().Format(time.RFC3339Nano)),
+				zap.Float64("duration_sec", duration),
+				zap.Int("records", totalRecords),
+				zap.Int64("bytes", totalBytes),
+				zap.String("Payload size in MB:", fmt.Sprint(totalBytes*1024*1024)),
+				zap.Float64("records_per_sec", float64(totalRecords)/duration),
+				zap.Float64("bytes_per_sec", float64(totalBytes)/duration),
+			)
+		}
+
+		// count bytes scanned
+		totalBytes += int64(len(s.Bytes()))
+
 		token, err := r.decoder.Decode(s.Bytes())
 		if err != nil {
 			r.set.Logger.Error("decode: %w", zap.Error(err))
 			r.Offset = s.Pos() // move past the bad token or we may be stuck
+			totalRecords++
 			continue
 		}
+		totalRecords++
 
 		if r.includeFileRecordNum {
 			r.RecordNum++
@@ -160,7 +199,8 @@ func (r *Reader) ReadToEnd(ctx context.Context) {
 			r.set.Logger.Error("Failed to seek post-header", zap.Error(err))
 			return
 		}
-		s = scanner.New(r, r.maxLogSize, scanner.DefaultBufferSize, r.Offset, r.splitFunc)
+		//s = scanner.New(r, r.maxLogSize, scanner.DefaultBufferSize, r.Offset, r.splitFunc)
+		s = scanner.New(r, r.maxLogSize, r.initialBufferSize, r.Offset, r.splitFunc)
 	}
 }
 

@@ -24,7 +24,6 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/header"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/metadata"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/reader"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/scanner"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/tracker"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/matcher"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
@@ -79,6 +78,7 @@ type Config struct {
 	StartAt                 string          `mapstructure:"start_at,omitempty"`
 	FingerprintSize         helper.ByteSize `mapstructure:"fingerprint_size,omitempty"`
 	MaxLogSize              helper.ByteSize `mapstructure:"max_log_size,omitempty"`
+	MaxRecordScanSize       helper.ByteSize `mapstructure:"max_record_scan_size,omitempty"`
 	Encoding                string          `mapstructure:"encoding,omitempty"`
 	SplitConfig             split.Config    `mapstructure:"multiline,omitempty"`
 	TrimConfig              trim.Config     `mapstructure:",squash,omitempty"`
@@ -155,10 +155,11 @@ func (c Config) Build(set component.TelemetrySettings, emit emit.Callback, opts 
 
 	set.Logger = set.Logger.With(zap.String("component", "fileconsumer"))
 	readerFactory := reader.Factory{
-		TelemetrySettings:       set,
-		FromBeginning:           startAtBeginning,
-		FingerprintSize:         int(c.FingerprintSize),
-		InitialBufferSize:       scanner.DefaultBufferSize,
+		TelemetrySettings: set,
+		FromBeginning:     startAtBeginning,
+		FingerprintSize:   int(c.FingerprintSize),
+		//InitialBufferSize:       scanner.DefaultBufferSize,
+		InitialBufferSize:       int(c.MaxRecordScanSize),
 		MaxLogSize:              int(c.MaxLogSize),
 		Encoding:                enc,
 		SplitFunc:               splitFunc,
@@ -177,6 +178,10 @@ func (c Config) Build(set component.TelemetrySettings, emit emit.Callback, opts 
 		t = tracker.NewNoStateTracker(set, c.MaxConcurrentFiles/2)
 	} else {
 		t = tracker.NewFileTracker(set, c.MaxConcurrentFiles/2)
+	}
+
+	if c.PollInterval <= 0 {
+		c.PollInterval = defaultPollInterval
 	}
 
 	telemetryBuilder, err := metadata.NewTelemetryBuilder(set)

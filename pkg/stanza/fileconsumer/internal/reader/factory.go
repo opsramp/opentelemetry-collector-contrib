@@ -7,6 +7,9 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/scanner"
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"os"
 	"time"
 
@@ -30,11 +33,12 @@ const (
 
 type Factory struct {
 	component.TelemetrySettings
-	HeaderConfig            *header.Config
-	FromBeginning           bool
-	FingerprintSize         int
-	InitialBufferSize       int
-	MaxLogSize              int
+	HeaderConfig      *header.Config
+	FromBeginning     bool
+	FingerprintSize   int
+	InitialBufferSize int
+	MaxLogSize        int
+	//MaxRecordScanSize       uint64
 	Encoding                encoding.Encoding
 	SplitFunc               bufio.SplitFunc
 	TrimFunc                trim.Func
@@ -44,6 +48,8 @@ type Factory struct {
 	DeleteAtEOF             bool
 	IncludeFileRecordNumber bool
 	Compression             string
+
+	logger *zap.Logger
 }
 
 func (f *Factory) NewFingerprint(file *os.File) (*fingerprint.Fingerprint, error) {
@@ -51,6 +57,9 @@ func (f *Factory) NewFingerprint(file *os.File) (*fingerprint.Fingerprint, error
 }
 
 func (f *Factory) NewReader(file *os.File, fp *fingerprint.Fingerprint) (*Reader, error) {
+	// added for debug purpose
+	f.logger = initLogger()
+
 	attributes, err := f.Attributes.Resolve(file)
 	if err != nil {
 		return nil, err
@@ -63,6 +72,12 @@ func (f *Factory) NewReader(file *os.File, fp *fingerprint.Fingerprint) (*Reader
 }
 
 func (f *Factory) NewReaderFromMetadata(file *os.File, m *Metadata) (r *Reader, err error) {
+
+	//f.InitialBufferSize = 1024 * 1024 * 4 // REMOVE: added for testing purpose only....
+
+	if f.InitialBufferSize < scanner.DefaultBufferSize {
+		f.InitialBufferSize = scanner.DefaultBufferSize
+	}
 
 	r = &Reader{
 		Metadata:             m,
@@ -79,6 +94,15 @@ func (f *Factory) NewReaderFromMetadata(file *os.File, m *Metadata) (r *Reader, 
 		compression:          f.Compression,
 	}
 	r.set.Logger = r.set.Logger.With(zap.String("path", r.fileName))
+
+	f.logger.Debug("REMOVE After debugging: NewReaderFromMetadata -- debugging purpose only",
+		zap.String("file", r.fileName),
+		zap.Int("fingerprint_size", r.fingerprintSize),
+		zap.Any("Read config", r),
+		zap.Int("initialBufferSize", r.initialBufferSize),
+		zap.Int("maxLogSize", r.maxLogSize),
+		zap.String("compression", r.compression),
+	)
 
 	if r.Fingerprint.Len() > r.fingerprintSize {
 		// User has reconfigured fingerprint_size
@@ -125,4 +149,22 @@ func (f *Factory) NewReaderFromMetadata(file *os.File, m *Metadata) (r *Reader, 
 	}
 
 	return r, nil
+}
+
+func initLogger() *zap.Logger {
+	writer := &lumberjack.Logger{
+		Filename:   "/var/log/opsramp/receiver-log.log", // or any path you prefer
+		MaxSize:    10,                                  // megabytes
+		MaxBackups: 5,                                   // number of old files to keep
+		MaxAge:     30,                                  // days to keep
+		Compress:   true,                                // gzip
+	}
+
+	core := zapcore.NewCore(
+		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+		zapcore.AddSync(writer),
+		zap.DebugLevel,
+	)
+
+	return zap.New(core)
 }

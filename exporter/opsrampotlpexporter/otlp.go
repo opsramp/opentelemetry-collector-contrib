@@ -17,20 +17,26 @@ package opsrampotlpexporter // import "go.opentelemetry.io/collector/exporter/ot
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"regexp"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
 	_ "github.com/opsramp/go-proxy-dialer/connect" // implemetation for http connect proxy
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/config/configgrpc"
 	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
@@ -72,6 +78,7 @@ type opsrampOTLPExporter struct {
 	// Default user-agent header.
 	userAgent   string
 	accessToken string
+	logger      *zap.Logger
 }
 
 // Crete new exporter and start it. The exporter will begin connecting but
@@ -110,7 +117,7 @@ type Person struct {
 func getAuthToken(cfg SecuritySettings) (string, error) {
 	if tokenRenewInProgress {
 		for tokenRenewInProgress {
-			time.Sleep(time.Second * 5)
+			time.Sleep(time.Second * 10)
 		}
 		tokenRenewInProgress = true
 		return credentials.AccessToken, nil
@@ -145,6 +152,10 @@ func getAuthToken(cfg SecuritySettings) (string, error) {
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := client.Do(request)
 	if err != nil {
+		if strings.Contains(err.Error(), "x509: certificate signed by unknown authority") || strings.Contains(err.Error(), "TLS handshake timeout") {
+			// If the error is due to an untrusted certificate, we can try to get the token with TLS verification disabled.
+			return getAuthTokenWithTlsDisabled(cfg)
+		}
 		return "", err
 	}
 	defer resp.Body.Close()
@@ -162,27 +173,29 @@ func getAuthToken(cfg SecuritySettings) (string, error) {
 // start actually creates the gRPC connection. The client construction is deferred till this point as this
 // is the only place we get hold of Extensions which are required to construct auth round tripper.
 func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (err error) {
+	e.logger = initLogger()
 	e.clientConn, err = e.config.ClientConfig.ToClientConn(
 		ctx,
 		host,
 		e.settings,
-		grpc.WithUserAgent(e.userAgent),
-		grpc.WithContextDialer(func(_ context.Context, addr string) (net.Conn, error) {
-			if httpproxy.FromEnvironment().HTTPProxy == "" {
-				return (&net.Dialer{}).Dial("tcp", addr)
-			}
+		configgrpc.WithGrpcDialOption(grpc.WithUserAgent(e.userAgent)),
+		configgrpc.WithGrpcDialOption(
+			grpc.WithContextDialer(func(_ context.Context, addr string) (net.Conn, error) {
+				if httpproxy.FromEnvironment().HTTPProxy == "" {
+					return (&net.Dialer{}).Dial("tcp", addr)
+				}
 
-			uri, er := url.Parse(httpproxy.FromEnvironment().HTTPProxy)
-			if er != nil {
-				return nil, er
-			}
+				uri, er := url.Parse(httpproxy.FromEnvironment().HTTPProxy)
+				if er != nil {
+					return nil, er
+				}
 
-			dialer, er := proxy.FromURL(uri, proxy.Direct)
-			if er != nil {
-				return nil, er
-			}
-			return dialer.Dial("tcp", addr)
-		}),
+				dialer, er := proxy.FromURL(uri, proxy.Direct)
+				if er != nil {
+					return nil, er
+				}
+				return dialer.Dial("tcp", addr)
+			})),
 	)
 	if err != nil {
 		return err
@@ -200,6 +213,13 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 	e.callOptions = []grpc.CallOption{
 		grpc.WaitForReady(e.config.ClientConfig.WaitForReady),
 	}
+
+	e.logger.Debug(
+		"OTLP Exporter started",
+		zap.String("Calloptions", fmt.Sprintf("%v", e.callOptions)),
+		zap.Int("Calloptions -> grpc.MaxCallSendMsgSize", e.config.Security.OtelExporterSetting.GrpcMaxSendSize),
+		zap.Int("Calloptions -> grpc.MaxCallRecvMsgSize", e.config.Security.OtelExporterSetting.GrpcMaxRecvSize),
+	)
 	return
 }
 
@@ -257,6 +277,9 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 		return nil
 	}
 
+	start := time.Now()
+	e.logger.Debug("Exporter: pushLogs Started processing logs", zap.String("start at", start.Format(time.RFC3339)))
+
 	if e.config.Masking != nil {
 		e.applyMasking(ld)
 	}
@@ -269,7 +292,35 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 
 	req := plogotlp.NewExportRequestFromLogs(ld)
 
+	data, _ := req.MarshalJSON()
+	e.logger.Debug("request details",
+		zap.String("started_at", start.Format(time.RFC3339Nano)),
+		zap.Int("ResourceLogsCount", ld.ResourceLogs().Len()),
+		zap.Int("TotalLogRecordCount", ld.LogRecordCount()),
+		zap.Int("RequestSizeBytes", len(data)),
+	)
+
+	beforePushEndTime := time.Now()
+
 	_, err := e.logExporter.Export(e.enhanceContext(context.Background()), req, e.callOptions...)
+
+	end := time.Now()
+	e.logger.Debug("Exporter: pushLogs: completed processing logs",
+		zap.String("Stage 1", "before push"),
+		zap.String("ended_at", beforePushEndTime.Format(time.RFC3339Nano)),
+		zap.Float64("duration_seconds", beforePushEndTime.Sub(start).Seconds()),
+		zap.Int64("duration_ms", beforePushEndTime.Sub(start).Milliseconds()),
+		zap.Float64("duration_seconds", beforePushEndTime.Sub(start).Seconds()),
+		zap.String("Stage 1", "before push - end"),
+
+		zap.String("Stage 2", "after push"),
+		zap.String("ended_at", end.Format(time.RFC3339Nano)),
+		zap.Float64("duration_seconds", end.Sub(start).Seconds()),
+		zap.Int64("duration_ms", end.Sub(start).Milliseconds()),
+		zap.Float64("duration_seconds", end.Sub(start).Seconds()),
+		zap.String("Stage 2", "after push - end"),
+	)
+
 	// trying to get new access token in case of expiration
 	if err != nil {
 		st := status.Convert(err)
@@ -305,6 +356,8 @@ func (e *opsrampOTLPExporter) updateExpiredToken() error {
 }
 
 func (e *opsrampOTLPExporter) enhanceContext(ctx context.Context) context.Context {
+	e.mut.Lock()
+	defer e.mut.Unlock()
 	if e.metadata.Len() > 0 {
 		return metadata.NewOutgoingContext(ctx, e.metadata)
 	}
@@ -416,4 +469,71 @@ func (e *opsrampOTLPExporter) skipExpired(ld plog.Logs) {
 			})
 		}
 	}
+}
+
+func getAuthTokenWithTlsDisabled(cfg SecuritySettings) (string, error) {
+	client := &http.Client{
+		Transport: &http.Transport{
+			Proxy: func(req *http.Request) (*url.URL, error) {
+				return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
+			},
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
+	form := url.Values{}
+	form.Set("client_id", cfg.ClientID)
+	form.Set("client_secret", cfg.ClientSecret)
+	form.Set("grant_type", "client_credentials")
+
+	req, err := http.NewRequest("POST", cfg.OAuthServiceURL, bytes.NewBufferString(form.Encode()))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if err := json.Unmarshal(body, &credentials); err != nil {
+		return "", err
+	}
+
+	return credentials.AccessToken, nil
+}
+
+func initLogger() *zap.Logger {
+	writer := &lumberjack.Logger{
+		Filename:   "/var/log/opsramp/exporter-log.log", // or any path you prefer
+		MaxSize:    10,                                  // megabytes
+		MaxBackups: 5,                                   // number of old files to keep
+		MaxAge:     30,                                  // days to keep
+		Compress:   true,                                // gzip
+	}
+
+	core := zapcore.NewCore(
+		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+		zapcore.AddSync(writer),
+		zap.DebugLevel,
+	)
+
+	return zap.New(core)
 }

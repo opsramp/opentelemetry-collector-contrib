@@ -32,11 +32,21 @@ type MaskingSettings struct {
 	Placeholder string `mapstructure:"placeholder"`
 }
 
-type SecuritySettings struct {
-	OAuthServiceURL string `mapstructure:"oauth_service_url"`
-	ClientID        string `mapstructure:"client_id"`
-	ClientSecret    string `mapstructure:"client_secret"`
-}
+type (
+	SecuritySettings struct {
+		OAuthServiceURL     string             `mapstructure:"oauth_service_url"`
+		ClientID            string             `mapstructure:"client_id"`
+		ClientSecret        string             `mapstructure:"client_secret"`
+		OtelExporterSetting CustomtOtelSetting `mapstructure:"otel_exporter_setting"`
+	}
+
+	CustomtOtelSetting struct {
+		ReadBufferSize  int `mapstructure:"otel_exporter_read_buffer_size"`
+		WriteBufferSize int `mapstructure:"otel_exporter_write_buffer_size"`
+		GrpcMaxSendSize int `mapstructure:"grpc_max_call_send_msg_size"`
+		GrpcMaxRecvSize int `mapstructure:"grpc_max_call_recv_msg_size"`
+	}
+)
 
 type Credentials struct {
 	AccessToken string `json:"access_token"`
@@ -63,9 +73,9 @@ func (s *SecuritySettings) Validate() error {
 
 // Config defines configuration for OpenCensus exporter.
 type Config struct {
-	exporterhelper.TimeoutSettings `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct.
-	exporterhelper.QueueSettings   `mapstructure:"sending_queue"`
-	configretry.BackOffConfig      `mapstructure:"retry_on_failure"`
+	exporterhelper.TimeoutConfig `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct.
+	exporterhelper.QueueConfig   `mapstructure:"sending_queue"`
+	configretry.BackOffConfig    `mapstructure:"retry_on_failure"`
 
 	Security                SecuritySettings         `mapstructure:"security"`
 	configgrpc.ClientConfig `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct.
@@ -77,7 +87,7 @@ var _ component.Config = (*Config)(nil)
 
 // Validate checks if the exporter configuration is valid
 func (cfg *Config) Validate() error {
-	if err := cfg.QueueSettings.Validate(); err != nil {
+	if err := cfg.QueueConfig.Validate(); err != nil {
 		return fmt.Errorf("queue settings has invalid configuration: %w", err)
 	}
 
