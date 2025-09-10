@@ -7,9 +7,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/cache"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/kube"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/lru"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/moid"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/redis"
 	"go.opentelemetry.io/collector/component"
@@ -21,7 +23,6 @@ import (
 	semconv "go.opentelemetry.io/collector/semconv/v1.5.0"
 	conventions "go.opentelemetry.io/collector/semconv/v1.8.0"
 	"go.uber.org/zap"
-	"strconv"
 )
 
 const (
@@ -73,15 +74,22 @@ func (kp *kubernetesprocessor) Start(_ context.Context, host component.Host) err
 		zap.Any("redisPort", kp.redisConfig.RedisPort),
 		zap.Any("redisPass", kp.redisConfig.RedisPass))
 
-	cache := lru.GetInstance(kp.redisConfig.LruCacheSize, kp.redisConfig.LruExpirationTime)
+	// cache := lru.GetInstance(kp.redisConfig.LruCacheSize, kp.redisConfig.LruExpirationTime)
 
-	if cache == nil {
+	// if cache == nil {
+	// 	kp.logger.Error("Failed to initilize the cache with GetInstance()")
+	// 	return nil
+	// }
+
+	// kp.redisClient = redis.NewClient(kp.logger, cache, kp.redisConfig.RedisHost, kp.redisConfig.RedisPort, kp.redisConfig.RedisPass)
+	cacheObj := cache.GetCacheInstance(kp.redisConfig.PrimaryCacheSize, kp.redisConfig.PrimaryCacheEvictionTime, kp.redisConfig.SecondaryCacheSize, kp.redisConfig.SecondaryCacheEvictionTime)
+
+	if cacheObj == nil {
 		kp.logger.Error("Failed to initilize the cache with GetInstance()")
-		return nil
+		return fmt.Errorf("failed to initialize cache")
 	}
 
-	kp.redisClient = redis.NewClient(kp.logger, cache, kp.redisConfig.RedisHost, kp.redisConfig.RedisPort, kp.redisConfig.RedisPass)
-
+	kp.redisClient = redis.NewClient(kp.logger, cacheObj, kp.redisConfig.RedisHost, kp.redisConfig.RedisPort, kp.redisConfig.RedisPass, kp.redisConfig.PrimaryCacheEvictionTime, kp.redisConfig.SecondaryCacheEvictionTime)
 	// This might have been set by an option already
 	if kp.kc == nil {
 		err := kp.initKubeClient(kp.telemetrySettings, kubeClientProvider)
@@ -311,7 +319,7 @@ func (kp *kubernetesprocessor) processopsrampResources(ctx context.Context, reso
 		if resourceUuid = kp.GetResourceUuidUsingWorkloadMoid(ctx, resource, dsname, "daemonset"); resourceUuid == "" {
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("daemonset", dsname.Str()))
 		}
-		resourceType = "daemonset" /// namespace event hanbdling
+		resourceType = "daemonset"
 	} else {
 		if resourceUuid = kp.redisConfig.ClusterUid; resourceUuid == "" {
 			kp.logger.Debug("opsramp resourceuuid not found", zap.Any("clustername", kp.redisConfig.ClusterName))
@@ -331,9 +339,12 @@ func (kp *kubernetesprocessor) processopsrampResources(ctx context.Context, reso
 			if val.Str() == "event" || val.Str() == "log" {
 				resource.Attributes().PutStr("resourceUUID", resourceUuid)
 				resource.Attributes().PutStr("k8s."+resourceType+".resourceUUID", resourceUuid)
+			} else {
+				resource.Attributes().PutStr("uuid", resourceUuid)
 			}
 		} else {
-			resource.Attributes().PutStr("uuid", resourceUuid)
+			kp.logger.Debug("type resource attribute not found hence not adding uuid/resourceuuid")
+
 		}
 	}
 
@@ -433,6 +444,7 @@ func (op *kubernetesprocessor) GetResourceUuidUsingPodMoid(ctx context.Context, 
 	var found bool
 
 	if namespace, found = resource.Attributes().Get("k8s.namespace.name"); !found {
+		op.logger.Debug("k8s.namespace.name not found in resource attributes hence not able to get resource uuid using pod moid")
 		return
 	}
 	if podname, found = resource.Attributes().Get("k8s.pod.name"); !found {
@@ -462,6 +474,7 @@ func (op *kubernetesprocessor) GetResourceUuidUsingWorkloadMoid(ctx context.Cont
 	var found bool
 
 	if namespace, found = resource.Attributes().Get("k8s.namespace.name"); !found {
+		op.logger.Debug("k8s.namespace.name not found in resource attributes hence not able to get resource uuid using workload moid")
 		return
 	}
 
@@ -490,6 +503,7 @@ func (op *kubernetesprocessor) GetResourceUuidUsingResourceNodeMoid(ctx context.
 	var nodename pcommon.Value
 	var found bool
 	if nodename, found = resource.Attributes().Get("k8s.node.name"); !found {
+		op.logger.Debug("k8s.node.name not found in resource attributes hence not able to get resource uuid using node moid")
 		return
 	}
 

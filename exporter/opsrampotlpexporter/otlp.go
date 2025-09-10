@@ -17,6 +17,7 @@ package opsrampotlpexporter // import "go.opentelemetry.io/collector/exporter/ot
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,6 +27,7 @@ import (
 	"net/url"
 	"regexp"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -53,6 +55,7 @@ import (
 var (
 	tokenRenewInProgress bool
 	credentials          Credentials
+	tokenMutex           sync.Mutex // Add mutex to protect global variables
 )
 
 type opsrampOTLPExporter struct {
@@ -75,7 +78,7 @@ type opsrampOTLPExporter struct {
 	accessToken string
 }
 
-// Crete new exporter and start it. The exporter will begin connecting but
+// Crete new exporter and start it. The exporter will begin connecting, but
 // this function may return before the connection is established.
 func newExporter(cfg component.Config, set exporter.Settings) (*opsrampOTLPExporter, error) {
 	oCfg := cfg.(*Config)
@@ -109,11 +112,16 @@ type Person struct {
 }
 
 func getAuthToken(cfg SecuritySettings) (string, error) {
+	tokenMutex.Lock()
+	defer tokenMutex.Unlock()
+
 	if tokenRenewInProgress {
 		for tokenRenewInProgress {
-			time.Sleep(time.Second * 5)
+			tokenMutex.Unlock()
+			time.Sleep(time.Second * 1) // Reduced from 10s to 1s for better performance
+			tokenMutex.Lock()
 		}
-		tokenRenewInProgress = true
+		// Return the refreshed token, don't set tokenRenewInProgress again
 		return credentials.AccessToken, nil
 	}
 	tokenRenewInProgress = true
@@ -140,51 +148,60 @@ func getAuthToken(cfg SecuritySettings) (string, error) {
 	data.Set("grant_type", grantType)
 	request, err := http.NewRequest("POST", cfg.OAuthServiceURL, bytes.NewBufferString(data.Encode()))
 	if err != nil {
+		tokenRenewInProgress = false
 		return "", err
 	}
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := client.Do(request)
 	if err != nil {
+		if strings.Contains(err.Error(), "x509: certificate signed by unknown authority") || strings.Contains(err.Error(), "TLS handshake timeout") {
+			// If the error is due to an untrusted certificate, we can try to get the token with TLS verification disabled.
+			return getAuthTokenWithTlsDisabled(cfg)
+		}
 		return "", err
 	}
 	defer resp.Body.Close()
 	jsonResp, err := io.ReadAll(resp.Body)
 	if err != nil {
+		tokenRenewInProgress = false
 		return "", err
 	}
 
 	if err := json.Unmarshal(jsonResp, &credentials); err != nil {
+		tokenRenewInProgress = false
 		return "", err
 	}
+	tokenRenewInProgress = false
 	return credentials.AccessToken, nil
 }
 
 // start actually creates the gRPC connection. The client construction is deferred till this point as this
 // is the only place we get hold of Extensions which are required to construct auth round tripper.
 func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (err error) {
+
 	e.clientConn, err = e.config.ClientConfig.ToClientConn(
 		ctx,
 		host,
 		e.settings,
 		configgrpc.WithGrpcDialOption(grpc.WithUserAgent(e.userAgent)),
 		configgrpc.WithGrpcDialOption(
-		grpc.WithContextDialer(func(_ context.Context, addr string) (net.Conn, error) {
-			if httpproxy.FromEnvironment().HTTPProxy == "" {
-				return (&net.Dialer{}).Dial("tcp", addr)
-			}
+			grpc.WithContextDialer(func(_ context.Context, addr string) (net.Conn, error) {
+				if httpproxy.FromEnvironment().HTTPProxy == "" {
+					return (&net.Dialer{}).Dial("tcp", addr)
+				}
 
-			uri, er := url.Parse(httpproxy.FromEnvironment().HTTPProxy)
-			if er != nil {
-				return nil, er
-			}
+				uri, er := url.Parse(httpproxy.FromEnvironment().HTTPProxy)
+				if er != nil {
+					return nil, er
+				}
 
-			dialer, er := proxy.FromURL(uri, proxy.Direct)
-			if er != nil {
-				return nil, er
-			}
-			return dialer.Dial("tcp", addr)
-		})),
+				dialer, er := proxy.FromURL(uri, proxy.Direct)
+				if er != nil {
+					return nil, er
+				}
+				return dialer.Dial("tcp", addr)
+			})),
 	)
 	if err != nil {
 		return err
@@ -200,8 +217,11 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 	e.metadata = metadata.New(headers)
 	e.metadata.Set("Authorization", fmt.Sprintf("Bearer %s", e.accessToken))
 	e.callOptions = []grpc.CallOption{
+		grpc.MaxCallSendMsgSize(e.config.Security.OtelExporterSetting.GrpcMaxSendSize),
+		grpc.MaxCallRecvMsgSize(e.config.Security.OtelExporterSetting.GrpcMaxRecvSize),
 		grpc.WaitForReady(e.config.ClientConfig.WaitForReady),
 	}
+
 	return
 }
 
@@ -265,14 +285,22 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 	if e.config.ExpirationSkip != 0 {
 		e.skipExpired(ld)
 	}
-	if ld.ResourceLogs().Len() <= 0 {
+	if ld.LogRecordCount() <= 0 {
 		return nil
+	}
+
+	if e.config.Masking != nil {
+		e.applyMasking(ld)
+	}
+
+	if e.config.ExpirationSkip != 0 {
+		e.skipExpired(ld)
 	}
 
 	req := plogotlp.NewExportRequestFromLogs(ld)
 
 	_, err := e.logExporter.Export(e.enhanceContext(context.Background()), req, e.callOptions...)
-	// trying to get new access token in case of expiration
+	// trying to get a new access token in case of expiration
 	if err != nil {
 		st := status.Convert(err)
 		if st.Code() == codes.Unauthenticated {
@@ -293,22 +321,23 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 func (e *opsrampOTLPExporter) updateExpiredToken() error {
 	accessToken, err := getAuthToken(e.config.Security)
 	if err != nil {
-		tokenRenewInProgress = false
 		return err
 	}
 	e.mut.Lock()
 	defer e.mut.Unlock()
 	e.accessToken = accessToken
-	if tokenRenewInProgress {
-		e.metadata.Set("Authorization", fmt.Sprintf("Bearer %s", e.accessToken))
-	}
-	tokenRenewInProgress = false
+	// Always update the metadata when token is refreshed
+	e.metadata.Set("Authorization", fmt.Sprintf("Bearer %s", e.accessToken))
 	return nil
 }
 
 func (e *opsrampOTLPExporter) enhanceContext(ctx context.Context) context.Context {
+	e.mut.Lock()
+	defer e.mut.Unlock()
 	if e.metadata.Len() > 0 {
-		return metadata.NewOutgoingContext(ctx, e.metadata)
+		// Create a copy of the metadata to avoid race conditions during gRPC validation
+		mdCopy := e.metadata.Copy()
+		return metadata.NewOutgoingContext(ctx, mdCopy)
 	}
 	return ctx
 }
@@ -418,4 +447,53 @@ func (e *opsrampOTLPExporter) skipExpired(ld plog.Logs) {
 			})
 		}
 	}
+}
+
+func getAuthTokenWithTlsDisabled(cfg SecuritySettings) (string, error) {
+	client := &http.Client{
+		Transport: &http.Transport{
+			Proxy: func(req *http.Request) (*url.URL, error) {
+				return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
+			},
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
+	form := url.Values{}
+	form.Set("client_id", cfg.ClientID)
+	form.Set("client_secret", cfg.ClientSecret)
+	form.Set("grant_type", "client_credentials")
+
+	req, err := http.NewRequest("POST", cfg.OAuthServiceURL, bytes.NewBufferString(form.Encode()))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if err := json.Unmarshal(body, &credentials); err != nil {
+		return "", err
+	}
+
+	return credentials.AccessToken, nil
 }
