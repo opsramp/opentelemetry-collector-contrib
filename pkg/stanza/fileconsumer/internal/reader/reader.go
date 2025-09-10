@@ -8,12 +8,10 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
-	"io"
-	"os"
-	"time"
-
 	"go.opentelemetry.io/collector/component"
 	"go.uber.org/zap"
+	"io"
+	"os"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/decode"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/attrs"
@@ -252,9 +250,7 @@ func (r *Reader) readContents(ctx context.Context) {
 
 		r.set.Logger.Debug("Emitting token", zap.Int64("offset", r.Offset), zap.String("filename", r.fileName))
 
-		emitCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-		err = r.emitFunc(emitCtx, token, r.FileAttributes)
+		err = r.emitFunc(ctx, token, r.FileAttributes)
 		r.set.Logger.Debug("Emit function returned", zap.Int64("offset", r.Offset), zap.String("filename", r.fileName), zap.Any("r.fileAttributes", r.FileAttributes))
 		if err != nil {
 			r.set.Logger.Error("failed to process token", zap.Error(err), zap.String("filename", r.fileName))

@@ -64,7 +64,7 @@ type InputOperator struct {
 
 // NewEntry will create a new entry using the `attributes`, and `resource` configuration.
 func (i *InputOperator) NewEntry(value any) (*entry.Entry, error) {
-	i.Logger().Debug("Creating new entry", zap.Any("Value", value))
+	i.Logger().Debug("Creating new entry")
 	entry := entry.New()
 	entry.Body = value
 
@@ -78,7 +78,7 @@ func (i *InputOperator) NewEntry(value any) (*entry.Entry, error) {
 		return nil, errors.Wrap(err, "add resource keys to entry")
 	}
 
-	i.Logger().Debug("Successfully created new entry", zap.Any("Entry", entry))
+	i.Logger().Debug("Successfully created new entry")
 	return entry, nil
 }
 

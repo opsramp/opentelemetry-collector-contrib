@@ -99,11 +99,13 @@ func (e *LogEmitter) Stop() error {
 
 // OutChannel returns the channel on which entries will be sent to.
 func (e *LogEmitter) OutChannel() <-chan []*entry.Entry {
+	e.set.Logger.Debug("OutChannel called", zap.Int("channel_length", len(e.logChan)), zap.Int("channel_capacity", cap(e.logChan)))
 	return e.logChan
 }
 
 // OutChannelForWrite returns the channel on which entries can be sent to.
 func (e *LogEmitter) OutChannelForWrite() chan []*entry.Entry {
+	e.Logger().Debug("OutChannelForWrite called")
 	return e.logChan
 }
 
@@ -163,7 +165,15 @@ func (e *LogEmitter) flush(ctx context.Context, batch []*entry.Entry) {
 	e.Logger().Debug("Flushing batch", zap.Int("batch_size", len(batch)))
 	select {
 	case e.logChan <- batch:
+		e.Logger().Debug("Successfully sent batch to log channel",
+			zap.Int("batch_size", len(batch)))
 	case <-ctx.Done():
+		e.Logger().Debug("Context done before batch could be sent",
+			zap.Int("batch_size", len(batch)),
+			zap.Error(ctx.Err()))
+	default:
+		e.Logger().Warn("Blocking on sending batch to log channel",
+			zap.Int("batch_size", len(batch)))
 	}
 }
 

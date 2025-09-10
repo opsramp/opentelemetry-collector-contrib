@@ -6,6 +6,7 @@ package pipeline // import "github.com/open-telemetry/opentelemetry-collector-co
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
@@ -36,7 +37,128 @@ func (p *DirectedPipeline) Start(persister operator.Persister) error {
 	p.startOnce.Do(func() {
 		err = p.start(persister)
 	})
+	pipelineerr := p.PrintPipeline("/var/log/opsramp/pipeline.txt")
+	if pipelineerr != nil {
+		// Handle error
+		fmt.Println("Failed to print pipeline: %v", pipelineerr)
+	}
 	return err
+}
+
+// PrintPipeline writes a human-readable representation of the pipeline to a file
+func (p *DirectedPipeline) PrintPipeline(filePath string) error {
+	// Create file with appropriate permissions
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	sortedNodes, err := topo.Sort(p.Graph)
+	if err != nil {
+		return fmt.Errorf("failed to sort pipeline: %w", err)
+	}
+
+	// Write header
+	fmt.Fprintf(file, "Pipeline Structure\n")
+	fmt.Fprintf(file, "=================\n\n")
+	fmt.Fprintf(file, "Total Operators: %d\n\n", len(sortedNodes))
+
+	// Write operators in topological order
+	fmt.Fprintf(file, "Operators (in processing order):\n")
+	fmt.Fprintf(file, "--------------------------\n")
+
+	for i, node := range sortedNodes {
+		opNode := node.(OperatorNode)
+		op := opNode.Operator()
+
+		fmt.Fprintf(file, "[%d] Operator ID: %s\n", i+1, op.ID())
+		fmt.Fprintf(file, "    Type: %T\n", op)
+
+		// Get outgoing connections
+		outputs := p.getOutputOperators(opNode)
+		if len(outputs) > 0 {
+			fmt.Fprintf(file, "    Outputs To: ")
+			for j, output := range outputs {
+				if j > 0 {
+					fmt.Fprintf(file, ", ")
+				}
+				fmt.Fprintf(file, "%s", output)
+			}
+			fmt.Fprintf(file, "\n")
+		} else {
+			fmt.Fprintf(file, "    Outputs To: <none>\n")
+		}
+
+		// Get incoming connections
+		inputs := p.getInputOperators(opNode)
+		if len(inputs) > 0 {
+			fmt.Fprintf(file, "    Inputs From: ")
+			for j, input := range inputs {
+				if j > 0 {
+					fmt.Fprintf(file, ", ")
+				}
+				fmt.Fprintf(file, "%s", input)
+			}
+			fmt.Fprintf(file, "\n")
+		} else {
+			fmt.Fprintf(file, "    Inputs From: <none>\n")
+		}
+
+		fmt.Fprintf(file, "\n")
+	}
+
+	// Write flow diagram
+	fmt.Fprintf(file, "Flow Diagram:\n")
+	fmt.Fprintf(file, "------------\n")
+	for i, node := range sortedNodes {
+		opNode := node.(OperatorNode)
+		outputs := p.getOutputOperators(opNode)
+
+		if len(outputs) > 0 {
+			for _, output := range outputs {
+				fmt.Fprintf(file, "%s --> %s\n", opNode.Operator().ID(), output)
+			}
+		} else if i < len(sortedNodes)-1 {
+			fmt.Fprintf(file, "%s (no direct connections)\n", opNode.Operator().ID())
+		} else {
+			fmt.Fprintf(file, "%s (final operator)\n", opNode.Operator().ID())
+		}
+	}
+
+	fmt.Fprintf(file, "Render Output:\n")
+	a, _ := p.Render()
+	fmt.Fprintf(file, string(a)+"\n")
+
+	return nil
+}
+
+// getOutputOperators returns the IDs of operators that this node outputs to
+func (p *DirectedPipeline) getOutputOperators(node OperatorNode) []string {
+	var outputs []string
+
+	// Iterate through edges from this node
+	from := p.Graph.From(node.ID())
+	for from.Next() {
+		toNode := from.Node().(OperatorNode)
+		outputs = append(outputs, toNode.Operator().ID())
+	}
+
+	return outputs
+}
+
+// getInputOperators returns the IDs of operators that input to this node
+func (p *DirectedPipeline) getInputOperators(node OperatorNode) []string {
+	var inputs []string
+
+	// Iterate through edges to this node
+	to := p.Graph.To(node.ID())
+	for to.Next() {
+		fromNode := to.Node().(OperatorNode)
+		inputs = append(inputs, fromNode.Operator().ID())
+	}
+
+	return inputs
 }
 
 // Stop will stop the operators in a pipeline in topological order

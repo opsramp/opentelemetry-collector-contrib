@@ -145,6 +145,7 @@ func (c *Converter) Stop() {
 
 // OutChannel returns the channel on which converted entries will be sent to.
 func (c *Converter) OutChannel() <-chan plog.Logs {
+	c.set.Logger.Debug("pLogsChan OutChannel called", zap.Int("channel_length", len(c.pLogsChan)), zap.Int("channel_capacity", cap(c.pLogsChan)))
 	return c.pLogsChan
 }
 
@@ -193,7 +194,17 @@ func (c *Converter) workerLoop() {
 
 		// Send plogs directly to flushChan
 		c.set.Logger.Debug("Worker sending batch of log entries to flush channel", zap.Int("entry_count", pLogs.LogRecordCount()))
-		c.flushChan <- pLogs
+		select {
+		case c.flushChan <- pLogs:
+			// sent successfully
+		default:
+			c.set.Logger.Warn(
+				"Blocked sending batch to flushChan",
+				zap.Int("entry_count", pLogs.LogRecordCount()),
+				zap.Int("flushChan_len", len(c.flushChan)),
+				zap.Int("flushChan_cap", cap(c.flushChan)),
+			)
+		}
 	}
 }
 
@@ -222,6 +233,14 @@ func (c *Converter) flush(ctx context.Context, pLogs plog.Logs) error {
 		return fmt.Errorf("flushing log entries interrupted, err: %w", ctx.Err())
 
 	case c.pLogsChan <- pLogs:
+		// sent successfully
+	default:
+		c.set.Logger.Warn(
+			"Blocked sending batch to pLogsChan",
+			zap.Int("entry_count", pLogs.LogRecordCount()),
+			zap.Int("pLogsChan_len", len(c.pLogsChan)),
+			zap.Int("pLogsChan_cap", cap(c.pLogsChan)),
+		)
 	}
 
 	return nil
@@ -237,7 +256,17 @@ func (c *Converter) Batch(e []*entry.Entry) error {
 	}
 
 	c.set.Logger.Debug("Adding batch of entries to converter", zap.Int("entry_count", len(e)))
-	c.workerChan <- e
+	select {
+	case c.workerChan <- e:
+		// sent successfully
+	default:
+		c.set.Logger.Warn(
+			"Blocked sending batch to workerChan",
+			zap.Int("entry_count", len(e)),
+			zap.Int("workerChan_len", len(c.workerChan)),
+			zap.Int("workerChan_cap", cap(c.workerChan)),
+		)
+	}
 	return nil
 }
 
