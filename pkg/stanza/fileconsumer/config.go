@@ -12,6 +12,8 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/scanner"
+
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/featuregate"
 	"go.uber.org/zap"
@@ -65,6 +67,7 @@ func NewConfig() *Config {
 		Resolver: attrs.Resolver{
 			IncludeFileName: true,
 		},
+		InitialBufferSize: scanner.DefaultBufferSize,
 	}
 }
 
@@ -78,7 +81,7 @@ type Config struct {
 	StartAt                 string          `mapstructure:"start_at,omitempty"`
 	FingerprintSize         helper.ByteSize `mapstructure:"fingerprint_size,omitempty"`
 	MaxLogSize              helper.ByteSize `mapstructure:"max_log_size,omitempty"`
-	MaxRecordScanSize       helper.ByteSize `mapstructure:"max_record_scan_size,omitempty"`
+	InitialBufferSize       int             `mapstructure:"initial_buffer_size, omitempty"`
 	Encoding                string          `mapstructure:"encoding,omitempty"`
 	SplitConfig             split.Config    `mapstructure:"multiline,omitempty"`
 	TrimConfig              trim.Config     `mapstructure:",squash,omitempty"`
@@ -153,13 +156,15 @@ func (c Config) Build(set component.TelemetrySettings, emit emit.Callback, opts 
 		return nil, err
 	}
 
-	set.Logger = set.Logger.With(zap.String("component", "fileconsumer"))
+	set.Logger = set.Logger.With(zap.String("component", "fileconsumer")).
+		With(zap.Int("c.InitialBufferSize", c.InitialBufferSize)).
+		With(zap.Duration("c.PollInterval", c.PollInterval))
+
 	readerFactory := reader.Factory{
-		TelemetrySettings: set,
-		FromBeginning:     startAtBeginning,
-		FingerprintSize:   int(c.FingerprintSize),
-		//InitialBufferSize:       scanner.DefaultBufferSize,
-		InitialBufferSize:       int(c.MaxRecordScanSize),
+		TelemetrySettings:       set,
+		FromBeginning:           startAtBeginning,
+		FingerprintSize:         int(c.FingerprintSize),
+		InitialBufferSize:       c.InitialBufferSize,
 		MaxLogSize:              int(c.MaxLogSize),
 		Encoding:                enc,
 		SplitFunc:               splitFunc,

@@ -6,6 +6,8 @@ package fileconsumer // import "github.com/open-telemetry/opentelemetry-collecto
 import (
 	"context"
 	"fmt"
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"os"
 	"sync"
 	"time"
@@ -39,9 +41,14 @@ type Manager struct {
 	pollsToArchive int
 
 	telemetryBuilder *metadata.TelemetryBuilder
+
+	logger *zap.Logger
 }
 
 func (m *Manager) Start(persister operator.Persister) error {
+	// REMOVE added for testing purpose only
+	m.logger = initLogger()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
 
@@ -112,35 +119,31 @@ func (m *Manager) startPoller(ctx context.Context) {
 	}()
 }
 
-// poll checks all the watched paths for new entries
 func (m *Manager) poll(ctx context.Context) {
-	// Used to keep track of the number of batches processed in this poll cycle
 	batchesProcessed := 0
 
-	// Get the list of paths on disk
 	matches, err := m.fileMatcher.MatchFiles()
 	if err != nil {
 		m.set.Logger.Debug("finding files", zap.Error(err))
 	}
-	m.set.Logger.Debug("matched files", zap.Strings("paths", matches))
+	m.logger.Debug("matched files", zap.Strings("paths", matches))
 
 	for len(matches) > m.maxBatchFiles {
 		m.consume(ctx, matches[:m.maxBatchFiles])
-
-		// If a maxBatches is set, check if we have hit the limit
 		if m.maxBatches != 0 {
 			batchesProcessed++
 			if batchesProcessed >= m.maxBatches {
 				goto checkpointAndEnd
 			}
 		}
-
 		matches = matches[m.maxBatchFiles:]
 	}
 	m.consume(ctx, matches)
 
 checkpointAndEnd:
-	// Set FromBeginning to true only if any file is new (no offset exists)
+	m.logger.Debug("poll ref: checkpointAndEnd -> ",
+		zap.Int("batches_processed", batchesProcessed))
+
 	m.readerFactory.FromBeginning = false
 	for _, path := range matches {
 		fp, _ := m.makeFingerprint(path)
@@ -150,15 +153,17 @@ checkpointAndEnd:
 		}
 	}
 
+	// Always update checkpoint at the end of poll, before rotating state
 	if m.persister != nil {
 		metadata := m.tracker.GetMetadata()
 		if metadata != nil {
-			if err := checkpoint.Save(context.Background(), m.persister, metadata); err != nil {
-				m.set.Logger.Error("save offsets", zap.Error(err))
+			if err = checkpoint.Save(context.Background(), m.persister, metadata); err != nil {
+				m.logger.Error("save offsets", zap.Error(err))
+			} else {
+				m.logger.Debug("checkpoint saved", zap.Any("metadata", metadata))
 			}
 		}
 	}
-	// rotate at end of every poll()
 	m.tracker.EndPoll()
 }
 
@@ -172,15 +177,19 @@ func (m *Manager) consume(ctx context.Context, paths []string) {
 	var wg sync.WaitGroup
 	for _, r := range m.tracker.CurrentPollFiles() {
 		wg.Add(1)
+
 		go func(r *reader.Reader) {
 			defer wg.Done()
 			m.telemetryBuilder.FileconsumerReadingFiles.Add(ctx, 1)
 			r.ReadToEnd(ctx)
+			m.set.Logger.Debug("file records read in poll",
+				zap.String("file", r.GetFileName()),
+				zap.String("time", time.Now().Format(time.RFC3339Nano)),
+			)
 			m.telemetryBuilder.FileconsumerReadingFiles.Add(ctx, -1)
 		}(r)
 	}
 	wg.Wait()
-
 	m.telemetryBuilder.FileconsumerOpenFiles.Add(ctx, int64(0-m.tracker.EndConsume()))
 }
 
@@ -236,7 +245,6 @@ func (m *Manager) makeReaders(ctx context.Context, paths []string) {
 			m.set.Logger.Error("Failed to create reader", zap.Error(err))
 			continue
 		}
-
 		m.tracker.Add(r)
 	}
 }
@@ -288,4 +296,22 @@ func (m *Manager) instantiateTracker(persister operator.Persister) {
 		t = tracker.NewFileTracker(m.set, m.maxBatchFiles)
 	}
 	m.tracker = t
+}
+
+func initLogger() *zap.Logger {
+	writer := &lumberjack.Logger{
+		Filename:   "/var/log/opsramp/receiver-stanza-log.log", // or any path you prefer
+		MaxSize:    10,                                         // megabytes
+		MaxBackups: 5,                                          // number of old files to keep
+		MaxAge:     30,                                         // days to keep
+		Compress:   true,                                       // gzip
+	}
+
+	core := zapcore.NewCore(
+		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+		zapcore.AddSync(writer),
+		zap.DebugLevel,
+	)
+
+	return zap.New(core)
 }

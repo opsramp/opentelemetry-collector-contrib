@@ -57,9 +57,6 @@ func (f *Factory) NewFingerprint(file *os.File) (*fingerprint.Fingerprint, error
 }
 
 func (f *Factory) NewReader(file *os.File, fp *fingerprint.Fingerprint) (*Reader, error) {
-	// added for debug purpose
-	f.logger = initLogger()
-
 	attributes, err := f.Attributes.Resolve(file)
 	if err != nil {
 		return nil, err
@@ -72,12 +69,15 @@ func (f *Factory) NewReader(file *os.File, fp *fingerprint.Fingerprint) (*Reader
 }
 
 func (f *Factory) NewReaderFromMetadata(file *os.File, m *Metadata) (r *Reader, err error) {
-
-	//f.InitialBufferSize = 1024 * 1024 * 4 // REMOVE: added for testing purpose only....
+	// REMOVE added for testing purpose only
+	f.logger = initLogger()
+	f.logger.Debug("NewReaderFromMetadata: stage 1: ", zap.Any("metadata", f))
 
 	if f.InitialBufferSize < scanner.DefaultBufferSize {
 		f.InitialBufferSize = scanner.DefaultBufferSize
 	}
+
+	f.logger.Debug("NewReaderFromMetadata: stage 2: ", zap.Any("metadata", f))
 
 	r = &Reader{
 		Metadata:             m,

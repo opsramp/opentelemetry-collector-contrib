@@ -60,6 +60,7 @@ type Reader struct {
 
 // ReadToEnd will read until the end of the file
 func (r *Reader) ReadToEnd(ctx context.Context) {
+	// REMOVE added for testing purpose only
 	r.logger = initLogger()
 
 	start := time.Now()

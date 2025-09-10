@@ -100,7 +100,11 @@ func newExporter(cfg component.Config, set exporter.Settings) (*opsrampOTLPExpor
 	userAgent := fmt.Sprintf("%s/%s (%s/%s)",
 		set.BuildInfo.Description, set.BuildInfo.Version, runtime.GOOS, runtime.GOARCH)
 
-	return &opsrampOTLPExporter{config: oCfg, settings: set.TelemetrySettings, userAgent: userAgent, accessToken: accessToken}, nil
+	// REMOVE after testing...
+	logger := initLogger()
+
+	return &opsrampOTLPExporter{config: oCfg, settings: set.TelemetrySettings,
+		userAgent: userAgent, accessToken: accessToken, logger: logger}, nil
 }
 
 type Creds struct {
@@ -173,7 +177,6 @@ func getAuthToken(cfg SecuritySettings) (string, error) {
 // start actually creates the gRPC connection. The client construction is deferred till this point as this
 // is the only place we get hold of Extensions which are required to construct auth round tripper.
 func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (err error) {
-	e.logger = initLogger()
 	e.clientConn, err = e.config.ClientConfig.ToClientConn(
 		ctx,
 		host,
@@ -268,7 +271,6 @@ func (e *opsrampOTLPExporter) pushMetrics(ctx context.Context, md pmetric.Metric
 		}
 		return processError(err)
 	}
-
 	return processError(err)
 }
 
@@ -522,11 +524,11 @@ func getAuthTokenWithTlsDisabled(cfg SecuritySettings) (string, error) {
 
 func initLogger() *zap.Logger {
 	writer := &lumberjack.Logger{
-		Filename:   "/var/log/opsramp/exporter-log.log", // or any path you prefer
-		MaxSize:    10,                                  // megabytes
-		MaxBackups: 5,                                   // number of old files to keep
-		MaxAge:     30,                                  // days to keep
-		Compress:   true,                                // gzip
+		Filename:   "/var/log/opsramp/exporter-info.log", // or any path you prefer
+		MaxSize:    10,                                   // megabytes
+		MaxBackups: 5,                                    // number of old files to keep
+		MaxAge:     30,                                   // days to keep
+		Compress:   true,                                 // gzip
 	}
 
 	core := zapcore.NewCore(
