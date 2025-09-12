@@ -87,13 +87,19 @@ func (e *LogEmitter) Start(_ operator.Persister) error {
 
 // Stop will close the log channel and stop running goroutines
 func (e *LogEmitter) Stop() error {
+	e.Logger().Debug("Stopping log emitter")
 	e.stopOnce.Do(func() {
+		e.Logger().Debug("Closing log emitter channels")
 		close(e.closeChan)
+		e.Logger().Debug("Waiting for log emitter goroutines to finish")
 		e.wg.Wait()
+		e.Logger().Debug("Closing log channel")
 
 		close(e.logChan)
+		e.Logger().Debug("Log emitter stopped")
 	})
 
+	e.Logger().Debug("Stopped log emitter")
 	return nil
 }
 
