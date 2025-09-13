@@ -25,6 +25,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"runtime"
 	"strings"
@@ -275,6 +276,9 @@ func (e *opsrampOTLPExporter) pushMetrics(ctx context.Context, md pmetric.Metric
 }
 
 func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
+	logFile, _ := os.OpenFile("/var/log/opsramp/otel-log-collector.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	defer logFile.Close()
+	fmt.Fprintf(logFile, "Exporting logs: %d\n", ld.LogRecordCount())
 	if ld.LogRecordCount() <= 0 {
 		return nil
 	}
