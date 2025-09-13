@@ -44,7 +44,6 @@ func (i *Input) emit(ctx context.Context, token []byte, attrs map[string]any) er
 	}
 
 	ent, err := i.NewEntry(i.toBody(token))
-	i.Logger().Debug("created entry")
 	if err != nil {
 		return fmt.Errorf("create entry: %w", err)
 	}

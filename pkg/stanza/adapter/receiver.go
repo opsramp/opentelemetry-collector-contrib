@@ -111,6 +111,7 @@ func (r *receiver) consumerLoop(ctx context.Context) {
 
 		r.set.Logger.Debug("Calling ConsumeLogs", zap.Int("log_record_count", logRecordCount))
 		cErr := r.consumer.ConsumeLogs(ctx, pLogs)
+		r.set.Logger.Debug("ConsumeLogs returned", zap.Int("log_record_count", logRecordCount))
 		if cErr != nil {
 			r.set.Logger.Error("ConsumeLogs() failed", zap.Error(cErr))
 		}

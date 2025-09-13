@@ -50,9 +50,8 @@ type WriterOperator struct {
 // Write will write an entry to the outputs of the operator.
 func (w *WriterOperator) Write(ctx context.Context, e *entry.Entry) error {
 
-	w.Logger().Debug("Starting Write", zap.Int("outputs", len(w.OutputOperators)), zap.Any("operators", w.OutputOperators))
+	w.Logger().Debug("Starting Write", zap.Int("outputs", len(w.OutputOperators)))
 	for i, op := range w.OutputOperators {
-		w.Logger().Debug("Processing output operator", zap.Int("index", i), zap.String("operator_id", op.ID()))
 		if i == len(w.OutputOperators)-1 {
 			w.Logger().Debug("Processing last output operator", zap.Int("index", i), zap.String("operator_id", op.ID()))
 			return op.Process(ctx, e)

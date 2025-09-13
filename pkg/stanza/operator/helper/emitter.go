@@ -130,7 +130,6 @@ func (e *LogEmitter) Process(ctx context.Context, ent *entry.Entry) error {
 func (e *LogEmitter) appendEntry(ent *entry.Entry) []*entry.Entry {
 	e.batchMux.Lock()
 	defer e.batchMux.Unlock()
-	e.Logger().Debug("Appending entry to batch", zap.Int("current_batch_size", len(e.batch)+1), zap.Uint("max_batch_size", e.maxBatchSize))
 
 	e.batch = append(e.batch, ent)
 	if uint(len(e.batch)) >= e.maxBatchSize {

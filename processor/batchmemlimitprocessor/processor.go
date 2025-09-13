@@ -3,6 +3,8 @@ package batchmemlimitprocessor
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -80,6 +82,7 @@ func (mp *batchMemoryLimitProcessor) startProcessingCycle() {
 			for {
 				select {
 				case item := <-mp.newItem:
+					mp.logger.Debug("Draining item from channel", zap.Int("log_records", item.LogRecordCount()))
 					mp.processItem(item)
 				default:
 					break DONE
@@ -87,10 +90,12 @@ func (mp *batchMemoryLimitProcessor) startProcessingCycle() {
 			}
 			// This is the close of the channel
 			if mp.batch.getLogCount() > 0 {
+				mp.logger.Debug("Sending remaining items before shutdown", zap.Int("log_records", mp.batch.getLogCount()))
 				mp.sendItems()
 			}
 			return
 		case item := <-mp.newItem:
+			mp.logger.Debug("Received item from channel", zap.Int("log_records", item.LogRecordCount()))
 			mp.processItem(item)
 		case <-mp.timer.C:
 			if mp.batch.getLogCount() > 0 {
@@ -114,7 +119,7 @@ func (mp *batchMemoryLimitProcessor) processItem(item plog.Logs) {
 	if err != nil {
 		mp.logger.Warn("Sender failed", zap.Error(err))
 	}
-	mp.logger.Debug("Processed item", zap.Int("batched_log_records", mp.batch.getLogCount()))
+	mp.logger.Debug("Processed item", zap.Int("batched_log_records", mp.batch.getLogCount()), zap.Bool("sent", sent))
 
 	if sent {
 		mp.stopTimer()
@@ -186,16 +191,31 @@ func (bl *batchLogs) add(ld plog.Logs) (bool, error) {
 
 func (bl *batchLogs) sendAndClear() error {
 	// breaking down the logs if they are above the size or count limit
+	logFile, fileerr := os.OpenFile("/var/log/opsramp/otel-log-collector.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if fileerr != nil {
+
+	} else {
+		defer logFile.Close()
+	}
 	var err error
+	fmt.Fprintf(logFile, "Batch Memory Limit Processor: Sending %d logs of size %d bytes bl.limits.count was: %d bl.limits.size was: %d\n", bl.logCount, bl.logSize, bl.limits.count, bl.limits.size)
 	for bl.logCount >= bl.limits.count || bl.logSize >= bl.limits.size {
 		sendLogs := bl.splitLogs()
 		if sendLogs.LogRecordCount() <= 0 {
 			continue
 		}
 		err = multierr.Append(err, bl.nextConsumer.ConsumeLogs(context.Background(), sendLogs))
+		fmt.Fprintf(logFile, "Batch Memory Limit Processor: Sent %d logs of size %d bytes\n", sendLogs.LogRecordCount(), bl.sizer.LogsSize(sendLogs))
+		if err != nil {
+			fmt.Fprintf(logFile, "line 210 err: %v\n", err)
+		}
 	}
 
 	err = bl.export()
+	fmt.Fprintf(logFile, "Batch Memory Limit Processor: Sent remaining %d logs of size %d bytes\n", bl.logCount, bl.logSize)
+	if err != nil {
+		fmt.Fprintf(logFile, "line 217 err: %v\n", err)
+	}
 	bl.resetLogs()
 	return err
 }

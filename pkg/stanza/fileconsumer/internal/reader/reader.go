@@ -234,7 +234,6 @@ func (r *Reader) readContents(ctx context.Context) {
 			return
 		}
 
-		r.set.Logger.Debug("Scanned token", zap.Int("token_length", len(s.Bytes())), zap.Int64("pos", s.Pos()), zap.String("filename", r.fileName))
 		token, err := r.decoder.Decode(s.Bytes())
 		if err != nil {
 			r.set.Logger.Error("failed to decode token", zap.Error(err), zap.Int64("pos", s.Pos()), zap.String("filename", r.fileName))
@@ -245,7 +244,6 @@ func (r *Reader) readContents(ctx context.Context) {
 		if r.includeFileRecordNum {
 			r.RecordNum++
 			r.FileAttributes[attrs.LogFileRecordNumber] = r.RecordNum
-			r.set.Logger.Debug("Incremented record number", zap.Int64("record_num", r.RecordNum), zap.String("filename", r.fileName))
 		}
 
 		r.set.Logger.Debug("Emitting token", zap.Int64("offset", r.Offset), zap.String("filename", r.fileName))
@@ -257,7 +255,6 @@ func (r *Reader) readContents(ctx context.Context) {
 		}
 
 		r.Offset = s.Pos()
-		r.set.Logger.Debug("Updated offset after token", zap.Int64("offset", r.Offset), zap.String("filename", r.fileName))
 	}
 }
 
