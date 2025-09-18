@@ -6,6 +6,7 @@ package fileconsumer // import "github.com/open-telemetry/opentelemetry-collecto
 import (
 	"context"
 	"fmt"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/fileset"
 	"os"
 	"sync"
 	"time"
@@ -124,6 +125,28 @@ func (m *Manager) poll(ctx context.Context) {
 	}
 	m.set.Logger.Debug("matched files", zap.Strings("paths", matches))
 
+	// Add extra files that were skipped due to max_age but known before
+	extraPaths := m.tracker.GetKnownFilePathsNotIn(matches)
+
+	if len(extraPaths) > 0 {
+		m.set.Logger.Debug("Restoring known files skipped by MatchFiles", zap.Strings("paths", extraPaths))
+	} else {
+		m.set.Logger.Debug("No files skipped by MatchFiles")
+	}
+
+	filteredExtraPaths := []string{}
+	for _, path := range extraPaths {
+		included, err := m.fileMatcher.IsFileIncludedAndTracked(path)
+		if err != nil {
+			m.set.Logger.Debug("error while checking file inclusion", zap.String("path", path), zap.Error(err))
+		}
+		if included {
+			filteredExtraPaths = append(filteredExtraPaths, path)
+		}
+	}
+
+	matches = append(matches, filteredExtraPaths...)
+
 	for len(matches) > m.maxBatchFiles {
 		m.consume(ctx, matches[:m.maxBatchFiles])
 
@@ -232,6 +255,11 @@ func (m *Manager) makeReaders(ctx context.Context, paths []string) {
 	}
 }
 
+// 1. Try to reuse reader from current poll
+// 2. Try to resume from previous poll
+// 3. Try to resume from closed metadata (in-memory)
+// 4. Fallback: Try to resume from archived offsets
+// 5. No match: Start fresh
 func (m *Manager) newReader(ctx context.Context, file *os.File, fp *fingerprint.Fingerprint) (*reader.Reader, error) {
 	// Check previous poll cycle for match
 	if oldReader := m.tracker.GetOpenFile(fp); oldReader != nil {
@@ -259,6 +287,35 @@ func (m *Manager) newReader(ctx context.Context, file *os.File, fp *fingerprint.
 		}
 		m.telemetryBuilder.FileconsumerOpenFiles.Add(ctx, 1)
 		return r, nil
+	}
+
+	// Fallback: Try loading from archive if no match found
+	for i := 0; i < m.tracker.PollsToArchive(); i++ {
+
+		key := fmt.Sprintf("knownFiles%d", i)
+		archivedMetadata, err := checkpoint.LoadKey(ctx, m.tracker.Persister(), key)
+		if err != nil {
+			m.set.Logger.Debug("Failed to load archive key", zap.String("key", key), zap.Error(err))
+			continue
+		}
+
+		// Try to match the fingerprint
+		//var fp *fingerprint.Fingerprint
+		m.set.Logger.Debug("Trying to match metadata from archive")
+		for _, meta := range archivedMetadata {
+			if fileset.StartsWith(fp, meta.Fingerprint) {
+				m.set.Logger.Debug("Matched metadata from archive",
+					zap.String("path", file.Name()),
+					zap.String("archive_key", key))
+
+				r, err := m.readerFactory.NewReaderFromMetadata(file, meta)
+				if err != nil {
+					return nil, err
+				}
+				m.telemetryBuilder.FileconsumerOpenFiles.Add(ctx, 1)
+				return r, nil
+			}
+		}
 	}
 
 	// If we don't match any previously known files, create a new reader from scratch

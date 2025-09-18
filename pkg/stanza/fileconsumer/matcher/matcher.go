@@ -6,6 +6,7 @@ package matcher // import "github.com/open-telemetry/opentelemetry-collector-con
 import (
 	"errors"
 	"fmt"
+	"github.com/bmatcuk/doublestar/v4"
 	"os"
 	"regexp"
 	"time"
@@ -216,7 +217,6 @@ func (m Matcher) MatchFiles() ([]string, error) {
 	if time.Since(m.cache.getLastUpdatedTime()) < m.refreshInterval {
 		return files, nil
 	}
-
 	files, err = finder.FindFiles(m.include, m.exclude, m.maxAge)
 	if err != nil {
 		errs = errors.Join(errs, err)
@@ -249,4 +249,45 @@ func (m Matcher) MatchFiles() ([]string, error) {
 	m.cache.update(files)
 
 	return files, errors.Join(err, errs)
+}
+
+func (m Matcher) IsFileIncludedAndTracked(path string) (bool, error) {
+	var errList []error
+	included := false
+
+	// Check include patterns
+	for _, pattern := range m.include {
+		matched, err := doublestar.Match(pattern, path)
+		if err != nil {
+			errList = append(errList, fmt.Errorf("error matching include pattern %q for path %q: %w", pattern, path, err))
+			continue
+		}
+		if matched {
+			included = true
+			break
+		}
+	}
+
+	if !included {
+		return false, nil // Not included, no error
+	}
+
+	// Check exclude patterns
+	for _, pattern := range m.exclude {
+		matched, err := doublestar.Match(pattern, path)
+		if err != nil {
+			errList = append(errList, fmt.Errorf("error matching exclude pattern %q for path %q: %w", pattern, path, err))
+			continue
+		}
+		if matched {
+			return false, nil // Explicitly excluded
+		}
+	}
+
+	// Return included with any accumulated errors
+	if len(errList) > 0 {
+		return true, errors.Join(errList...)
+	}
+
+	return true, nil
 }
