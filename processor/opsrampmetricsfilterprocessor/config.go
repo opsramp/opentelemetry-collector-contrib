@@ -44,10 +44,6 @@ var _ component.Config = (*Config)(nil)
 
 // Validate checks if the processor configuration is valid
 func (cfg *Config) Validate() error {
-	// Check if both file path and ConfigMap are configured
-	if cfg.AlertDefinitionsFilePath != "" && (cfg.AlertConfigMapName != "" && cfg.AlertConfigMapKey != "") {
-		return fmt.Errorf("cannot specify both alert_definitions_file_path and ConfigMap configuration (alert_definitions_configmap_name/alert_definitions_key)")
-	}
 
 	// If file path is provided, validate it
 	if cfg.AlertDefinitionsFilePath != "" {
