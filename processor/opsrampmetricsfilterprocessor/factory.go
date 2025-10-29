@@ -32,6 +32,8 @@ func createDefaultConfig() component.Config {
 		AlertConfigMapName: "opsramp-alert-user-config",
 		AlertConfigMapKey:  "alert-definitions.yaml",
 		Namespace:          "opsramp-agent",
+		WatchFileChanges:   false,
+		FileWatchInterval:  "",
 	}
 }
 
