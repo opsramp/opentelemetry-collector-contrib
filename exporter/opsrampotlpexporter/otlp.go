@@ -17,6 +17,7 @@ package opsrampotlpexporter // import "go.opentelemetry.io/collector/exporter/ot
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,6 +27,7 @@ import (
 	"net/url"
 	"regexp"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -53,6 +55,7 @@ import (
 var (
 	tokenRenewInProgress bool
 	credentials          Credentials
+	tokenMutex           sync.Mutex // Add mutex to protect global variables
 )
 
 type opsrampOTLPExporter struct {
@@ -73,9 +76,11 @@ type opsrampOTLPExporter struct {
 	// Default user-agent header.
 	userAgent   string
 	accessToken string
+
+	//logger *zap.Logger
 }
 
-// Crete new exporter and start it. The exporter will begin connecting but
+// Crete new exporter and start it. The exporter will begin connecting, but
 // this function may return before the connection is established.
 func newExporter(cfg component.Config, set exporter.Settings) (*opsrampOTLPExporter, error) {
 	oCfg := cfg.(*Config)
@@ -94,7 +99,11 @@ func newExporter(cfg component.Config, set exporter.Settings) (*opsrampOTLPExpor
 	userAgent := fmt.Sprintf("%s/%s (%s/%s)",
 		set.BuildInfo.Description, set.BuildInfo.Version, runtime.GOOS, runtime.GOARCH)
 
-	return &opsrampOTLPExporter{config: oCfg, settings: set.TelemetrySettings, userAgent: userAgent, accessToken: accessToken}, nil
+	// REMOVE after testing...
+	//logger := initLogger()
+
+	return &opsrampOTLPExporter{config: oCfg, settings: set.TelemetrySettings,
+		userAgent: userAgent, accessToken: accessToken}, nil
 }
 
 type Creds struct {
@@ -109,11 +118,16 @@ type Person struct {
 }
 
 func getAuthToken(cfg SecuritySettings) (string, error) {
+	tokenMutex.Lock()
+	defer tokenMutex.Unlock()
+
 	if tokenRenewInProgress {
 		for tokenRenewInProgress {
-			time.Sleep(time.Second * 5)
+			tokenMutex.Unlock()
+			time.Sleep(time.Second * 1) // Reduced from 10s to 1s for better performance
+			tokenMutex.Lock()
 		}
-		tokenRenewInProgress = true
+		// Return the refreshed token, don't set tokenRenewInProgress again
 		return credentials.AccessToken, nil
 	}
 	tokenRenewInProgress = true
@@ -140,29 +154,38 @@ func getAuthToken(cfg SecuritySettings) (string, error) {
 	data.Set("grant_type", grantType)
 	request, err := http.NewRequest("POST", cfg.OAuthServiceURL, bytes.NewBufferString(data.Encode()))
 	if err != nil {
+		tokenRenewInProgress = false
 		return "", err
 	}
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := client.Do(request)
 	if err != nil {
+		if strings.Contains(err.Error(), "x509: certificate signed by unknown authority") || strings.Contains(err.Error(), "TLS handshake timeout") {
+			// If the error is due to an untrusted certificate, we can try to get the token with TLS verification disabled.
+			return getAuthTokenWithTlsDisabled(cfg)
+		}
 		return "", err
 	}
 	defer resp.Body.Close()
 	jsonResp, err := io.ReadAll(resp.Body)
 	if err != nil {
+		tokenRenewInProgress = false
 		return "", err
 	}
 
 	if err := json.Unmarshal(jsonResp, &credentials); err != nil {
+		tokenRenewInProgress = false
 		return "", err
 	}
+	tokenRenewInProgress = false
 	return credentials.AccessToken, nil
 }
 
 // start actually creates the gRPC connection. The client construction is deferred till this point as this
 // is the only place we get hold of Extensions which are required to construct auth round tripper.
 func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (err error) {
+
 	e.clientConn, err = e.config.ClientConfig.ToClientConn(
 		ctx,
 		host,
@@ -200,8 +223,18 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 	e.metadata = metadata.New(headers)
 	e.metadata.Set("Authorization", fmt.Sprintf("Bearer %s", e.accessToken))
 	e.callOptions = []grpc.CallOption{
+		grpc.MaxCallSendMsgSize(e.config.Security.OtelExporterSetting.GrpcMaxSendSize),
+		grpc.MaxCallRecvMsgSize(e.config.Security.OtelExporterSetting.GrpcMaxRecvSize),
 		grpc.WaitForReady(e.config.ClientConfig.WaitForReady),
 	}
+
+	//e.logger.Debug(
+	//	"OTLP Exporter started",
+	//	zap.String("Calloptions", fmt.Sprintf("%v", e.callOptions)),
+	//	zap.Int("Calloptions -> grpc.MaxCallSendMsgSize", e.config.Security.OtelExporterSetting.GrpcMaxSendSize),
+	//	zap.Int("Calloptions -> grpc.MaxCallRecvMsgSize", e.config.Security.OtelExporterSetting.GrpcMaxRecvSize),
+	//)
+
 	return
 }
 
@@ -259,20 +292,59 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 		return nil
 	}
 
+	//start := time.Now()
+	//e.logger.Debug("Exporter: pushLogs Started processing logs", zap.String("start at", start.Format(time.RFC3339)))
+
 	if e.config.Masking != nil {
 		e.applyMasking(ld)
 	}
 	if e.config.ExpirationSkip != 0 {
 		e.skipExpired(ld)
 	}
-	if ld.ResourceLogs().Len() <= 0 {
+	if ld.LogRecordCount() <= 0 {
 		return nil
 	}
 
+	if e.config.Masking != nil {
+		e.applyMasking(ld)
+	}
+
+	if e.config.ExpirationSkip != 0 {
+		e.skipExpired(ld)
+	}
+
 	req := plogotlp.NewExportRequestFromLogs(ld)
+	//
+	//data, _ := req.MarshalJSON()
+	//e.logger.Debug("request details",
+	//	zap.String("started_at", start.Format(time.RFC3339Nano)),
+	//	zap.Int("ResourceLogsCount", ld.ResourceLogs().Len()),
+	//	zap.Int("TotalLogRecordCount", ld.LogRecordCount()),
+	//	zap.Int("RequestSizeBytes", len(data)),
+	//)
+	//
+	//beforePushEndTime := time.Now()
 
 	_, err := e.logExporter.Export(e.enhanceContext(context.Background()), req, e.callOptions...)
-	// trying to get new access token in case of expiration
+
+	//end := time.Now()
+	//e.logger.Debug("Exporter: pushLogs: completed processing logs",
+	//	zap.String("Stage 1", "before push"),
+	//	zap.String("ended_at", beforePushEndTime.Format(time.RFC3339Nano)),
+	//	zap.Float64("duration_seconds", beforePushEndTime.Sub(start).Seconds()),
+	//	zap.Int64("duration_ms", beforePushEndTime.Sub(start).Milliseconds()),
+	//	zap.Float64("duration_seconds", beforePushEndTime.Sub(start).Seconds()),
+	//	zap.String("Stage 1", "before push - end"),
+	//
+	//	zap.String("Stage 2", "after push"),
+	//	zap.String("ended_at", end.Format(time.RFC3339Nano)),
+	//	zap.Float64("duration_seconds", end.Sub(start).Seconds()),
+	//	zap.Int64("duration_ms", end.Sub(start).Milliseconds()),
+	//	zap.Float64("duration_seconds", end.Sub(start).Seconds()),
+	//	zap.String("Stage 2", "after push - end"),
+	//)
+
+	// trying to get a new access token in case of expiration
 	if err != nil {
 		st := status.Convert(err)
 		if st.Code() == codes.Unauthenticated {
@@ -293,16 +365,13 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 func (e *opsrampOTLPExporter) updateExpiredToken() error {
 	accessToken, err := getAuthToken(e.config.Security)
 	if err != nil {
-		tokenRenewInProgress = false
 		return err
 	}
 	e.mut.Lock()
 	defer e.mut.Unlock()
 	e.accessToken = accessToken
-	if tokenRenewInProgress {
-		e.metadata.Set("Authorization", fmt.Sprintf("Bearer %s", e.accessToken))
-	}
-	tokenRenewInProgress = false
+	// Always update the metadata when token is refreshed
+	e.metadata.Set("Authorization", fmt.Sprintf("Bearer %s", e.accessToken))
 	return nil
 }
 
@@ -310,7 +379,9 @@ func (e *opsrampOTLPExporter) enhanceContext(ctx context.Context) context.Contex
 	e.mut.Lock()
 	defer e.mut.Unlock()
 	if e.metadata.Len() > 0 {
-		return metadata.NewOutgoingContext(ctx, e.metadata)
+		// Create a copy of the metadata to avoid race conditions during gRPC validation
+		mdCopy := e.metadata.Copy()
+		return metadata.NewOutgoingContext(ctx, mdCopy)
 	}
 	return ctx
 }
@@ -421,3 +492,70 @@ func (e *opsrampOTLPExporter) skipExpired(ld plog.Logs) {
 		}
 	}
 }
+
+func getAuthTokenWithTlsDisabled(cfg SecuritySettings) (string, error) {
+	client := &http.Client{
+		Transport: &http.Transport{
+			Proxy: func(req *http.Request) (*url.URL, error) {
+				return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
+			},
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
+	form := url.Values{}
+	form.Set("client_id", cfg.ClientID)
+	form.Set("client_secret", cfg.ClientSecret)
+	form.Set("grant_type", "client_credentials")
+
+	req, err := http.NewRequest("POST", cfg.OAuthServiceURL, bytes.NewBufferString(form.Encode()))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if err := json.Unmarshal(body, &credentials); err != nil {
+		return "", err
+	}
+
+	return credentials.AccessToken, nil
+}
+
+//func initLogger() *zap.Logger {
+//	writer := &lumberjack.Logger{
+//		Filename:   "/var/log/opsramp/exporter-info.log", // or any path you prefer
+//		MaxSize:    10,                                   // megabytes
+//		MaxBackups: 5,                                    // number of old files to keep
+//		MaxAge:     30,                                   // days to keep
+//		Compress:   true,                                 // gzip
+//	}
+//
+//	core := zapcore.NewCore(
+//		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+//		zapcore.AddSync(writer),
+//		zap.DebugLevel,
+//	)
+//
+//	return zap.New(core)
+//}
