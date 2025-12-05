@@ -48,7 +48,7 @@ type AlertDefinition struct {
 
 // AlertDefinitions represents the structure of alert definitions
 type AlertDefinitions struct {
-	AlertDefinitions []AlertRule `yaml:"alertDefinitions"`
+	AlertDefinitions []AlertDefinition `yaml:"alertDefinitions"`
 }
 
 // filterProcessor implements the alert metrics extractor processor
@@ -350,9 +350,27 @@ func (fp *filterProcessor) processAlertDefinitionsData(data []byte) error {
 	startTime := time.Now()
 
 	var alertDefs AlertDefinitions
-	if err := yaml.Unmarshal(data, &alertDefs); err != nil {
-		fp.logger.Error("Failed to unmarshal alert definitions", zap.Error(err))
-		return fmt.Errorf("failed to unmarshal alert definitions: %w", err)
+
+	if fp.config.AlertDefinitionsFilePath == "" {
+		if err := yaml.Unmarshal(data, &alertDefs); err != nil {
+			fp.logger.Error("Failed to unmarshal alert definitions", zap.Error(err))
+			return fmt.Errorf("failed to unmarshal alert definitions: %w", err)
+		}
+	} else {
+		// Flat format
+		var flat struct {
+			AlertDefinitions []AlertRule `yaml:"alertDefinitions"`
+		}
+		if err := yaml.Unmarshal(data, &flat); err != nil {
+			fmt.Println("Failed to unmarshal flat format:", err)
+			return fmt.Errorf("failed to unmarshal alert definitions: %w", err)
+		}
+		alertDefs.AlertDefinitions = []AlertDefinition{
+			{
+				ResourceType: "file", // placeholder
+				Rules:        flat.AlertDefinitions,
+			},
+		}
 	}
 
 	// Validate that we have alert definitions
@@ -370,27 +388,29 @@ func (fp *filterProcessor) processAlertDefinitionsData(data []byte) error {
 	invalidExpressions := 0
 
 	// Iterate directly over the alert rules (no more nested structure)
-	for _, rule := range alertDefs.AlertDefinitions {
-		if rule.Expr == "" {
-			fp.logger.Warn("Empty expression found in alert rule",
-				zap.String("rule_name", rule.Name))
-			invalidExpressions++
-			continue
-		}
+	for _, alertDef := range alertDefs.AlertDefinitions {
+		for _, rule := range alertDef.Rules {
+			if rule.Expr == "" {
+				fp.logger.Warn("Empty expression found in alert rule",
+					zap.String("rule_name", rule.Name))
+				invalidExpressions++
+				continue
+			}
 
-		metrics := fp.extractMetricsFromExpression(rule.Expr)
-		if len(metrics) == 0 {
-			fp.logger.Warn("No metrics extracted from expression",
-				zap.String("expression", rule.Expr),
-				zap.String("rule_name", rule.Name))
-		}
+			metrics := fp.extractMetricsFromExpression(rule.Expr)
+			if len(metrics) == 0 {
+				fp.logger.Warn("No metrics extracted from expression",
+					zap.String("expression", rule.Expr),
+					zap.String("rule_name", rule.Name))
+			}
 
-		for _, metric := range metrics {
-			newMetricsMap[metric] = true
-			fp.logger.Warn("Extracted metric from rule",
-				zap.String("metric", metric),
-				zap.String("rule_name", rule.Name),
-				zap.String("expression", rule.Expr))
+			for _, metric := range metrics {
+				newMetricsMap[metric] = true
+				fp.logger.Warn("Extracted metric from rule",
+					zap.String("metric", metric),
+					zap.String("rule_name", rule.Name),
+					zap.String("expression", rule.Expr))
+			}
 		}
 	}
 
