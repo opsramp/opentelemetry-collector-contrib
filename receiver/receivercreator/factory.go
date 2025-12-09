@@ -46,9 +46,11 @@ func createDefaultConfig() component.Config {
 				conventions.AttributeK8SNamespaceName: "`namespace`",
 			},
 			observer.PortType: map[string]string{
-				conventions.AttributeK8SPodName:       "`pod.name`",
-				conventions.AttributeK8SPodUID:        "`pod.uid`",
-				conventions.AttributeK8SNamespaceName: "`pod.namespace`",
+				conventions.AttributeK8SPodName:         "`pod.name`",
+				conventions.AttributeK8SPodUID:          "`pod.uid`",
+				conventions.AttributeK8SNamespaceName:   "`pod.namespace`",
+				conventions.AttributeContainerID:        "`container.id`",
+				conventions.AttributeContainerImageName: "`container.image.name`",
 			},
 			observer.PodContainerType: map[string]string{
 				conventions.AttributeK8SPodName:         "`pod.name`",
