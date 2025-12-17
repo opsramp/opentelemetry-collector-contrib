@@ -16,6 +16,12 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
+var (
+	LogsOpsRampChannel    = make(chan plog.Logs, 1000)
+	EventsOpsRampChannel  = make(chan plog.Logs, 100)
+	MetricsOpsRampChannel = make(chan *pmetric.Metrics, 1000)
+)
+
 type debugExporter struct {
 	verbosity        configtelemetry.Level
 	logger           *zap.Logger
@@ -67,6 +73,14 @@ func (s *debugExporter) pushMetrics(_ context.Context, md pmetric.Metrics) error
 		zap.Int("resource metrics", md.ResourceMetrics().Len()),
 		zap.Int("metrics", md.MetricCount()),
 		zap.Int("data points", md.DataPointCount()))
+
+	select {
+	case MetricsOpsRampChannel <- &md:
+		s.logger.Info("#######opsrampdebugexporter - pushMetrics: Successfully sent to channel")
+	default:
+		s.logger.Info("#######opsrampdebugexporter - pushMetrics: failed sent to channel")
+	}
+
 	if s.verbosity == configtelemetry.LevelBasic {
 		return nil
 	}
@@ -83,6 +97,43 @@ func (s *debugExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 	s.logger.Info("Logs",
 		zap.Int("resource logs", ld.ResourceLogs().Len()),
 		zap.Int("log records", ld.LogRecordCount()))
+
+	eventsSlice := plog.NewResourceLogsSlice()
+	logsSlice := plog.NewResourceLogsSlice()
+
+	rlSlice := ld.ResourceLogs()
+	for i := 0; i < rlSlice.Len(); i++ {
+		rl := rlSlice.At(i)
+		resource := rl.Resource()
+
+		if val, found := resource.Attributes().Get("type"); found && val.Str() == "event" {
+			rl.CopyTo(eventsSlice.AppendEmpty())
+		} else {
+			rl.CopyTo(logsSlice.AppendEmpty())
+		}
+	}
+
+	if logsSlice.Len() != 0 {
+		logs := plog.NewLogs()
+		logsSlice.CopyTo(logs.ResourceLogs())
+		select {
+		case LogsOpsRampChannel <- logs:
+			s.logger.Info("#######LogsExporter: Successfully sent to logs channel")
+		default:
+			s.logger.Info("#######LogsExporter: failed sent to logs channel")
+		}
+	}
+
+	if eventsSlice.Len() != 0 {
+		eventLogs := plog.NewLogs()
+		eventsSlice.CopyTo(eventLogs.ResourceLogs())
+		select {
+		case EventsOpsRampChannel <- eventLogs:
+			s.logger.Info("#######LogsExporter: Successfully sent to events channel")
+		default:
+			s.logger.Info("#######LogsExporter: failed sent to eventschannel")
+		}
+	}
 
 	if s.verbosity == configtelemetry.LevelBasic {
 		return nil
