@@ -13,7 +13,9 @@ import (
 	conventions "go.opentelemetry.io/otel/semconv/v1.6.1"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/cache"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/kube"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/redis"
 )
 
 //nolint:unused
@@ -56,6 +58,11 @@ type Config struct {
 
 	// WaitForMetadataTimeout is the maximum time the processor will wait for the k8s metadata to be synced.
 	WaitForMetadataTimeout time.Duration `mapstructure:"wait_for_metadata_timeout"`
+
+	//Opsramp Metadata Addons Section
+	MetadataAddOn []AddOnMetadata `mapstructure:"metadata_addon"`
+
+	RedisConfig redis.OpsrampRedisConfig `mapstructure:"redis_config"`
 }
 
 func (cfg *Config) Validate() error {
@@ -123,6 +130,34 @@ func (cfg *Config) Validate() error {
 		default:
 			return fmt.Errorf("'%s' is not a valid label filter operation for key=%s, value=%s", f.Op, f.Key, f.Value)
 		}
+	}
+
+	if cfg.RedisConfig.RedisHost == "" || cfg.RedisConfig.RedisPort == "" || cfg.RedisConfig.RedisPass == "" {
+		return fmt.Errorf("redis host, redis port and redis pass is mandatory")
+	}
+
+	if cfg.RedisConfig.ClusterName == "" || cfg.RedisConfig.ClusterUid == "" {
+		return fmt.Errorf("cluster name and cluster uid is mandatory")
+	}
+
+	if cfg.RedisConfig.NodeName == "" {
+		return fmt.Errorf("node name is mandatory")
+	}
+
+	if cfg.RedisConfig.PrimaryCacheEvictionTime == 0 {
+		cfg.RedisConfig.PrimaryCacheEvictionTime = cache.DEFAULT_PRIMARY_CACHE_EXPIRATION_INTERVAL
+	}
+
+	if cfg.RedisConfig.SecondaryCacheEvictionTime == 0 {
+		cfg.RedisConfig.SecondaryCacheEvictionTime = cache.DEFAULT_SECONDARY_CACHE_EXPIRATION_INTERVAL
+	}
+
+	if cfg.RedisConfig.PrimaryCacheSize == 0 {
+		cfg.RedisConfig.PrimaryCacheSize = cache.DEFAULT_PRIMARY_CACHE_SIZE
+	}
+
+	if cfg.RedisConfig.SecondaryCacheSize == 0 {
+		cfg.RedisConfig.SecondaryCacheSize = cache.DEFAULT_SECONDARY_CACHE_SIZE
 	}
 
 	return nil
@@ -331,4 +366,10 @@ type PodAssociationSourceConfig struct {
 
 	// prevent unkeyed literal initialization
 	_ struct{}
+}
+
+type AddOnMetadata struct {
+	Key string `mapstructure:"key"`
+
+	Value string `mapstructure:"value"`
 }

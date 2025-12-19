@@ -205,6 +205,11 @@ func createProcessorOpts(cfg component.Config) []option {
 		withExcludes(oCfg.Exclude),
 		withWaitForMetadataTimeout(oCfg.WaitForMetadataTimeout))
 
+	//Opsramp Metadata Addons
+	opts = append(opts, withAddOnFields(oCfg.MetadataAddOn...))
+
+	opts = append(opts, withRedisConfigFields(oCfg.RedisConfig))
+
 	if oCfg.WaitForMetadata {
 		opts = append(opts, withWaitForMetadata(true))
 	}

@@ -469,3 +469,9 @@ func OtelAnnotations() FieldExtractionRule {
 		From:                 MetadataFromPod,
 	}
 }
+
+type AddOnMetadata struct {
+	Key string `mapstructure:"key"`
+
+	Value string `mapstructure:"value"`
+}

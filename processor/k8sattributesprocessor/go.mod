@@ -4,12 +4,15 @@ go 1.24.0
 
 require (
 	github.com/distribution/reference v0.6.0
+	github.com/go-pkgz/expirable-cache/v3 v3.0.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.141.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.141.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig v0.141.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/xk8stest v0.141.0
+	github.com/redis/go-redis/v9 v9.7.0
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/collector/client v1.47.0
 	go.opentelemetry.io/collector/component v1.47.0
@@ -34,6 +37,7 @@ require (
 	go.opentelemetry.io/collector/receiver/otlpreceiver v0.141.0
 	go.opentelemetry.io/collector/receiver/receivertest v0.141.0
 	go.opentelemetry.io/collector/receiver/xreceiver v0.141.0
+	go.opentelemetry.io/collector/semconv v0.128.0
 	go.opentelemetry.io/otel v1.38.0
 	go.opentelemetry.io/otel/metric v1.38.0
 	go.opentelemetry.io/otel/sdk/metric v1.38.0
@@ -49,9 +53,11 @@ require (
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/docker/docker v28.5.2+incompatible // indirect
 	github.com/docker/go-connections v0.6.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
