@@ -22,8 +22,9 @@ import (
 type mode string
 
 const (
-	PullMode  mode = "pull"
-	WatchMode mode = "watch"
+	PullMode      mode = "pull"
+	WatchMode     mode = "watch"
+	ListWatchMode mode = "list-watch"
 
 	defaultPullInterval    time.Duration = time.Hour
 	defaultMode            mode          = PullMode
@@ -31,8 +32,9 @@ const (
 )
 
 var modeMap = map[mode]bool{
-	PullMode:  true,
-	WatchMode: true,
+	PullMode:      true,
+	WatchMode:     true,
+	ListWatchMode: true,
 }
 
 type ErrorMode string
@@ -53,6 +55,8 @@ type K8sObjectsConfig struct {
 	Interval         time.Duration        `mapstructure:"interval"`
 	ResourceVersion  string               `mapstructure:"resource_version"`
 	ExcludeWatchType []apiWatch.EventType `mapstructure:"exclude_watch_type"`
+	PageLimit        int                  `mapstructure:"page_limit"`
+	PageInterval     time.Duration        `mapstructure:"page_interval"`
 	exclude          map[apiWatch.EventType]bool
 	gvr              *schema.GroupVersionResource
 }
@@ -96,6 +100,15 @@ func (c *Config) Validate() error {
 		if object.Mode == PullMode && c.IncludeInitialState {
 			return errors.New("include_initial_state can only be used with watch mode")
 		}
+
+		if object.PageLimit <= 0 {
+			object.PageLimit = 500
+		}
+
+		if object.PageInterval <= 0 {
+			object.PageInterval = 2 * time.Second
+		}
+
 	}
 	return nil
 }
