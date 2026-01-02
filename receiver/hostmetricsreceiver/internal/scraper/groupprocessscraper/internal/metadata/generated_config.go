@@ -26,7 +26,7 @@ func (ms *MetricConfig) Unmarshal(parser *confmap.Conf) error {
 	return nil
 }
 
-// MetricsConfig provides config for hostmetricsreceiver/groupprocess metrics.
+// MetricsConfig provides config for groupprocess metrics.
 type MetricsConfig struct {
 	ProcessCount               MetricConfig `mapstructure:"process.count"`
 	ProcessCPUPercent          MetricConfig `mapstructure:"process.cpu.percent"`
@@ -81,7 +81,7 @@ func (rac *ResourceAttributeConfig) Unmarshal(parser *confmap.Conf) error {
 	return nil
 }
 
-// ResourceAttributesConfig provides config for hostmetricsreceiver/groupprocess resource attributes.
+// ResourceAttributesConfig provides config for groupprocess resource attributes.
 type ResourceAttributesConfig struct {
 	GroupName ResourceAttributeConfig `mapstructure:"group.name"`
 }
@@ -94,7 +94,7 @@ func DefaultResourceAttributesConfig() ResourceAttributesConfig {
 	}
 }
 
-// MetricsBuilderConfig is a configuration for hostmetricsreceiver/groupprocess metrics builder.
+// MetricsBuilderConfig is a configuration for groupprocess metrics builder.
 type MetricsBuilderConfig struct {
 	Metrics            MetricsConfig            `mapstructure:"metrics"`
 	ResourceAttributes ResourceAttributesConfig `mapstructure:"resource_attributes"`

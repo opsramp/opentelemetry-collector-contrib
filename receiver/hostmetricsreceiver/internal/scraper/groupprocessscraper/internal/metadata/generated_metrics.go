@@ -9,11 +9,11 @@ import (
 	"go.opentelemetry.io/collector/filter"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
-	"go.opentelemetry.io/collector/receiver"
-	conventions "go.opentelemetry.io/collector/semconv/v1.9.0"
+	"go.opentelemetry.io/collector/scraper"
+	conventions "go.opentelemetry.io/otel/semconv/v1.9.0"
 )
 
-// AttributeState specifies the a value state attribute.
+// AttributeState specifies the value state attribute.
 type AttributeState int
 
 const (
@@ -47,6 +47,36 @@ var MapAttributeState = map[string]AttributeState{
 	"total":  AttributeStateTotal,
 }
 
+var MetricsInfo = metricsInfo{
+	ProcessCount: metricInfo{
+		Name: "process.count",
+	},
+	ProcessCPUPercent: metricInfo{
+		Name: "process.cpu.percent",
+	},
+	ProcessMemoryPercent: metricInfo{
+		Name: "process.memory.percent",
+	},
+	ProcessOpenFileDescriptors: metricInfo{
+		Name: "process.open_file_descriptors",
+	},
+	ProcessThreads: metricInfo{
+		Name: "process.threads",
+	},
+}
+
+type metricsInfo struct {
+	ProcessCount               metricInfo
+	ProcessCPUPercent          metricInfo
+	ProcessMemoryPercent       metricInfo
+	ProcessOpenFileDescriptors metricInfo
+	ProcessThreads             metricInfo
+}
+
+type metricInfo struct {
+	Name string
+}
+
 type metricProcessCount struct {
 	data     pmetric.Metric // data buffer for generated metric.
 	config   MetricConfig   // metric config provided by user.
@@ -56,8 +86,8 @@ type metricProcessCount struct {
 // init fills process.count metric with initial data.
 func (m *metricProcessCount) init() {
 	m.data.SetName("process.count")
-	m.data.SetDescription("Total number of processes")
-	m.data.SetUnit("count")
+	m.data.SetDescription("Total number of processes in the group")
+	m.data.SetUnit("{count}")
 	m.data.SetEmptySum()
 	m.data.Sum().SetIsMonotonic(false)
 	m.data.Sum().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
@@ -107,7 +137,7 @@ type metricProcessCPUPercent struct {
 // init fills process.cpu.percent metric with initial data.
 func (m *metricProcessCPUPercent) init() {
 	m.data.SetName("process.cpu.percent")
-	m.data.SetDescription("Total CPU percent used by the process")
+	m.data.SetDescription("Total CPU percent used by the process group")
 	m.data.SetUnit("%")
 	m.data.SetEmptyGauge()
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
@@ -158,7 +188,7 @@ type metricProcessMemoryPercent struct {
 // init fills process.memory.percent metric with initial data.
 func (m *metricProcessMemoryPercent) init() {
 	m.data.SetName("process.memory.percent")
-	m.data.SetDescription("Total memory percent used by the process")
+	m.data.SetDescription("Total memory percent used by the process group")
 	m.data.SetUnit("%")
 	m.data.SetEmptyGauge()
 }
@@ -207,8 +237,8 @@ type metricProcessOpenFileDescriptors struct {
 // init fills process.open_file_descriptors metric with initial data.
 func (m *metricProcessOpenFileDescriptors) init() {
 	m.data.SetName("process.open_file_descriptors")
-	m.data.SetDescription("Total number of open file descriptors")
-	m.data.SetUnit("count")
+	m.data.SetDescription("Total number of open file descriptors in the group")
+	m.data.SetUnit("{count}")
 	m.data.SetEmptySum()
 	m.data.Sum().SetIsMonotonic(false)
 	m.data.Sum().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
@@ -258,8 +288,8 @@ type metricProcessThreads struct {
 // init fills process.threads metric with initial data.
 func (m *metricProcessThreads) init() {
 	m.data.SetName("process.threads")
-	m.data.SetDescription("Total number of threads")
-	m.data.SetUnit("count")
+	m.data.SetDescription("Total number of threads in the group")
+	m.data.SetUnit("{threads}")
 	m.data.SetEmptySum()
 	m.data.Sum().SetIsMonotonic(false)
 	m.data.Sum().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
@@ -334,8 +364,7 @@ func WithStartTime(startTime pcommon.Timestamp) MetricBuilderOption {
 		mb.startTime = startTime
 	})
 }
-
-func NewMetricsBuilder(mbc MetricsBuilderConfig, settings receiver.Settings, options ...MetricBuilderOption) *MetricsBuilder {
+func NewMetricsBuilder(mbc MetricsBuilderConfig, settings scraper.Settings, options ...MetricBuilderOption) *MetricsBuilder {
 	mb := &MetricsBuilder{
 		config:                           mbc,
 		startTime:                        pcommon.NewTimestampFromTime(time.Now()),
@@ -422,7 +451,7 @@ func (mb *MetricsBuilder) EmitForResource(options ...ResourceMetricsOption) {
 	rm := pmetric.NewResourceMetrics()
 	rm.SetSchemaUrl(conventions.SchemaURL)
 	ils := rm.ScopeMetrics().AppendEmpty()
-	ils.Scope().SetName("github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper")
+	ils.Scope().SetName(ScopeName)
 	ils.Scope().SetVersion(mb.buildInfo.Version)
 	ils.Metrics().EnsureCapacity(mb.metricsCapacity)
 	mb.metricProcessCount.emit(ils.Metrics())

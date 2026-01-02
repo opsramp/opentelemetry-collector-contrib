@@ -9,25 +9,26 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"go.opentelemetry.io/collector/receiver/receivertest"
+	"go.opentelemetry.io/collector/scraper/scrapertest"
+
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper/internal/metadata"
 )
 
 func TestCreateDefaultConfig(t *testing.T) {
-	factory := &Factory{}
+	factory := NewFactory()
 	cfg := factory.CreateDefaultConfig()
 	assert.IsType(t, &Config{}, cfg)
 }
 
 func TestCreateResourceMetricsScraper(t *testing.T) {
-	factory := &Factory{}
+	factory := NewFactory()
 	cfg := &Config{}
 
-	scraper, err := factory.CreateMetricsScraper(context.Background(), receivertest.NewNopSettings(), cfg)
+	scraper, err := factory.CreateMetrics(context.Background(), scrapertest.NewNopSettings(metadata.Type), cfg)
 
 	if runtime.GOOS == "linux" || runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
 		assert.NoError(t, err)
 		assert.NotNil(t, scraper)
-		assert.Equal(t, scraperType.String(), scraper.ID().String())
 	} else {
 		assert.Error(t, err)
 		assert.Nil(t, scraper)

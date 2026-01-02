@@ -6,7 +6,6 @@ package groupprocessscraper // import "github.com/open-telemetry/opentelemetry-c
 import (
 	"time"
 
-	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper/internal/metadata"
 )
 
@@ -14,7 +13,6 @@ import (
 type Config struct {
 	// MetricsBuilderConfig allows to customize scraped metrics/attributes representation.
 	metadata.MetricsBuilderConfig `mapstructure:",squash"`
-	internal.ScraperConfig
 
 	GroupConfig []GroupMatchConfig `mapstructure:"process_configs"`
 

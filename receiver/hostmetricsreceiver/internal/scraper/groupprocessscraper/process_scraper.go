@@ -10,14 +10,13 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/shirou/gopsutil/v4/common"
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/host"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
-	"go.opentelemetry.io/collector/receiver"
-	"go.opentelemetry.io/collector/receiver/scrapererror"
+	"go.opentelemetry.io/collector/scraper"
+	"go.opentelemetry.io/collector/scraper/scrapererror"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/filter/filterset"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper/internal/handlecount"
@@ -38,9 +37,9 @@ const (
 	metricsLen = cpuMetricsLen + memoryMetricsLen + diskMetricsLen + memoryUtilizationMetricsLen + pagingMetricsLen + threadMetricsLen + contextSwitchMetricsLen + fileDescriptorMetricsLen + signalMetricsLen
 )
 
-// scraper for Process Metrics
-type scraper struct {
-	settings           receiver.Settings
+// groupProcessScraper for Process Metrics
+type groupProcessScraper struct {
+	settings           scraper.Settings
 	config             *Config
 	mb                 *metadata.MetricsBuilder
 	scrapeProcessDelay time.Duration
@@ -57,8 +56,8 @@ type scraper struct {
 }
 
 // newGroupProcessScraper creates a Process Scraper
-func newGroupProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, error) {
-	scraper := &scraper{
+func newGroupProcessScraper(settings scraper.Settings, cfg *Config) (*groupProcessScraper, error) {
+	s := &groupProcessScraper{
 		settings:             settings,
 		config:               cfg,
 		getProcessCreateTime: processHandle.CreateTimeWithContext,
@@ -73,14 +72,14 @@ func newGroupProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, 
 
 	for _, gc := range cfg.GroupConfig {
 
-		scraper.matchGroupFS[gc.GroupName] = make(map[string]filterset.FilterSet)
+		s.matchGroupFS[gc.GroupName] = make(map[string]filterset.FilterSet)
 
 		if len(gc.Comm.Names) > 0 {
 			commFS, err := filterset.CreateFilterSet(gc.Comm.Names, &filterset.Config{MatchType: filterset.MatchType(gc.Comm.MatchType)})
 			if err != nil {
 				return nil, fmt.Errorf("error creating comm filter set: %w", err)
 			}
-			scraper.matchGroupFS[gc.GroupName]["comm"] = commFS
+			s.matchGroupFS[gc.GroupName]["comm"] = commFS
 		}
 
 		if len(gc.Exe.Names) > 0 {
@@ -88,7 +87,7 @@ func newGroupProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, 
 			if err != nil {
 				return nil, fmt.Errorf("error creating exe filter set: %w", err)
 			}
-			scraper.matchGroupFS[gc.GroupName]["exe"] = exeFS
+			s.matchGroupFS[gc.GroupName]["exe"] = exeFS
 		}
 
 		if len(gc.Cmdline.Names) > 0 {
@@ -96,8 +95,8 @@ func newGroupProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, 
 			if err != nil {
 				return nil, fmt.Errorf("error creating cmdline filter set: %w", err)
 			}
-			scraper.matchGroupFS[gc.GroupName]["cmdline"] = cmdlineFS
-			scraper.matchGroupNames[gc.GroupName] = gc.Cmdline.Names
+			s.matchGroupFS[gc.GroupName]["cmdline"] = cmdlineFS
+			s.matchGroupNames[gc.GroupName] = gc.Cmdline.Names
 		}
 	}
 
@@ -106,17 +105,17 @@ func newGroupProcessScraper(settings receiver.Settings, cfg *Config) (*scraper, 
 		return nil, fmt.Errorf("error getting number of logical cores: %w", err)
 	}
 
-	scraper.logicalCores = logicalCores
+	s.logicalCores = logicalCores
 
-	return scraper, nil
+	return s, nil
 }
 
-func (s *scraper) start(context.Context, component.Host) error {
+func (s *groupProcessScraper) start(context.Context, component.Host) error {
 	s.mb = metadata.NewMetricsBuilder(s.config.MetricsBuilderConfig, s.settings)
 	return nil
 }
 
-func (s *scraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
+func (s *groupProcessScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 	var errs scrapererror.ScrapeErrors
 
 	// If the boot time cache featuregate is disabled, this will refresh the
@@ -132,7 +131,7 @@ func (s *scraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 		host.EnableBootTimeCache(true)
 	}
 
-	data, err := s.getProcessMetadata()
+	data, err := s.getProcessMetadata(ctx)
 	if err != nil {
 		var partialErr scrapererror.PartialScrapeError
 		if !errors.As(err, &partialErr) {
@@ -143,7 +142,6 @@ func (s *scraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 	}
 
 	presentPIDs := make(map[int32]struct{}, len(data))
-	ctx = context.WithValue(ctx, common.EnvKey, s.config.EnvMap)
 
 	for groupName, processMetadataList := range data {
 		var totalCPUPercent float64
@@ -209,8 +207,7 @@ func (s *scraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 // for all currently running processes. If errors occur obtaining information
 // for some processes, an error will be returned, but any processes that were
 // successfully obtained will still be returned.
-func (s *scraper) getProcessMetadata() (map[string][]*processMetadata, error) {
-	ctx := context.WithValue(context.Background(), common.EnvKey, s.config.EnvMap)
+func (s *groupProcessScraper) getProcessMetadata(ctx context.Context) (map[string][]*processMetadata, error) {
 	handles, err := s.getProcessHandles(ctx)
 	if err != nil {
 		return nil, err

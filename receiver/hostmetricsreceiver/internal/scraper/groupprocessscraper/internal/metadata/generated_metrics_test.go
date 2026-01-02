@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
-	"go.opentelemetry.io/collector/receiver/receivertest"
+	"go.opentelemetry.io/collector/scraper/scrapertest"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 )
@@ -57,7 +57,7 @@ func TestMetricsBuilder(t *testing.T) {
 			start := pcommon.Timestamp(1_000_000_000)
 			ts := pcommon.Timestamp(1_000_001_000)
 			observedZapCore, observedLogs := observer.New(zap.WarnLevel)
-			settings := receivertest.NewNopSettings()
+			settings := scrapertest.NewNopSettings(scrapertest.NopType)
 			settings.Logger = zap.New(observedZapCore)
 			mb := NewMetricsBuilder(loadMetricsBuilderConfig(t, tt.name), settings, WithStartTime(start))
 
@@ -117,8 +117,8 @@ func TestMetricsBuilder(t *testing.T) {
 					validatedMetrics["process.count"] = true
 					assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
 					assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
-					assert.Equal(t, "Total number of processes", ms.At(i).Description())
-					assert.Equal(t, "count", ms.At(i).Unit())
+					assert.Equal(t, "Total number of processes in the group", ms.At(i).Description())
+					assert.Equal(t, "{count}", ms.At(i).Unit())
 					assert.False(t, ms.At(i).Sum().IsMonotonic())
 					assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
 					dp := ms.At(i).Sum().DataPoints().At(0)
@@ -131,7 +131,7 @@ func TestMetricsBuilder(t *testing.T) {
 					validatedMetrics["process.cpu.percent"] = true
 					assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
 					assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
-					assert.Equal(t, "Total CPU percent used by the process", ms.At(i).Description())
+					assert.Equal(t, "Total CPU percent used by the process group", ms.At(i).Description())
 					assert.Equal(t, "%", ms.At(i).Unit())
 					dp := ms.At(i).Gauge().DataPoints().At(0)
 					assert.Equal(t, start, dp.StartTimestamp())
@@ -140,13 +140,13 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.InDelta(t, float64(1), dp.DoubleValue(), 0.01)
 					attrVal, ok := dp.Attributes().Get("state")
 					assert.True(t, ok)
-					assert.EqualValues(t, "system", attrVal.Str())
+					assert.Equal(t, "system", attrVal.Str())
 				case "process.memory.percent":
 					assert.False(t, validatedMetrics["process.memory.percent"], "Found a duplicate in the metrics slice: process.memory.percent")
 					validatedMetrics["process.memory.percent"] = true
 					assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
 					assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
-					assert.Equal(t, "Total memory percent used by the process", ms.At(i).Description())
+					assert.Equal(t, "Total memory percent used by the process group", ms.At(i).Description())
 					assert.Equal(t, "%", ms.At(i).Unit())
 					dp := ms.At(i).Gauge().DataPoints().At(0)
 					assert.Equal(t, start, dp.StartTimestamp())
@@ -158,8 +158,8 @@ func TestMetricsBuilder(t *testing.T) {
 					validatedMetrics["process.open_file_descriptors"] = true
 					assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
 					assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
-					assert.Equal(t, "Total number of open file descriptors", ms.At(i).Description())
-					assert.Equal(t, "count", ms.At(i).Unit())
+					assert.Equal(t, "Total number of open file descriptors in the group", ms.At(i).Description())
+					assert.Equal(t, "{count}", ms.At(i).Unit())
 					assert.False(t, ms.At(i).Sum().IsMonotonic())
 					assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
 					dp := ms.At(i).Sum().DataPoints().At(0)
@@ -172,8 +172,8 @@ func TestMetricsBuilder(t *testing.T) {
 					validatedMetrics["process.threads"] = true
 					assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
 					assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
-					assert.Equal(t, "Total number of threads", ms.At(i).Description())
-					assert.Equal(t, "count", ms.At(i).Unit())
+					assert.Equal(t, "Total number of threads in the group", ms.At(i).Description())
+					assert.Equal(t, "{threads}", ms.At(i).Unit())
 					assert.False(t, ms.At(i).Sum().IsMonotonic())
 					assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
 					dp := ms.At(i).Sum().DataPoints().At(0)

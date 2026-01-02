@@ -47,7 +47,7 @@ type commandMetadata struct {
 	commandLineSlice []string
 }
 
-func (s *scraper) buildGroupResource(rb *metadata.ResourceBuilder, groupName string) pcommon.Resource {
+func (s *groupProcessScraper) buildGroupResource(rb *metadata.ResourceBuilder, groupName string) pcommon.Resource {
 	rb.SetGroupName(groupName)
 	return rb.Emit()
 }

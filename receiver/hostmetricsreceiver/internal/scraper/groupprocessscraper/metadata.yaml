@@ -1,13 +1,19 @@
-type: hostmetricsreceiver/groupprocess
+type: groupprocess
 
-parent: hostmetrics
+status:
+  class: scraper
+  stability:
+    beta: [metrics]
+  distributions: [contrib]
+  codeowners:
+    active: []
 
 sem_conv_version: 1.9.0
 
 resource_attributes:
   group.name:
     enabled: true
-    description: "Name of the process"
+    description: "Name of the process group"
     type: string
 
 attributes:
@@ -19,17 +25,10 @@ attributes:
 metrics:
   process.count:
     enabled: true
-    description: "Total number of processes"
-    unit: "count"
-    sum:
-      value_type: int
-      aggregation_temporality: cumulative
-      monotonic: false
-
-  process.threads:
-    enabled: true
-    description: "Total number of threads"
-    unit: "count"
+    description: "Total number of processes in the group"
+    unit: "{count}"
+    stability:
+      level: beta
     sum:
       value_type: int
       aggregation_temporality: cumulative
@@ -37,23 +36,40 @@ metrics:
 
   process.cpu.percent:
     enabled: true
-    description: "Total CPU percent used by the process"
+    description: "Total CPU percent used by the process group"
     unit: "%"
+    stability:
+      level: beta
     gauge:
       value_type: double
     attributes: [state]
 
   process.memory.percent:
     enabled: true
-    description: "Total memory percent used by the process"
+    description: "Total memory percent used by the process group"
     unit: "%"
+    stability:
+      level: beta
     gauge:
       value_type: double
 
   process.open_file_descriptors:
     enabled: true
-    description: "Total number of open file descriptors"
-    unit: "count"
+    description: "Total number of open file descriptors in the group"
+    unit: "{count}"
+    stability:
+      level: beta
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: false
+
+  process.threads:
+    enabled: true
+    description: "Total number of threads in the group"
+    unit: "{threads}"
+    stability:
+      level: beta
     sum:
       value_type: int
       aggregation_temporality: cumulative

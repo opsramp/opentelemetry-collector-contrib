@@ -33,7 +33,7 @@ func TestResourceBuilder(t *testing.T) {
 			val, ok := res.Attributes().Get("group.name")
 			assert.True(t, ok)
 			if ok {
-				assert.EqualValues(t, "group.name-val", val.Str())
+				assert.Equal(t, "group.name-val", val.Str())
 			}
 		})
 	}

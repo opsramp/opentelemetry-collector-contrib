@@ -10,24 +10,12 @@ import (
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/featuregate"
-	"go.opentelemetry.io/collector/receiver"
-	"go.opentelemetry.io/collector/receiver/scraperhelper"
+	"go.opentelemetry.io/collector/scraper"
 
-	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/internal/scraper/groupprocessscraper/internal/metadata"
 )
 
 // This file implements Factory for Group Process scraper.
-
-const (
-	// TypeStr the value of "type" key in configuration.
-	TypeStr = "groupprocess"
-)
-
-var (
-	// scraperType is the component type used for the built scraper.
-	scraperType component.Type = component.MustNewType(TypeStr)
-)
 
 var (
 	bootTimeCacheFeaturegateID = "hostmetrics.groupprocess.bootTimeCache"
@@ -40,23 +28,24 @@ var (
 	)
 )
 
-// Factory is the Factory for scraper.
-type Factory struct {
+// NewFactory creates a new factory for Group Process scraper.
+func NewFactory() scraper.Factory {
+	return scraper.NewFactory(metadata.Type, createDefaultConfig, scraper.WithMetrics(createMetricsScraper, metadata.MetricsStability))
 }
 
-// CreateDefaultConfig creates the default configuration for the Scraper.
-func (f *Factory) CreateDefaultConfig() internal.Config {
+// createDefaultConfig creates the default configuration for the Scraper.
+func createDefaultConfig() component.Config {
 	return &Config{
 		MetricsBuilderConfig: metadata.DefaultMetricsBuilderConfig(),
 	}
 }
 
-// CreateMetricsScraper creates a resource scraper based on provided config.
-func (f *Factory) CreateMetricsScraper(
+// createMetricsScraper creates a resource scraper based on provided config.
+func createMetricsScraper(
 	_ context.Context,
-	settings receiver.Settings,
-	cfg internal.Config,
-) (scraperhelper.Scraper, error) {
+	settings scraper.Settings,
+	cfg component.Config,
+) (scraper.Metrics, error) {
 	if runtime.GOOS != "linux" && runtime.GOOS != "windows" && runtime.GOOS != "darwin" {
 		return nil, errors.New("groupprocess scraper only available on Linux, Windows, or MacOS")
 	}
@@ -66,9 +55,8 @@ func (f *Factory) CreateMetricsScraper(
 		return nil, err
 	}
 
-	return scraperhelper.NewScraper(
-		scraperType,
+	return scraper.NewMetrics(
 		s.scrape,
-		scraperhelper.WithStart(s.start),
+		scraper.WithStart(s.start),
 	)
 }
