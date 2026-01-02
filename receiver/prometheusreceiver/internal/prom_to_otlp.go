@@ -6,7 +6,6 @@ package internal // import "github.com/open-telemetry/opentelemetry-collector-co
 import (
 	"net"
 
-	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"go.opentelemetry.io/collector/featuregate"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -43,20 +42,22 @@ func isDiscernibleHost(host string) bool {
 
 // CreateResource creates the resource data added to OTLP payloads.
 func CreateResource(job, instance string, serviceDiscoveryLabels labels.Labels) pcommon.Resource {
-	host, port, err := net.SplitHostPort(instance)
+	/*host, port, err := net.SplitHostPort(instance)
 	if err != nil {
 		host = instance
-	}
+	}*/
 	resource := pcommon.NewResource()
 	attrs := resource.Attributes()
 	attrs.PutStr(string(conventions.ServiceNameKey), job)
-	if isDiscernibleHost(host) {
+	attrs.PutStr(string(conventions.ServiceInstanceIDKey), instance)
+
+	/*if isDiscernibleHost(host) {
 		attrs.PutStr(string(conventions.ServerAddressKey), host)
 	}
 	attrs.PutStr(string(conventions.ServiceInstanceIDKey), instance)
 	attrs.PutStr(string(conventions.ServerPortKey), port)
 	attrs.PutStr(string(conventions.URLSchemeKey), serviceDiscoveryLabels.Get(model.SchemeLabel))
-
+	*/
 	addKubernetesResource(attrs, serviceDiscoveryLabels)
 
 	return resource
