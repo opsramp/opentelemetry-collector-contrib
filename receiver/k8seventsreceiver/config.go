@@ -4,10 +4,19 @@
 package k8seventsreceiver // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8seventsreceiver"
 
 import (
+	"fmt"
+
 	"go.opentelemetry.io/collector/component"
 	k8s "k8s.io/client-go/kubernetes"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig"
+)
+
+type EventType string
+
+const (
+	EventTypeNormal  EventType = "Normal"
+	EventTypeWarning EventType = "Warning"
 )
 
 // Config defines configuration for kubernetes events receiver.
@@ -17,13 +26,46 @@ type Config struct {
 	// List of ‘namespaces’ to collect events from.
 	Namespaces []string `mapstructure:"namespaces"`
 
+	// List of ‘eventtypes’ to filter.
+	EventTypes []EventType `mapstructure:"event_types,omitempty"`
+
+	// Include only the specified involved objects. ObjectKind to List of Reasons.
+	IncludeInvolvedObject map[string]InvolvedObjectProperties `mapstructure:"include_involved_objects,omitempty"`
+
 	K8sLeaderElector *component.ID `mapstructure:"k8s_leader_elector"`
 
 	// For mocking
 	makeClient func(apiConf k8sconfig.APIConfig) (k8s.Interface, error)
 }
 
+type InvolvedObjectProperties struct {
+	// Include only the specified reasons. If its empty, list events of all reasons.
+	IncludeReasons []ReasonProperties `mapstructure:"include_reasons,omitempty"`
+
+	//Can be enhanced to take in object names with reg ex etc.
+}
+
+type ReasonProperties struct {
+	Name       string     `mapstructure:"name"`
+	Attributes []KeyValue `mapstructure:"attributes,omitempty"`
+}
+
+type KeyValue struct {
+	// This is a required field.
+	Key string `mapstructure:"key"`
+
+	// This is a required field.
+	Value any `mapstructure:"value"`
+}
+
 func (cfg *Config) Validate() error {
+	for _, eventType := range cfg.EventTypes {
+		switch eventType {
+		case EventTypeNormal, EventTypeWarning:
+		default:
+			return fmt.Errorf("invalid event_type %s, must be one of %s or %s", eventType, EventTypeNormal, EventTypeWarning)
+		}
+	}
 	return cfg.APIConfig.Validate()
 }
 

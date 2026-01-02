@@ -163,8 +163,8 @@ func (kr *k8seventsReceiver) startWatch(ns string, client k8s.Interface) {
 }
 
 func (kr *k8seventsReceiver) handleEvent(ev *corev1.Event) {
-	if kr.allowEvent(ev) {
-		ld := k8sEventToLogData(kr.settings.Logger, ev, kr.settings.BuildInfo.Version)
+	if attributes, allow := kr.allowEvent(ev); allow {
+		ld := k8sEventToLogData(kr.settings.Logger, ev, kr.settings.BuildInfo.Version, attributes)
 
 		ctx := kr.obsrecv.StartLogsOp(kr.ctx)
 		consumerErr := kr.logsConsumer.ConsumeLogs(ctx, ld)
@@ -198,9 +198,60 @@ func (kr *k8seventsReceiver) startWatchingNamespace(
 // Allow events with eventTimestamp(EventTime/LastTimestamp/FirstTimestamp)
 // not older than the receiver start time so that
 // event flood can be avoided upon startup.
-func (kr *k8seventsReceiver) allowEvent(ev *corev1.Event) bool {
+func (kr *k8seventsReceiver) allowEvent(ev *corev1.Event) (attributes []KeyValue, allow bool) {
 	eventTimestamp := getEventTimestamp(ev)
-	return !eventTimestamp.Before(kr.startTime)
+	if eventTimestamp.Before(kr.startTime) {
+		return attributes, false
+	}
+
+	if len(kr.config.EventTypes) != 0 {
+
+		found := false
+		for _, configuredEventType := range kr.config.EventTypes {
+			if ev.Type == string(configuredEventType) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return attributes, false
+		}
+	}
+
+	existsInSlice := func(key string, slice []ReasonProperties) ([]KeyValue, bool) {
+		for _, k := range slice {
+			if key == k.Name {
+				return k.Attributes, true
+			}
+		}
+		return []KeyValue{}, false
+	}
+
+	if len(kr.config.IncludeInvolvedObject) != 0 {
+		if prop, exists := kr.config.IncludeInvolvedObject[ev.InvolvedObject.Kind]; !exists {
+			if prop, exists := kr.config.IncludeInvolvedObject["Other"]; !exists {
+				return attributes, false
+			} else {
+				if len(prop.IncludeReasons) != 0 {
+					if reasonAttributes, exists := existsInSlice(ev.Reason, prop.IncludeReasons); !exists {
+						return attributes, false
+					} else {
+						attributes = reasonAttributes
+					}
+				}
+			}
+		} else {
+			if len(prop.IncludeReasons) != 0 {
+				if reasonAttributes, exists := existsInSlice(ev.Reason, prop.IncludeReasons); !exists {
+					return attributes, false
+				} else {
+					attributes = reasonAttributes
+				}
+			}
+		}
+	}
+
+	return attributes, true
 }
 
 // Return the EventTimestamp based on the populated k8s event timestamps.
