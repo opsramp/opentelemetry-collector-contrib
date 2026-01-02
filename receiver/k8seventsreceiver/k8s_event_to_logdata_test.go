@@ -45,7 +45,7 @@ func TestK8sEventToLogDataWithDifferentEventTypes(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			k8sEvent := getEvent(test.eventType)
 
-			ld := k8sEventToLogData(zap.NewNop(), k8sEvent, "latest")
+			ld := k8sEventToLogData(zap.NewNop(), k8sEvent, "latest", nil)
 			rl := ld.ResourceLogs().At(0)
 			lr := rl.ScopeLogs().At(0)
 			logRecord := lr.LogRecords().At(0)
@@ -58,7 +58,7 @@ func TestK8sEventToLogDataWithDifferentEventTypes(t *testing.T) {
 func TestK8sEventToLogData(t *testing.T) {
 	k8sEvent := getEvent("Normal")
 
-	ld := k8sEventToLogData(zap.NewNop(), k8sEvent, "latest")
+	ld := k8sEventToLogData(zap.NewNop(), k8sEvent, "latest", nil)
 	rl := ld.ResourceLogs().At(0)
 	resourceAttrs := rl.Resource().Attributes()
 	lr := rl.ScopeLogs().At(0)
@@ -69,14 +69,14 @@ func TestK8sEventToLogData(t *testing.T) {
 
 	// Count attribute will not be present in the LogData
 	k8sEvent.Count = 0
-	ld = k8sEventToLogData(zap.NewNop(), k8sEvent, "latest")
+	ld = k8sEventToLogData(zap.NewNop(), k8sEvent, "latest", nil)
 	assert.Equal(t, 6, ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0).Attributes().Len())
 }
 
 func TestK8sEventToLogDataWithApiAndResourceVersion(t *testing.T) {
 	k8sEvent := getEvent("Normal")
 
-	ld := k8sEventToLogData(zap.NewNop(), k8sEvent, "latest")
+	ld := k8sEventToLogData(zap.NewNop(), k8sEvent, "latest", nil)
 	attrs := ld.ResourceLogs().At(0).Resource().Attributes()
 	attr, ok := attrs.Get("k8s.object.api_version")
 	assert.True(t, ok)
@@ -88,7 +88,7 @@ func TestK8sEventToLogDataWithApiAndResourceVersion(t *testing.T) {
 
 	// add ResourceVersion
 	k8sEvent.InvolvedObject.ResourceVersion = "7387066320"
-	ld = k8sEventToLogData(zap.NewNop(), k8sEvent, "latest")
+	ld = k8sEventToLogData(zap.NewNop(), k8sEvent, "latest", nil)
 	attrs = ld.ResourceLogs().At(0).Resource().Attributes()
 	attr, ok = attrs.Get("k8s.object.resource_version")
 	assert.True(t, ok)
@@ -98,7 +98,7 @@ func TestK8sEventToLogDataWithApiAndResourceVersion(t *testing.T) {
 func TestUnknownSeverity(t *testing.T) {
 	k8sEvent := getEvent("Unknown")
 
-	ld := k8sEventToLogData(zap.NewNop(), k8sEvent, "latest")
+	ld := k8sEventToLogData(zap.NewNop(), k8sEvent, "latest", nil)
 	rl := ld.ResourceLogs().At(0)
 	logEntry := rl.ScopeLogs().At(0).LogRecords().At(0)
 
@@ -110,7 +110,7 @@ func TestScopeNameAndVersion(t *testing.T) {
 	k8sEvent := getEvent("Normal")
 
 	version := "latest"
-	ld := k8sEventToLogData(zap.NewNop(), k8sEvent, version)
+	ld := k8sEventToLogData(zap.NewNop(), k8sEvent, version, nil)
 	rl := ld.ResourceLogs().At(0)
 	sl := rl.ScopeLogs().At(0)
 

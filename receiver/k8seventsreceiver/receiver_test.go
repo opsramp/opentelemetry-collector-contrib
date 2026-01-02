@@ -119,15 +119,15 @@ func TestAllowEvent(t *testing.T) {
 	recv := r.(*k8seventsReceiver)
 	k8sEvent := getEvent("Normal")
 
-	shouldAllowEvent := recv.allowEvent(k8sEvent)
+	_, shouldAllowEvent := recv.allowEvent(k8sEvent)
 	assert.True(t, shouldAllowEvent)
 
 	k8sEvent.FirstTimestamp = v1.Time{Time: time.Now().Add(-time.Hour)}
-	shouldAllowEvent = recv.allowEvent(k8sEvent)
+	_, shouldAllowEvent = recv.allowEvent(k8sEvent)
 	assert.False(t, shouldAllowEvent)
 
 	k8sEvent.FirstTimestamp = v1.Time{}
-	shouldAllowEvent = recv.allowEvent(k8sEvent)
+	_, shouldAllowEvent = recv.allowEvent(k8sEvent)
 	assert.False(t, shouldAllowEvent)
 }
 
