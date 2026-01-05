@@ -9,11 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
-	"net/url"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -30,6 +27,11 @@ var jmxGathererMainClass = "io.opentelemetry.contrib.jmxmetrics.JmxMetrics"
 var jmxScraperMainClass = "io.opentelemetry.contrib.jmxscraper.JmxScraper"
 
 type Config struct {
+	Applications       map[string]ApplicationConfig `mapstructure:"applications"`
+	OTLPExporterConfig otlpExporterConfig           `mapstructure:"otlp"`
+}
+
+type ApplicationConfig struct {
 	// The path for the JMX Metric Gatherer or JMX Scraper JAR (/opt/opentelemetry-java-contrib-jmx-metrics.jar by default).
 	// Supported by: jmx-scraper and jmx-metric-gatherer
 	JARPath string `mapstructure:"jar_path"`
@@ -126,24 +128,25 @@ func (oec otlpExporterConfig) headersToString() string {
 	return headerString
 }
 
-func (c *Config) parseProperties(logger *zap.Logger) []string {
+func (c *ApplicationConfig) parseProperties(logger *zap.Logger) []string {
 	// slf4j.simpleLogger only available in JMX Metrics Gatherer jar
-	if err := c.validateJar(jmxMetricsGathererVersions, c.JARPath); err == nil {
-		parsed := make([]string, 0, 1)
+	//if err := c.validateJar(jmxMetricsGathererVersions, c.JARPath); err == nil {
+	parsed := make([]string, 0, 1)
 
-		logLevel := "info"
-		if c.LogLevel != "" {
-			logLevel = strings.ToLower(c.LogLevel)
-		} else if logger != nil {
-			logLevel = getZapLoggerLevelEquivalent(logger)
-		}
-
-		parsed = append(parsed, "-Dorg.slf4j.simpleLogger.defaultLogLevel="+logLevel)
-		// Sorted for testing and reproducibility
-		sort.Strings(parsed)
-		return parsed
+	logLevel := "info"
+	if c.LogLevel != "" {
+		logLevel = strings.ToLower(c.LogLevel)
+	} else if logger != nil {
+		logLevel = getZapLoggerLevelEquivalent(logger)
 	}
-	return nil
+
+	parsed = append(parsed, "-Dorg.slf4j.simpleLogger.defaultLogLevel="+logLevel)
+
+	// Sorted for testing and reproducibility
+	sort.Strings(parsed)
+	return parsed
+	//}
+	//return nil
 }
 
 var logLevelTranslator = map[zapcore.Level]string{
@@ -188,7 +191,7 @@ func testLevel(logger *zap.Logger, level zapcore.Level) bool {
 }
 
 // parseClasspath creates a classpath string with the JMX Gatherer JAR at the beginning
-func (c *Config) parseClasspath() string {
+func (c *ApplicationConfig) parseClasspath() string {
 	var classPathElems []string
 
 	// Add JMX JAR to classpath
@@ -210,7 +213,7 @@ func isSupportedJAR(supportedJarDetails map[string]supportedJar, jar string) boo
 	return ok
 }
 
-func (c *Config) jarMainClass() string {
+/*func (c *ApplicationConfig) jarMainClass() string {
 	if isSupportedJAR(jmxMetricsGathererVersions, c.JARPath) {
 		return jmxGathererMainClass
 	} else if isSupportedJAR(jmxScraperVersions, c.JARPath) {
@@ -219,14 +222,14 @@ func (c *Config) jarMainClass() string {
 	return ""
 }
 
-func (c *Config) jarJMXSamplingConfig() (string, string) {
+func (c *ApplicationConfig) jarJMXSamplingConfig() (string, string) {
 	if isSupportedJAR(jmxMetricsGathererVersions, c.JARPath) {
 		return "otel.jmx.interval.milliseconds", strconv.FormatInt(c.CollectionInterval.Milliseconds(), 10)
 	} else if isSupportedJAR(jmxScraperVersions, c.JARPath) {
 		return "otel.metric.export.interval", c.CollectionInterval.String()
 	}
 	return "", ""
-}
+}*/
 
 func hashFile(path string) (string, error) {
 	f, err := os.Open(path)
@@ -286,62 +289,26 @@ func initAdditionalTargetSystems() {
 }
 
 func (c *Config) Validate() error {
-	var missingFields []string
-	if c.JARPath == "" {
-		missingFields = append(missingFields, "`jar_path`")
+	if len(c.Applications) == 0 {
+		return fmt.Errorf("at least one application must be configured")
 	}
-	if c.Endpoint == "" {
-		missingFields = append(missingFields, "`endpoint`")
-	}
-	if c.TargetSystem == "" {
-		// jmx-scraper can use jmx_configs instead
-		if c.validateJar(jmxScraperVersions, c.JARPath) == nil {
-			if c.JmxConfigs == "" {
-				missingFields = append(missingFields, "`target_system`", "`jmx_configs`")
-			}
-		} else {
-			missingFields = append(missingFields, "`target_system`")
+
+	for appName, appConfig := range c.Applications {
+		if appConfig.JARPath == "" {
+			return fmt.Errorf("missing required field `jar_path` for application %s", appName)
 		}
-	}
-	if missingFields != nil {
-		return fmt.Errorf("missing required field(s): %v", strings.Join(missingFields, ", "))
-	}
-
-	jmxScraperErr := c.validateJar(jmxScraperVersions, c.JARPath)
-	jmxGathererErr := c.validateJar(jmxMetricsGathererVersions, c.JARPath)
-	if jmxScraperErr != nil && jmxGathererErr != nil {
-		return fmt.Errorf("invalid `jar_path`: %w", jmxScraperErr)
-	}
-
-	for _, additionalJar := range c.AdditionalJars {
-		err := c.validateJar(wildflyJarVersions, additionalJar)
-		if err != nil {
-			return fmt.Errorf("invalid `additional_jars`. Additional Jar should be a jboss-client.jar from Wildfly, "+
-				"no other integrations require additional jars at this time: %w", err)
+		if appConfig.Endpoint == "" {
+			return fmt.Errorf("missing required field `endpoint` for application %s", appName)
 		}
-	}
-
-	if c.CollectionInterval < 0 {
-		return fmt.Errorf("`interval` must be positive: %vms", c.CollectionInterval.Milliseconds())
-	}
-
-	if c.OTLPExporterConfig.TimeoutSettings.Timeout < 0 {
-		return fmt.Errorf("`otlp.timeout` must be positive: %vms", c.OTLPExporterConfig.TimeoutSettings.Timeout.Milliseconds())
-	}
-
-	if c.LogLevel != "" {
-		if isSupportedJAR(jmxScraperVersions, c.JARPath) {
-			return errors.New("`log_level` can only be used with a JMX Metrics Gatherer JAR")
+		if appConfig.TargetSystem == "" {
+			return fmt.Errorf("missing required field `target_system` for application %s", appName)
 		}
-		if _, ok := validLogLevels[strings.ToLower(c.LogLevel)]; !ok {
-			return fmt.Errorf("`log_level` must be one of %s", listKeys(validLogLevels))
+		if appConfig.CollectionInterval < 0 {
+			return fmt.Errorf("`collection_interval` must be positive for application %s: %vms", appName, appConfig.CollectionInterval.Milliseconds())
 		}
-	}
-
-	if c.TargetSystem != "" {
-		for system := range strings.SplitSeq(c.TargetSystem, ",") {
-			if _, ok := validTargetSystems[strings.ToLower(system)]; !ok {
-				return fmt.Errorf("`target_system` list may only be a subset of %s", listKeys(validTargetSystems))
+		if len(appConfig.LogLevel) > 0 {
+			if _, ok := validLogLevels[strings.ToLower(appConfig.LogLevel)]; !ok {
+				return fmt.Errorf("`log_level` must be one of %s for application %s", listKeys(validLogLevels), appName)
 			}
 		}
 	}
@@ -356,124 +323,4 @@ func listKeys(presenceMap map[string]struct{}) string {
 	}
 	sort.Strings(list)
 	return strings.Join(list, ", ")
-}
-
-func (c *Config) buildJMXConfig() (string, error) {
-	config := map[string]string{}
-	failedToParse := `failed to parse Endpoint "%s": %w`
-	parsed, err := url.Parse(c.Endpoint)
-	if err != nil {
-		return "", fmt.Errorf(failedToParse, c.Endpoint, err)
-	}
-
-	if parsed.Scheme != "service" || !strings.HasPrefix(parsed.Opaque, "jmx:") {
-		host, portStr, err := net.SplitHostPort(c.Endpoint)
-		if err != nil {
-			return "", fmt.Errorf(failedToParse, c.Endpoint, err)
-		}
-		port, err := strconv.ParseInt(portStr, 10, 0)
-		if err != nil {
-			return "", fmt.Errorf(failedToParse, c.Endpoint, err)
-		}
-		c.Endpoint = fmt.Sprintf("service:jmx:rmi:///jndi/rmi://%v:%d/jmxrmi", host, port)
-	}
-
-	config["otel.jmx.service.url"] = c.Endpoint
-	samplingKey, samplingValue := c.jarJMXSamplingConfig()
-	config[samplingKey] = samplingValue
-	config["otel.jmx.target.system"] = c.TargetSystem
-
-	endpoint := c.OTLPExporterConfig.Endpoint
-	if !strings.HasPrefix(endpoint, "http") {
-		endpoint = "http://" + endpoint
-	}
-
-	config["otel.metrics.exporter"] = "otlp"
-	config["otel.exporter.otlp.endpoint"] = endpoint
-	config["otel.exporter.otlp.timeout"] = strconv.FormatInt(c.OTLPExporterConfig.TimeoutSettings.Timeout.Milliseconds(), 10)
-
-	if len(c.OTLPExporterConfig.Headers) > 0 {
-		config["otel.exporter.otlp.headers"] = c.OTLPExporterConfig.headersToString()
-	}
-
-	if c.Username != "" {
-		config["otel.jmx.username"] = c.Username
-	}
-
-	if c.Password != "" {
-		config["otel.jmx.password"] = string(c.Password)
-	}
-
-	if c.RemoteProfile != "" {
-		config["otel.jmx.remote.profile"] = c.RemoteProfile
-	}
-
-	if c.Realm != "" {
-		config["otel.jmx.realm"] = c.Realm
-	}
-
-	if c.KeystorePath != "" {
-		config["javax.net.ssl.keyStore"] = c.KeystorePath
-	}
-	if c.KeystorePassword != "" {
-		config["javax.net.ssl.keyStorePassword"] = string(c.KeystorePassword)
-	}
-	if c.KeystoreType != "" {
-		config["javax.net.ssl.keyStoreType"] = c.KeystoreType
-	}
-	if c.TruststorePath != "" {
-		config["javax.net.ssl.trustStore"] = c.TruststorePath
-	}
-	if c.TruststorePassword != "" {
-		config["javax.net.ssl.trustStorePassword"] = string(c.TruststorePassword)
-	}
-	if c.TruststoreType != "" {
-		config["javax.net.ssl.trustStoreType"] = c.TruststoreType
-	}
-
-	if len(c.ResourceAttributes) > 0 {
-		attributes := make([]string, 0, len(c.ResourceAttributes))
-		for k, v := range c.ResourceAttributes {
-			attributes = append(attributes, fmt.Sprintf("%s=%s", k, v))
-		}
-		sort.Strings(attributes)
-		config["otel.resource.attributes"] = strings.Join(attributes, ",")
-	}
-
-	// set jmx-scraper specific config options
-	if isSupportedJAR(jmxScraperVersions, c.JARPath) {
-		// jmx-scraper default target source: https://github.com/open-telemetry/opentelemetry-java-contrib/tree/main/jmx-scraper#configuration-reference
-		if c.TargetSource != "" {
-			config["otel.jmx.target.source"] = c.TargetSource
-		} else {
-			config["otel.jmx.target.source"] = "auto"
-		}
-		if c.JmxConfigs != "" {
-			config["otel.jmx.config"] = c.JmxConfigs
-		}
-	}
-
-	content := make([]string, 0, len(config))
-	for k, v := range config {
-		// Documentation of Java Properties format & escapes: https://docs.oracle.com/javase/7/docs/api/java/util/Properties.html#load(java.io.Reader)
-
-		// Keys are receiver-defined so this escape should be unnecessary but in case that assumption
-		// breaks in the future this will ensure keys are properly escaped
-		safeKey := strings.ReplaceAll(k, "=", "\\=")
-		safeKey = strings.ReplaceAll(safeKey, ":", "\\:")
-		// Any whitespace must be removed from keys
-		safeKey = strings.ReplaceAll(safeKey, " ", "")
-		safeKey = strings.ReplaceAll(safeKey, "\t", "")
-		safeKey = strings.ReplaceAll(safeKey, "\n", "")
-
-		// Unneeded escape tokens will be removed by the properties file loader, so it should be pre-escaped to ensure
-		// the values provided reach the metrics gatherer as provided. Also in case a user attempts to provide multiline
-		// values for one of the available fields, we need to escape the newlines
-		safeValue := strings.ReplaceAll(v, "\\", "\\\\")
-		safeValue = strings.ReplaceAll(safeValue, "\n", "\\n")
-		content = append(content, fmt.Sprintf("%s = %s", safeKey, safeValue))
-	}
-	sort.Strings(content)
-
-	return strings.Join(content, "\n"), nil
 }

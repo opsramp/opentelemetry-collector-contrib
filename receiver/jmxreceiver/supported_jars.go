@@ -3,8 +3,6 @@
 
 package jmxreceiver // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver"
 
-import "fmt"
-
 type supportedJar struct {
 	jar             string
 	version         string
@@ -18,7 +16,7 @@ var MetricsGathererHash = "n/a"
 var ScraperHash = "n/a"
 
 // Support for SSL properties passed via property file will be available starting in v1.14.0
-func oldFormatProperties(c *Config, j supportedJar) error {
+/*func oldFormatProperties(c *Config, j supportedJar) error {
 	if c.KeystorePassword != "" ||
 		c.KeystorePath != "" ||
 		c.KeystoreType != "" ||
@@ -393,3 +391,4 @@ var wildflyJarVersions = map[string]supportedJar{
 		jar:     "wildfly jboss client",
 	},
 }
+*/
