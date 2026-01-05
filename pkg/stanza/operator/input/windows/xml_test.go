@@ -421,7 +421,7 @@ func TestParseEventData(t *testing.T) {
 }
 
 func TestInvalidUnmarshal(t *testing.T) {
-	_, err := unmarshalEventXML([]byte("Test \n Invalid \t Unmarshal"))
+	_, err := UnmarshalEventXML([]byte("Test \n Invalid \t Unmarshal"))
 	require.Error(t, err)
 }
 
@@ -429,7 +429,7 @@ func TestUnmarshalWithEventData(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("testdata", "xmlSample.xml"))
 	require.NoError(t, err)
 
-	event, err := unmarshalEventXML(data)
+	event, err := UnmarshalEventXML(data)
 	require.NoError(t, err)
 
 	xml := &EventXML{
@@ -471,7 +471,7 @@ func TestUnmarshalWithAnonymousEventDataEntries(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("testdata", "xmlWithAnonymousEventDataEntries.xml"))
 	require.NoError(t, err)
 
-	event, err := unmarshalEventXML(data)
+	event, err := UnmarshalEventXML(data)
 	require.NoError(t, err)
 
 	xml := &EventXML{
@@ -509,7 +509,7 @@ func TestUnmarshalWithUserData(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("testdata", "xmlSampleUserData.xml"))
 	require.NoError(t, err)
 
-	event, err := unmarshalEventXML(data)
+	event, err := UnmarshalEventXML(data)
 	require.NoError(t, err)
 
 	xml := &EventXML{
