@@ -145,6 +145,8 @@ func (t TopNOption) apply(items []*item) ([]*item, error) {
 
 type mtimeSortOption struct {
 	ascending bool
+	hasLimit  bool
+	maxTime   time.Duration
 }
 
 type mtimeItem struct {
@@ -161,6 +163,12 @@ func (m mtimeSortOption) apply(items []*item) ([]*item, error) {
 		fi, err := os.Stat(path)
 		if err != nil {
 			errs = multierr.Append(errs, err)
+			continue
+		}
+
+		// drop all files that are older than max time
+		modTime := fi.ModTime()
+		if m.hasLimit && time.Since(modTime) >= m.maxTime {
 			continue
 		}
 
@@ -194,8 +202,10 @@ func (m mtimeSortOption) apply(items []*item) ([]*item, error) {
 	return filteredValues, errs
 }
 
-func SortMtime(ascending bool) Option {
+func SortMtime(ascending bool, duration time.Duration) Option {
 	return mtimeSortOption{
 		ascending: ascending,
+		hasLimit:  !(duration.Seconds() == 0),
+		maxTime:   duration,
 	}
 }

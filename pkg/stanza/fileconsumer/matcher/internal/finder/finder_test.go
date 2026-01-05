@@ -170,19 +170,24 @@ func TestFindFiles(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Chdir(t.TempDir())
+			cwd, err := os.Getwd()
+			require.NoError(t, err)
+			require.NoError(t, os.Chdir(t.TempDir()))
+			defer func() {
+				require.NoError(t, os.Chdir(cwd))
+			}()
 			for _, f := range tc.files {
-				require.NoError(t, os.MkdirAll(filepath.Dir(f), 0o700))
+				require.NoError(t, os.MkdirAll(filepath.Dir(f), 0700))
 
 				var file *os.File
-				file, err := os.OpenFile(f, os.O_CREATE|os.O_RDWR, 0o600)
+				file, err = os.OpenFile(f, os.O_CREATE|os.O_RDWR, 0600)
 				require.NoError(t, err)
 
 				_, err = file.WriteString(filepath.Base(f))
 				require.NoError(t, err)
 				require.NoError(t, file.Close())
 			}
-			files, err := FindFiles(tc.include, tc.exclude)
+			files, err := FindFiles(tc.include, tc.exclude, 0)
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, tc.expected, files)
 		})
@@ -193,7 +198,12 @@ func TestFindFilesWithIOErrors(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("permissions test not valid on windows")
 	}
-	t.Chdir(t.TempDir())
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(t.TempDir()))
+	defer func() {
+		require.NoError(t, os.Chdir(cwd))
+	}()
 
 	for _, f := range []string{
 		"1.log",
@@ -203,15 +213,15 @@ func TestFindFilesWithIOErrors(t *testing.T) {
 		filepath.Join("dir1", "1.log"),
 		filepath.Join("dir1", "2.log"),
 	} {
-		require.NoError(t, os.MkdirAll(filepath.Dir(f), 0o700))
+		require.NoError(t, os.MkdirAll(filepath.Dir(f), 0700))
 
-		_, err := os.OpenFile(f, os.O_CREATE|os.O_RDWR, 0o600)
+		_, err = os.OpenFile(f, os.O_CREATE|os.O_RDWR, 0600)
 		require.NoError(t, err)
 	}
 
-	require.NoError(t, os.Chmod("no_permission", 0o000))
+	require.NoError(t, os.Chmod("no_permission", 0000))
 	defer func() {
-		require.NoError(t, os.Chmod("no_permission", 0o700))
+		require.NoError(t, os.Chmod("no_permission", 0700))
 	}()
 
 	cases := []struct {
@@ -240,7 +250,7 @@ func TestFindFilesWithIOErrors(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			files, err := FindFiles(tc.include, []string{})
+			files, err := FindFiles(tc.include, []string{}, 0)
 			assert.ErrorContains(t, err, tc.failedMsg)
 			assert.ElementsMatch(t, tc.expected, files)
 		})
@@ -270,9 +280,9 @@ func BenchmarkFind10kFiles(b *testing.B) {
 	excludeGlobs := []string{}
 
 	var r []string
-
-	for b.Loop() {
-		r, _ = FindFiles(includeGlobs, excludeGlobs)
+	b.ResetTimer()
+	for range b.N {
+		r, _ = FindFiles(includeGlobs, excludeGlobs, 0)
 	}
 
 	benchResult = r

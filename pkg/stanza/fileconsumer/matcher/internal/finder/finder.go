@@ -4,12 +4,11 @@
 package finder // import "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/matcher/internal/finder"
 
 import (
+	"errors"
 	"fmt"
-	"maps"
-	"slices"
+	"time"
 
 	"github.com/bmatcuk/doublestar/v4"
-	"go.uber.org/multierr"
 )
 
 func Validate(globs []string) error {
@@ -23,17 +22,16 @@ func Validate(globs []string) error {
 }
 
 // FindFiles gets a list of paths given an array of glob patterns to include and exclude
-func FindFiles(includes, excludes []string) ([]string, error) {
+func FindFiles(includes []string, excludes []string, maxAge time.Duration) ([]string, error) {
 	var errs error
-
-	allSet := make(map[string]struct{}, len(includes))
+	all := make([]string, 0, len(includes))
 	for _, include := range includes {
-		matches, err := doublestar.FilepathGlob(include, doublestar.WithFilesOnly(), doublestar.WithFailOnIOErrors())
+		matches, err := doublestar.FilepathGlob(include, doublestar.WithFilesOnly(), doublestar.WithFailOnIOErrors(), doublestar.WithMaxAge(maxAge))
 		if err != nil {
-			errs = multierr.Append(errs, fmt.Errorf("find files with '%s' pattern: %w", include, err))
+			errs = errors.Join(errs, fmt.Errorf("find files with '%s' pattern: %w", include, err))
 			// the same pattern could cause an IO error due to one file or directory,
 			// but also could still find files without `doublestar.WithFailOnIOErrors()`.
-			matches, _ = doublestar.FilepathGlob(include, doublestar.WithFilesOnly())
+			matches, _ = doublestar.FilepathGlob(include, doublestar.WithFilesOnly(), doublestar.WithMaxAge(maxAge))
 		}
 	INCLUDE:
 		for _, match := range matches {
@@ -43,11 +41,15 @@ func FindFiles(includes, excludes []string) ([]string, error) {
 				}
 			}
 
-			allSet[match] = struct{}{}
+			for _, existing := range all {
+				if existing == match {
+					continue INCLUDE
+				}
+			}
+
+			all = append(all, match)
 		}
 	}
 
-	keys := slices.Collect(maps.Keys(allSet))
-	slices.Sort(keys)
-	return keys, errs
+	return all, errs
 }

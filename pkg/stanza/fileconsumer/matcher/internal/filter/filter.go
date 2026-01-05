@@ -5,6 +5,7 @@ package filter // import "github.com/open-telemetry/opentelemetry-collector-cont
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 
 	"go.uber.org/multierr"
@@ -28,6 +29,11 @@ func Filter(values []string, regex *regexp.Regexp, opts ...Option) ([]string, er
 		items = append(items, it)
 	}
 	for _, opt := range opts {
+		if os.Getenv("OTEL_K8S_AGENT") != "TRUE" {
+			if _, isTopN := opt.(TopNOption); isTopN {
+				continue
+			}
+		}
 		var applyErr error
 		items, applyErr = opt.apply(items)
 		errs = multierr.Append(errs, applyErr)

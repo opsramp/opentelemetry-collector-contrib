@@ -152,6 +152,11 @@ func (c Config) Build(set component.TelemetrySettings, emit emit.Callback, opts 
 		return nil, err
 	}
 
+	// when no values defined, default buffer size take precedence
+	if c.InitialBufferSize <= 0 {
+		c.InitialBufferSize = scanner.DefaultBufferSize
+	}
+
 	set.Logger = set.Logger.With(zap.String("component", "fileconsumer"))
 	readerFactory := &reader.Factory{
 		TelemetrySettings:       set,
