@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,7 +27,7 @@ import (
 type Input struct {
 	helper.InputOperator
 	bookmark                 Bookmark
-	buffer                   *Buffer
+	buffer                   Buffer
 	channel                  string
 	ignoreChannelErrors      bool
 	query                    *string
@@ -517,4 +518,3 @@ func (i *Input) sendEventRaw(ctx context.Context, eventRaw EventRaw) {
 	entry.Severity = eventRaw.ParseRenderedSeverity()
 	i.Write(ctx, entry)
 }
-
