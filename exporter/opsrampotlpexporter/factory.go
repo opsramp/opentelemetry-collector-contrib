@@ -46,10 +46,10 @@ func NewFactory() exporter.Factory {
 func createDefaultConfig() component.Config {
 	return &Config{
 		TimeoutConfig: exporterhelper.NewDefaultTimeoutConfig(),
-		BackOffConfig: configretry.NewDefaultBackOffConfig(),
+		RetryConfig:   configretry.NewDefaultBackOffConfig(),
 		QueueConfig:   exporterhelper.NewDefaultQueueConfig(),
 		ClientConfig: configgrpc.ClientConfig{
-			Headers: map[string]configopaque.String{},
+			Headers: configopaque.MapList{},
 			// Default to gzip compression
 			Compression: configcompression.TypeGzip,
 			// We almost read 0 bytes, so no need to tune ReadBufferSize.
@@ -69,14 +69,14 @@ func createTracesExporter(
 		return nil, err
 	}
 	oCfg := cfg.(*Config)
-	return exporterhelper.NewTracesExporter(
+	return exporterhelper.NewTraces(
 		ctx,
 		set,
 		cfg,
 		oce.pushTraces,
 		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
 		exporterhelper.WithTimeout(oCfg.TimeoutConfig),
-		exporterhelper.WithRetry(oCfg.BackOffConfig),
+		exporterhelper.WithRetry(oCfg.RetryConfig),
 		exporterhelper.WithQueue(oCfg.QueueConfig),
 		exporterhelper.WithStart(oce.start),
 		exporterhelper.WithShutdown(oce.shutdown))
@@ -92,14 +92,14 @@ func createMetricsExporter(
 		return nil, err
 	}
 	oCfg := cfg.(*Config)
-	return exporterhelper.NewMetricsExporter(
+	return exporterhelper.NewMetrics(
 		ctx,
 		set,
 		cfg,
 		oce.pushMetrics,
 		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: false}),
 		exporterhelper.WithTimeout(oCfg.TimeoutConfig),
-		exporterhelper.WithRetry(oCfg.BackOffConfig),
+		exporterhelper.WithRetry(oCfg.RetryConfig),
 		exporterhelper.WithQueue(oCfg.QueueConfig),
 		exporterhelper.WithStart(oce.start),
 		exporterhelper.WithShutdown(oce.shutdown),
@@ -123,7 +123,7 @@ func createLogsExporter(
 		oce.pushLogs,
 		exporterhelper.WithCapabilities(consumer.Capabilities{MutatesData: true}),
 		exporterhelper.WithTimeout(oCfg.TimeoutConfig),
-		exporterhelper.WithRetry(oCfg.BackOffConfig),
+		exporterhelper.WithRetry(oCfg.RetryConfig),
 		exporterhelper.WithQueue(oCfg.QueueConfig),
 		exporterhelper.WithStart(oce.start),
 		exporterhelper.WithShutdown(oce.shutdown),

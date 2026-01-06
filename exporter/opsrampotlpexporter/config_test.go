@@ -19,46 +19,40 @@ import (
 	"testing"
 	"time"
 
-	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/opsrampotlpexporter/internal/metadata"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configauth"
 	"go.opentelemetry.io/collector/config/configgrpc"
 	"go.opentelemetry.io/collector/config/configopaque"
+	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/config/configtls"
+	"go.opentelemetry.io/collector/confmap/confmaptest"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
-	"go.opentelemetry.io/collector/otelcol/otelcoltest"
 )
 
 func TestLoadConfig(t *testing.T) {
-	factories, err := otelcoltest.NopFactories()
-	assert.NoError(t, err)
-
-	factory := NewFactory()
-	factories.Exporters[metadata.Type] = factory
-
-	cfg, err := otelcoltest.LoadConfigAndValidate(filepath.Join("testdata", "config.yaml"), factories)
-
+	cm, err := confmaptest.LoadConf(filepath.Join("testdata", "config.yaml"))
 	require.NoError(t, err)
-	require.NotNil(t, cfg)
-
-	e := cfg.Exporters[component.NewID(metadata.Type)]
+	
+	factory := NewFactory()
+	cfg := factory.CreateDefaultConfig()
+	require.NoError(t, cm.Unmarshal(&cfg))
 
 	// e1 := cfg.Exporters[config.NewComponentIDWithName(typeStr, "2")]
-	assert.Equal(t, e,
+	assert.Equal(t, cfg,
 		&Config{
 			TimeoutConfig: exporterhelper.TimeoutConfig{
 				Timeout: 10 * time.Second,
 			},
-			BackOffConfig: configretry.BackOffConfig{
+			RetryConfig: configretry.BackOffConfig{
 				Enabled:         true,
 				InitialInterval: 10 * time.Second,
 				MaxInterval:     1 * time.Minute,
 				MaxElapsedTime:  10 * time.Minute,
 			},
-			QueueConfig: exporterhelper.QueueConfig{
+			QueueConfig: exporterhelper.QueueBatchConfig{
 				Enabled:      true,
 				NumConsumers: 2,
 				QueueSize:    10,
@@ -69,27 +63,27 @@ func TestLoadConfig(t *testing.T) {
 				OAuthServiceURL: "url",
 			},
 			ClientConfig: configgrpc.ClientConfig{
-				Headers: map[string]configopaque.String{
-					"can you have a . here?": "F0000000-0000-0000-0000-000000000000",
-					"header1":                "234",
-					"another":                "somevalue",
+				Headers: configopaque.MapList{
+					{Name: "can you have a . here?", Value: "F0000000-0000-0000-0000-000000000000"},
+					{Name: "header1", Value: "234"},
+					{Name: "another", Value: "somevalue"},
 				},
 				Endpoint:    "1.2.3.4:1234",
 				Compression: "gzip",
-				TLSSetting: configtls.ClientConfig{
+				TLS: configtls.ClientConfig{
 					Config: configtls.Config{
 						CAFile: "/var/lib/mycert.pem",
 					},
 					Insecure: false,
 				},
-				Keepalive: &configgrpc.KeepaliveClientConfig{
+				Keepalive: configoptional.Some(configgrpc.KeepaliveClientConfig{
 					Time:                20 * time.Second,
 					PermitWithoutStream: true,
 					Timeout:             30 * time.Second,
-				},
+				}),
 				WriteBufferSize: 512 * 1024,
 				BalancerName:    "round_robin",
-				Auth:            &configauth.Authentication{AuthenticatorID: component.NewID(component.MustNewType("nop"))},
+				Auth:            configoptional.Some(configauth.Config{AuthenticatorID: component.MustNewID("nop")}),
 			},
 		})
 }

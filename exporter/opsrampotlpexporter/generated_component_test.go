@@ -38,21 +38,21 @@ func TestComponentLifecycle(t *testing.T) {
 		{
 			name: "logs",
 			createFn: func(ctx context.Context, set exporter.Settings, cfg component.Config) (component.Component, error) {
-				return factory.CreateLogsExporter(ctx, set, cfg)
+				return factory.CreateLogs(ctx, set, cfg)
 			},
 		},
 
 		{
 			name: "metrics",
 			createFn: func(ctx context.Context, set exporter.Settings, cfg component.Config) (component.Component, error) {
-				return factory.CreateMetricsExporter(ctx, set, cfg)
+				return factory.CreateMetrics(ctx, set, cfg)
 			},
 		},
 
 		{
 			name: "traces",
 			createFn: func(ctx context.Context, set exporter.Settings, cfg component.Config) (component.Component, error) {
-				return factory.CreateTracesExporter(ctx, set, cfg)
+				return factory.CreateTraces(ctx, set, cfg)
 			},
 		},
 	}
@@ -66,13 +66,13 @@ func TestComponentLifecycle(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name+"-shutdown", func(t *testing.T) {
-			c, err := test.createFn(context.Background(), exportertest.NewNopSettings(), cfg)
+			c, err := test.createFn(context.Background(), exportertest.NewNopSettings(factory.Type()), cfg)
 			require.NoError(t, err)
 			err = c.Shutdown(context.Background())
 			require.NoError(t, err)
 		})
 		t.Run(test.name+"-lifecycle", func(t *testing.T) {
-			c, err := test.createFn(context.Background(), exportertest.NewNopSettings(), cfg)
+			c, err := test.createFn(context.Background(), exportertest.NewNopSettings(factory.Type()), cfg)
 			require.NoError(t, err)
 			host := componenttest.NewNopHost()
 			err = c.Start(context.Background(), host)

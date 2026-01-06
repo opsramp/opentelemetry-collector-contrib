@@ -20,18 +20,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/opsrampotlpexporter/internal/metadata"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/common/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/config/configcompression"
 	"go.opentelemetry.io/collector/config/configgrpc"
 	"go.opentelemetry.io/collector/config/configopaque"
+	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/config/configtls"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/exporter/exportertest"
-
-	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/common/testutil"
 )
 
 func TestCreateDefaultConfig(t *testing.T) {
@@ -41,7 +42,7 @@ func TestCreateDefaultConfig(t *testing.T) {
 	assert.NoError(t, componenttest.CheckConfigStruct(cfg))
 	ocfg, ok := factory.CreateDefaultConfig().(*Config)
 	assert.True(t, ok)
-	assert.Equal(t, ocfg.BackOffConfig, configretry.NewDefaultBackOffConfig())
+	assert.Equal(t, ocfg.RetryConfig, configretry.NewDefaultBackOffConfig())
 	assert.Equal(t, ocfg.QueueConfig, exporterhelper.NewDefaultQueueConfig())
 	assert.Equal(t, ocfg.TimeoutConfig, exporterhelper.NewDefaultTimeoutConfig())
 	assert.Equal(t, ocfg.Compression, configcompression.TypeGzip)
@@ -57,8 +58,8 @@ func TestCreateMetricsExporter(t *testing.T) {
 		ClientSecret:    "Da2achZqvHF7tKDaSP3FCkHE2PKcY6twRxwZEnEYQHc5GADgHy5VZDBxdeKhNbrw",
 	}
 
-	set := exportertest.NewNopSettings()
-	oexp, err := factory.CreateMetricsExporter(context.Background(), set, cfg)
+	set := exportertest.NewNopSettings(metadata.Type)
+	oexp, err := factory.CreateMetrics(context.Background(), set, cfg)
 	require.Nil(t, err)
 	require.NotNil(t, oexp)
 }
@@ -85,7 +86,7 @@ func TestCreateTracesExporter(t *testing.T) {
 			config: Config{
 				ClientConfig: configgrpc.ClientConfig{
 					Endpoint: endpoint,
-					TLSSetting: configtls.ClientConfig{
+					TLS: configtls.ClientConfig{
 						Insecure: false,
 					},
 				},
@@ -96,11 +97,11 @@ func TestCreateTracesExporter(t *testing.T) {
 			config: Config{
 				ClientConfig: configgrpc.ClientConfig{
 					Endpoint: endpoint,
-					Keepalive: &configgrpc.KeepaliveClientConfig{
+					Keepalive: configoptional.Some(configgrpc.KeepaliveClientConfig{
 						Time:                30 * time.Second,
 						Timeout:             25 * time.Second,
 						PermitWithoutStream: true,
-					},
+					}),
 				},
 			},
 		},
@@ -145,9 +146,9 @@ func TestCreateTracesExporter(t *testing.T) {
 			config: Config{
 				ClientConfig: configgrpc.ClientConfig{
 					Endpoint: endpoint,
-					Headers: map[string]configopaque.String{
-						"hdr1": "val1",
-						"hdr2": "val2",
+					Headers: configopaque.MapList{
+						{Name: "hdr1", Value: "val1"},
+						{Name: "hdr2", Value: "val2"},
 					},
 				},
 			},
@@ -165,7 +166,7 @@ func TestCreateTracesExporter(t *testing.T) {
 			config: Config{
 				ClientConfig: configgrpc.ClientConfig{
 					Endpoint: endpoint,
-					TLSSetting: configtls.ClientConfig{
+					TLS: configtls.ClientConfig{
 						Config: configtls.Config{
 							CAFile: filepath.Join("testdata", "test_cert.pem"),
 						},
@@ -178,7 +179,7 @@ func TestCreateTracesExporter(t *testing.T) {
 			config: Config{
 				ClientConfig: configgrpc.ClientConfig{
 					Endpoint: endpoint,
-					TLSSetting: configtls.ClientConfig{
+					TLS: configtls.ClientConfig{
 						Config: configtls.Config{
 							CAFile: "nosuchfile",
 						},
@@ -192,8 +193,8 @@ func TestCreateTracesExporter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			factory := NewFactory()
-			set := exportertest.NewNopSettings()
-			consumer, err := factory.CreateTracesExporter(context.Background(), set, &tt.config)
+			set := exportertest.NewNopSettings(metadata.Type)
+			consumer, err := factory.CreateTraces(context.Background(), set, &tt.config)
 			if tt.mustFailOnCreate {
 				assert.NotNil(t, err)
 				return
@@ -221,8 +222,8 @@ func TestCreateLogsExporter(t *testing.T) {
 	cfg := factory.CreateDefaultConfig().(*Config)
 	cfg.ClientConfig.Endpoint = testutil.GetAvailableLocalAddress(t)
 
-	set := exportertest.NewNopSettings()
-	oexp, err := factory.CreateLogsExporter(context.Background(), set, cfg)
+	set := exportertest.NewNopSettings(metadata.Type)
+	oexp, err := factory.CreateLogs(context.Background(), set, cfg)
 	require.Nil(t, err)
 	require.NotNil(t, oexp)
 }

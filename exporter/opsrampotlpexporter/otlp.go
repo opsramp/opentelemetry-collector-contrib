@@ -188,7 +188,7 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 
 	e.clientConn, err = e.config.ClientConfig.ToClientConn(
 		ctx,
-		host,
+		host.GetExtensions(),
 		e.settings,
 		configgrpc.WithGrpcDialOption(grpc.WithUserAgent(e.userAgent)),
 		configgrpc.WithGrpcDialOption(
@@ -217,8 +217,8 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 	e.metricExporter = pmetricotlp.NewGRPCClient(e.clientConn)
 	e.logExporter = plogotlp.NewGRPCClient(e.clientConn)
 	headers := map[string]string{}
-	for k, v := range e.config.ClientConfig.Headers {
-		headers[k] = string(v)
+	for _, pair := range e.config.ClientConfig.Headers {
+		headers[pair.Name] = string(pair.Value)
 	}
 	e.metadata = metadata.New(headers)
 	e.metadata.Set("Authorization", fmt.Sprintf("Bearer %s", e.accessToken))

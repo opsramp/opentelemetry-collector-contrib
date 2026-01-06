@@ -50,6 +50,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal/testdata"
+	opsrampmetadata "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/opsrampotlpexporter/internal/metadata"
 )
 
 type mockReceiver struct {
@@ -218,11 +219,12 @@ func TestSendTraces(t *testing.T) {
 	cfg := factory.CreateDefaultConfig().(*Config)
 	cfg.ClientConfig = configgrpc.ClientConfig{
 		Endpoint: ln.Addr().String(),
-		TLSSetting: configtls.ClientConfig{
+		TLS: configtls.ClientConfig{
 			Insecure: true,
 		},
-		Headers: map[string]configopaque.String{
-			"header": "header-value",
+		Headers: configopaque.MapList{
+		{Name: 
+			"header", Value: "header-value"},
 		},
 	}
 	cfg.Security = SecuritySettings{
@@ -230,10 +232,10 @@ func TestSendTraces(t *testing.T) {
 		ClientID:        "mamRxRJB796HYtWYxqeDzeEXCKSswnsr",
 		ClientSecret:    "Da2achZqvHF7tKDaSP3FCkHE2PKcY6twRxwZEnEYQHc5GADgHy5VZDBxdeKhNbrw",
 	}
-	set := exportertest.NewNopSettings()
+	set := exportertest.NewNopSettings(opsrampmetadata.Type)
 	set.BuildInfo.Description = "Collector"
 	set.BuildInfo.Version = "1.2.3test"
-	exp, err := factory.CreateTracesExporter(context.Background(), set, cfg)
+	exp, err := factory.CreateTraces(context.Background(), set, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, exp)
 
@@ -301,7 +303,7 @@ func TestSendTracesWhenEndpointHasHttpScheme(t *testing.T) {
 			useTLS: false,
 			scheme: "http://",
 			gRPCClientSettings: configgrpc.ClientConfig{
-				TLSSetting: configtls.ClientConfig{
+				TLS: configtls.ClientConfig{
 					Insecure: true,
 				},
 			},
@@ -329,10 +331,10 @@ func TestSendTracesWhenEndpointHasHttpScheme(t *testing.T) {
 			cfg.ClientConfig = test.gRPCClientSettings
 			cfg.ClientConfig.Endpoint = test.scheme + ln.Addr().String()
 			if test.useTLS {
-				cfg.ClientConfig.TLSSetting.InsecureSkipVerify = true
+				cfg.ClientConfig.TLS.InsecureSkipVerify = true
 			}
-			set := exportertest.NewNopSettings()
-			exp, err := factory.CreateTracesExporter(context.Background(), set, cfg)
+			set := exportertest.NewNopSettings(opsrampmetadata.Type)
+			exp, err := factory.CreateTraces(context.Background(), set, cfg)
 			require.NoError(t, err)
 			require.NotNil(t, exp)
 
@@ -374,11 +376,12 @@ func TestSendMetrics(t *testing.T) {
 	cfg := factory.CreateDefaultConfig().(*Config)
 	cfg.ClientConfig = configgrpc.ClientConfig{
 		Endpoint: ln.Addr().String(),
-		TLSSetting: configtls.ClientConfig{
+		TLS: configtls.ClientConfig{
 			Insecure: true,
 		},
-		Headers: map[string]configopaque.String{
-			"header": "header-value",
+		Headers: configopaque.MapList{
+		{Name: 
+			"header", Value: "header-value"},
 		},
 	}
 	cfg.Security = SecuritySettings{
@@ -386,10 +389,10 @@ func TestSendMetrics(t *testing.T) {
 		ClientID:        "mamRxRJB796HYtWYxqeDzeEXCKSswnsr",
 		ClientSecret:    "Da2achZqvHF7tKDaSP3FCkHE2PKcY6twRxwZEnEYQHc5GADgHy5VZDBxdeKhNbrw",
 	}
-	set := exportertest.NewNopSettings()
+	set := exportertest.NewNopSettings(opsrampmetadata.Type)
 	set.BuildInfo.Description = "Collector"
 	set.BuildInfo.Version = "1.2.3test"
-	exp, err := factory.CreateMetricsExporter(context.Background(), set, cfg)
+	exp, err := factory.CreateMetrics(context.Background(), set, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, exp)
 	defer func() {
@@ -452,7 +455,7 @@ func TestSendTraceDataServerDownAndUp(t *testing.T) {
 	cfg.QueueConfig.Enabled = false
 	cfg.ClientConfig = configgrpc.ClientConfig{
 		Endpoint: ln.Addr().String(),
-		TLSSetting: configtls.ClientConfig{
+		TLS: configtls.ClientConfig{
 			Insecure: true,
 		},
 		// Need to wait for every request blocking until either request timeouts or succeed.
@@ -465,8 +468,8 @@ func TestSendTraceDataServerDownAndUp(t *testing.T) {
 		ClientSecret:    "Da2achZqvHF7tKDaSP3FCkHE2PKcY6twRxwZEnEYQHc5GADgHy5VZDBxdeKhNbrw",
 	}
 
-	set := exportertest.NewNopSettings()
-	exp, err := factory.CreateTracesExporter(context.Background(), set, cfg)
+	set := exportertest.NewNopSettings(opsrampmetadata.Type)
+	exp, err := factory.CreateTraces(context.Background(), set, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, exp)
 	defer func() {
@@ -518,7 +521,7 @@ func TestSendTraceDataServerStartWhileRequest(t *testing.T) {
 	cfg := factory.CreateDefaultConfig().(*Config)
 	cfg.ClientConfig = configgrpc.ClientConfig{
 		Endpoint: ln.Addr().String(),
-		TLSSetting: configtls.ClientConfig{
+		TLS: configtls.ClientConfig{
 			Insecure: true,
 		},
 	}
@@ -527,8 +530,8 @@ func TestSendTraceDataServerStartWhileRequest(t *testing.T) {
 		ClientID:        "mamRxRJB796HYtWYxqeDzeEXCKSswnsr",
 		ClientSecret:    "Da2achZqvHF7tKDaSP3FCkHE2PKcY6twRxwZEnEYQHc5GADgHy5VZDBxdeKhNbrw",
 	}
-	set := exportertest.NewNopSettings()
-	exp, err := factory.CreateTracesExporter(context.Background(), set, cfg)
+	set := exportertest.NewNopSettings(opsrampmetadata.Type)
+	exp, err := factory.CreateTraces(context.Background(), set, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, exp)
 	defer func() {
@@ -571,10 +574,10 @@ func TestSendTracesOnResourceExhaustion(t *testing.T) {
 
 	factory := NewFactory()
 	cfg := factory.CreateDefaultConfig().(*Config)
-	cfg.BackOffConfig.InitialInterval = 0
+	cfg.RetryConfig.InitialInterval = 0
 	cfg.ClientConfig = configgrpc.ClientConfig{
 		Endpoint: ln.Addr().String(),
-		TLSSetting: configtls.ClientConfig{
+		TLS: configtls.ClientConfig{
 			Insecure: true,
 		},
 	}
@@ -583,8 +586,8 @@ func TestSendTracesOnResourceExhaustion(t *testing.T) {
 		ClientID:        "mamRxRJB796HYtWYxqeDzeEXCKSswnsr",
 		ClientSecret:    "Da2achZqvHF7tKDaSP3FCkHE2PKcY6twRxwZEnEYQHc5GADgHy5VZDBxdeKhNbrw",
 	}
-	set := exportertest.NewNopSettings()
-	exp, err := factory.CreateTracesExporter(context.Background(), set, cfg)
+	set := exportertest.NewNopSettings(opsrampmetadata.Type)
+	exp, err := factory.CreateTraces(context.Background(), set, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, exp)
 
@@ -657,7 +660,7 @@ func TestSendLogData(t *testing.T) {
 	cfg := factory.CreateDefaultConfig().(*Config)
 	cfg.ClientConfig = configgrpc.ClientConfig{
 		Endpoint: ln.Addr().String(),
-		TLSSetting: configtls.ClientConfig{
+		TLS: configtls.ClientConfig{
 			Insecure: true,
 		},
 	}
@@ -666,10 +669,10 @@ func TestSendLogData(t *testing.T) {
 		ClientID:        "mamRxRJB796HYtWYxqeDzeEXCKSswnsr",
 		ClientSecret:    "Da2achZqvHF7tKDaSP3FCkHE2PKcY6twRxwZEnEYQHc5GADgHy5VZDBxdeKhNbrw",
 	}
-	set := exportertest.NewNopSettings()
+	set := exportertest.NewNopSettings(opsrampmetadata.Type)
 	set.BuildInfo.Description = "Collector"
 	set.BuildInfo.Version = "1.2.3test"
-	exp, err := factory.CreateLogsExporter(context.Background(), set, cfg)
+	exp, err := factory.CreateLogs(context.Background(), set, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, exp)
 	defer func() {
