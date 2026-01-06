@@ -16,3 +16,6 @@ retract (
 	v0.65.0
 	v0.37.0 // Contains dependencies on v0.36.0 components, which should have been updated to v0.37.0.
 )
+
+replace github.com/bmatcuk/doublestar/v4 => github.com/opsramp/doublestar/v4 v4.0.0-20250915103945-2523a0640215
+
