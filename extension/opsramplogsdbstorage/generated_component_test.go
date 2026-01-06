@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/opsramplogsdbstorage/internal/metadata"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/confmap/confmaptest"
@@ -30,7 +31,7 @@ func TestComponentLifecycle(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, sub.Unmarshal(&cfg))
 	t.Run("shutdown", func(t *testing.T) {
-		e, err := factory.CreateExtension(context.Background(), extensiontest.NewNopSettings(), cfg)
+		e, err := factory.Create(context.Background(), extensiontest.NewNopSettings(metadata.Type), cfg)
 		require.NoError(t, err)
 		err = e.Shutdown(context.Background())
 		require.NoError(t, err)

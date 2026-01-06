@@ -13,7 +13,7 @@ import (
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/extension/experimental/storage"
+	"go.opentelemetry.io/collector/extension/xextension/storage"
 	"go.uber.org/zap"
 )
 

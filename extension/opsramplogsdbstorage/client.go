@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/syndtr/goleveldb/leveldb"
-	"go.opentelemetry.io/collector/extension/experimental/storage"
+	"go.opentelemetry.io/collector/extension/xextension/storage"
 )
 
 type dbStorageClient struct {
@@ -49,7 +49,7 @@ func (c *dbStorageClient) Delete(_ context.Context, key string) error {
 }
 
 // Batch executes the specified operations in order. Get operation results are updated in place
-func (c *dbStorageClient) Batch(ctx context.Context, ops ...storage.Operation) error {
+func (c *dbStorageClient) Batch(ctx context.Context, ops ...*storage.Operation) error {
 	var err error
 	for _, op := range ops {
 		switch op.Type {
