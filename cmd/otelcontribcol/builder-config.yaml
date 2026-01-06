@@ -58,6 +58,7 @@ extensions:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/encoding/azureencodingextension v0.141.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector v0.141.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/cgroupruntimeextension v0.141.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/opsramplogsdbstorage v0.141.0
 
 exporters:
   - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.141.0
@@ -111,6 +112,8 @@ exporters:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/tencentcloudlogserviceexporter v0.141.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/tinybirdexporter v0.141.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/zipkinexporter v0.141.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/opsrampdebugexporter v0.141.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/opsrampotlpexporter v0.141.0
 
 processors:
   - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.141.0
@@ -143,6 +146,9 @@ processors:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/unrollprocessor v0.141.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/remotetapprocessor v0.141.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/datadogsemanticsprocessor v0.141.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/opsrampmetricsfilterprocessor v0.141.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/opsrampk8sobjectsprocessor v0.141.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/scrubbingprocessor v0.141.0
 
 receivers:
   - gomod: go.opentelemetry.io/collector/receiver/nopreceiver v0.141.0
