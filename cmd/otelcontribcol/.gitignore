@@ -1,4 +1,5 @@
 *
 !builder-config.yaml
 !Dockerfile
+!Dockerfile.ubuntu
 !metadata.yaml
