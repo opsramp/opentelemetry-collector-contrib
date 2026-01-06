@@ -131,7 +131,7 @@ func (e *Event) RenderDeep(buffer *Buffer, publisher Publisher) (EventXML, error
 	return *eventXMLPtr, nil
 }
 
-func (e *Event) RenderRaw(buffer Buffer) (EventRaw, error) {
+func (e *Event) RenderRaw(buffer *Buffer) (EventRaw, error) {
 	if e.handle == 0 {
 		return EventRaw{}, fmt.Errorf("event handle does not exist")
 	}
@@ -169,7 +169,7 @@ func (e *Event) Close() error {
 }
 
 // RenderFormatted will render the event as EventXML with formatted info.
-func (e *Event) RenderFormatted(buffer Buffer, publisher Publisher) (*EventXML, error) {
+func (e *Event) RenderFormatted(buffer *Buffer, publisher Publisher) (*EventXML, error) {
 	if e.handle == 0 {
 		return nil, fmt.Errorf("event handle does not exist")
 	}

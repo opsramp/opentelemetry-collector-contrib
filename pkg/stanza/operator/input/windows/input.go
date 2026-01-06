@@ -27,7 +27,7 @@ import (
 type Input struct {
 	helper.InputOperator
 	bookmark                 Bookmark
-	buffer                   Buffer
+	buffer                   *Buffer
 	channel                  string
 	ignoreChannelErrors      bool
 	query                    *string
