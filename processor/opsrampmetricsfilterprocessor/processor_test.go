@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/pdata/pmetric"
@@ -36,7 +37,7 @@ func TestCreateProcessor(t *testing.T) {
 	// But validates the configuration structure
 	_, err := createMetricsProcessor(
 		context.Background(),
-		processortest.NewNopSettings(),
+		processortest.NewNopSettings(component.MustNewType(typeStr)),
 		cfg,
 		consumertest.NewNop(),
 	)
@@ -113,7 +114,7 @@ func TestValidateConfig(t *testing.T) {
 func TestExtractMetricsFromExpression(t *testing.T) {
 	// This is a unit test that doesn't require Kubernetes
 	processor := &filterProcessor{
-		logger: processortest.NewNopSettings().Logger,
+		logger: processortest.NewNopSettings(component.MustNewType(typeStr)).Logger,
 	}
 
 	tests := []struct {
