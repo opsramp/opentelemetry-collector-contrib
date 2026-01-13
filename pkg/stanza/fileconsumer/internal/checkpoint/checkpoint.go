@@ -87,25 +87,9 @@ func Load(ctx context.Context, persister operator.Persister) ([]*reader.Metadata
 		if rmd.FileAttributes == nil {
 			rmd.FileAttributes = map[string]any{}
 		}
-
-		// Migrate readers that used FileAttributes.HeaderAttributes
-		// This block can be removed in a future release, tentatively v0.90.0
-		if ha, ok := rmd.FileAttributes["HeaderAttributes"]; ok {
-			switch hat := ha.(type) {
-			case map[string]any:
-				for k, v := range hat {
-					rmd.FileAttributes[k] = v
-				}
-				delete(rmd.FileAttributes, "HeaderAttributes")
-			default:
-				errs = append(errs, errors.New("migrate header attributes: unexpected format"))
-			}
-		}
-
 		// This reader won't be used for anything other than metadata reference, so just wrap the metadata
 		rmds = append(rmds, rmd)
 	}
-
 	return rmds, errors.Join(errs...)
 }
 
