@@ -159,22 +159,26 @@ func (kr *k8sobjectsreceiver) Start(ctx context.Context, host component.Host) er
 func (kr *k8sobjectsreceiver) startWithListWatchModeSupport(cctx context.Context, validConfigs []*K8sObjectsConfig) {
 	var listWatchObjects int
 	var listWatchInterval time.Duration
+	var listWatchConfigs []*K8sObjectsConfig
+	
 	for _, object := range validConfigs {
 		if object.Mode == ListWatchMode {
 			listWatchObjects++
+			listWatchConfigs = append(listWatchConfigs, object)
 			if strings.ToLower(object.Name) == "pods" {
 				listWatchInterval = object.Interval
 			}
 		} else {
 			kr.start(cctx, object)
 		}
-		if listWatchObjects > 0 {
-			//if there is no list watch interval set for pods, use the first object interval
-			if listWatchInterval == 0 {
-				listWatchInterval = kr.config.Objects[0].Interval
-			}
-			go kr.startListWatchObjects(cctx, kr.config.Objects, listWatchInterval)
+	}
+	
+	if listWatchObjects > 0 {
+		//if there is no list watch interval set for pods, use the first object interval
+		if listWatchInterval == 0 {
+			listWatchInterval = listWatchConfigs[0].Interval
 		}
+		go kr.startListWatchObjects(cctx, listWatchConfigs, listWatchInterval)
 	}
 }
 
