@@ -11,8 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"go.opentelemetry.io/collector/component"
-	"go.uber.org/zap"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/fileset"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/checkpoint"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/fingerprint"
@@ -21,6 +20,8 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/tracker"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/matcher"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
+	"go.opentelemetry.io/collector/component"
+	"go.uber.org/zap"
 )
 
 type Manager struct {
@@ -40,13 +41,14 @@ type Manager struct {
 	pollsToArchive int
 
 	telemetryBuilder *metadata.TelemetryBuilder
+	logger           *zap.Logger
 }
 
 func (m *Manager) Start(persister operator.Persister) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
 
-	if _, err := m.fileMatcher.MatchFiles(); err != nil {
+	if _, _, err := m.fileMatcher.MatchFiles(); err != nil {
 		m.set.Logger.Warn("finding files", zap.Error(err))
 	}
 
@@ -119,7 +121,9 @@ func (m *Manager) poll(ctx context.Context) {
 	batchesProcessed := 0
 
 	// Get the list of paths on disk
-	matches, err := m.fileMatcher.MatchFiles()
+	matches, oldFiles, err := m.fileMatcher.MatchFiles()
+	// or for the oldFiles we may call the matchFiles function with zero max time, in this manner it will pull all the include files
+	// issue:: it will again take time for file globe
 	if err != nil {
 		m.set.Logger.Debug("finding files", zap.Error(err))
 	}
@@ -134,12 +138,9 @@ func (m *Manager) poll(ctx context.Context) {
 		m.set.Logger.Debug("No files skipped by MatchFiles")
 	}
 
-	filteredExtraPaths := []string{}
+	var filteredExtraPaths []string
 	for _, path := range extraPaths {
-		included, err := m.fileMatcher.IsFileIncludedAndTracked(path)
-		if err != nil {
-			m.set.Logger.Debug("error while checking file inclusion", zap.String("path", path), zap.Error(err))
-		}
+		included := m.fileMatcher.IsFileIncludedAndTracked(path, oldFiles)
 		if included {
 			filteredExtraPaths = append(filteredExtraPaths, path)
 		}
@@ -165,9 +166,9 @@ func (m *Manager) poll(ctx context.Context) {
 	// Any new files that appear should be consumed entirely
 	m.readerFactory.FromBeginning = true
 	if m.persister != nil {
-		metadata := m.tracker.GetMetadata()
-		if metadata != nil {
-			if err := checkpoint.Save(context.Background(), m.persister, metadata); err != nil {
+		trackerMetadata := m.tracker.GetMetadata()
+		if trackerMetadata != nil {
+			if err = checkpoint.Save(context.Background(), m.persister, trackerMetadata); err != nil {
 				m.set.Logger.Error("save offsets", zap.Error(err))
 			}
 		}
@@ -291,7 +292,6 @@ func (m *Manager) newReader(ctx context.Context, file *os.File, fp *fingerprint.
 
 	// Fallback: Try loading from archive if no match found
 	for i := 0; i < m.tracker.PollsToArchive(); i++ {
-
 		key := fmt.Sprintf("knownFiles%d", i)
 		archivedMetadata, err := checkpoint.LoadKey(ctx, m.tracker.Persister(), key)
 		if err != nil {
