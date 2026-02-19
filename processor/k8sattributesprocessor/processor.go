@@ -321,7 +321,7 @@ func (kp *kubernetesprocessor) processopsrampResources(ctx context.Context, reso
 		}
 		resourceType = "daemonset"
 	} else if nsname, found := resource.Attributes().Get("k8s.namespace.name"); found {
-		if _, found := resource.Attributes().Get("opsramp.sd.role"); found {
+		if _, found := resource.Attributes().Get("prometheus.sd.role"); found {
 			if resourceUuid = kp.GetResourceUuidUsingNamespaceMoid(ctx, resource); resourceUuid == "" {
 				kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("namespacename", nsname.Str()))
 			}
