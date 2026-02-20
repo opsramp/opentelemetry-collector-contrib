@@ -290,7 +290,10 @@ func (kp *kubernetesprocessor) processopsrampResources(ctx context.Context, reso
 	}
 	var resourceType string
 
-	if podname, found := resource.Attributes().Get("k8s.pod.name"); found {
+	if _, found := resource.Attributes().Get("map.to.namespace"); found {
+		resourceUuid = kp.GetResourceUuidUsingNamespaceMoid(ctx, resource)
+		resourceType = "namespace"
+	} else if podname, found := resource.Attributes().Get("k8s.pod.name"); found {
 		if resourceUuid = kp.GetResourceUuidUsingPodMoid(ctx, resource); resourceUuid == "" {
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("podname", podname.Str()))
 		}
@@ -320,13 +323,6 @@ func (kp *kubernetesprocessor) processopsrampResources(ctx context.Context, reso
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("daemonset", dsname.Str()))
 		}
 		resourceType = "daemonset"
-	} else if nsname, found := resource.Attributes().Get("k8s.namespace.name"); found {
-		if _, found := resource.Attributes().Get("prometheus.sd.role"); found {
-			if resourceUuid = kp.GetResourceUuidUsingNamespaceMoid(ctx, resource); resourceUuid == "" {
-				kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("namespacename", nsname.Str()))
-			}
-			resourceType = "namespace"
-		}
 	} else {
 		if resourceUuid = kp.redisConfig.ClusterUid; resourceUuid == "" {
 			kp.logger.Debug("opsramp resourceuuid not found", zap.Any("clustername", kp.redisConfig.ClusterName))
