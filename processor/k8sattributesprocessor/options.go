@@ -431,7 +431,7 @@ func withAddOnFields(filters ...AddOnMetadata) option {
 		var fields []kube.AddOnMetadata
 		for _, f := range filters {
 
-			fmt.Println("The value of key : ", f.Key, " Value : ", f.Value)
+			// fmt.Println("The value of key : ", f.Key, " Value : ", f.Value)
 
 			fields = append(fields, kube.AddOnMetadata{
 				Key:   f.Key,
@@ -444,7 +444,7 @@ func withAddOnFields(filters ...AddOnMetadata) option {
 }
 
 func withRedisConfigFields(filters redis.OpsrampRedisConfig) option {
-	fmt.Println("The value of filters received  : ", filters)
+	// fmt.Println("The value of filters received  : ", filters)
 
 	return func(p *kubernetesprocessor) error {
 		p.redisConfig = filters
