@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"go.opentelemetry.io/collector/extension/xextension/storage"
 	"go.uber.org/zap"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/checkpoint"
@@ -20,8 +19,7 @@ import (
 )
 
 const (
-	archiveIndexKey          = "knownFilesArchiveIndex"
-	archivePollsToArchiveKey = "knonwFilesPollsToArchive"
+	archiveIndexKey = "knownFilesArchiveIndex"
 )
 
 type Archive interface {
@@ -138,8 +136,7 @@ func (a *archive) WriteFiles(ctx context.Context, metadata *fileset.Fileset[*rea
 	if err := json.NewEncoder(&buf).Encode(a.archiveIndex); err != nil {
 		a.logger.Error("failed to encode archive index", zap.Error(err))
 	}
-	indexOp := storage.SetOperation(archiveIndexKey, buf.Bytes()) // batch the updated index with metadata
-	if err := a.writeArchive(ctx, a.archiveIndex, metadata, indexOp); err != nil {
+	if err := a.writeArchive(ctx, a.archiveIndex, metadata); err != nil {
 		a.logger.Error("failed to write archive", zap.Error(err))
 	}
 	a.archiveIndex = (a.archiveIndex + 1) % a.pollsToArchive
@@ -156,9 +153,9 @@ func (a *archive) readArchive(ctx context.Context, index int) (*fileset.Fileset[
 	return f, nil
 }
 
-func (a *archive) writeArchive(ctx context.Context, index int, rmds *fileset.Fileset[*reader.Metadata], ops ...*storage.Operation) error {
+func (a *archive) writeArchive(ctx context.Context, index int, rmds *fileset.Fileset[*reader.Metadata]) error {
 	// writeArchive saves data to the archive for a given index and returns an error, if encountered.
-	return checkpoint.SaveKey(ctx, a.persister, rmds.Get(), archiveKey(index), ops...)
+	return checkpoint.SaveKey(ctx, a.persister, rmds.Get(), archiveKey(index))
 }
 
 func getArchiveIndex(ctx context.Context, persister operator.Persister) (int, error) {
