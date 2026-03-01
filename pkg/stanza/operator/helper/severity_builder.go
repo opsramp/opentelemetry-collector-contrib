@@ -15,7 +15,7 @@ import (
 )
 
 // map[string or int input]sev-level
-func getBuiltinMapping(name string) severityMap {
+func getBuiltinMapping(name string) SeverityMap {
 	switch name {
 	case "none":
 		return map[string]entry.Severity{}
@@ -69,6 +69,17 @@ func getBuiltinMapping(name string) severityMap {
 			"23":     entry.Fatal3,
 			"fatal4": entry.Fatal4,
 			"24":     entry.Fatal4,
+
+			"emquency": entry.Emergency,
+			"25":       entry.Emergency,
+			"alert":    entry.Alert,
+			"26":       entry.Alert,
+			"critical": entry.Critical,
+			"27":       entry.Critical,
+			"notice":   entry.Notice,
+			"28":       entry.Notice,
+			"verbose":  entry.Verbose,
+			"29":       entry.Verbose,
 		}
 	default:
 		// Add some additional values that are automatically recognized
@@ -85,7 +96,7 @@ func getBuiltinMapping(name string) severityMap {
 	}
 }
 
-func (m severityMap) add(severity entry.Severity, parseableValues ...string) {
+func (m SeverityMap) add(severity entry.Severity, parseableValues ...string) {
 	for _, str := range parseableValues {
 		m[str] = severity
 	}

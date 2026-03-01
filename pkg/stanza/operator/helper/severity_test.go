@@ -541,7 +541,7 @@ func (tc severityTestCase) run(parseFrom entry.Field) func(*testing.T) {
 func TestBuildCustomMapping(t *testing.T) {
 	t.Parallel()
 
-	expected := severityMap{
+	expected := SeverityMap{
 		"300":         entry.Info,
 		"301":         entry.Info,
 		"399":         entry.Info,

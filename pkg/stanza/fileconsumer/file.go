@@ -45,7 +45,7 @@ func (m *Manager) Start(persister operator.Persister) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
 
-	if _, err := m.fileMatcher.MatchFiles(); err != nil {
+	if _, _, err := m.fileMatcher.MatchFiles(); err != nil {
 		m.set.Logger.Warn("finding files", zap.Error(err))
 	}
 
@@ -118,7 +118,7 @@ func (m *Manager) poll(ctx context.Context) {
 	batchesProcessed := 0
 
 	// Get the list of paths on disk
-	matches, err := m.fileMatcher.MatchFiles()
+	matches, _, err := m.fileMatcher.MatchFiles()
 	if err != nil {
 		m.set.Logger.Debug("finding files", zap.Error(err))
 	}
@@ -142,9 +142,9 @@ func (m *Manager) poll(ctx context.Context) {
 	// Any new files that appear should be consumed entirely
 	m.readerFactory.FromBeginning = true
 	if m.persister != nil {
-		metadata := m.tracker.GetMetadata()
-		if metadata != nil {
-			if err := checkpoint.Save(context.Background(), m.persister, metadata); err != nil {
+		fileMetadata := m.tracker.GetMetadata()
+		if fileMetadata != nil {
+			if err := checkpoint.Save(context.Background(), m.persister, fileMetadata); err != nil {
 				m.set.Logger.Error("save offsets", zap.Error(err))
 			}
 		}
@@ -248,11 +248,11 @@ func (m *Manager) handleUnmatchedFiles(ctx context.Context) {
 		file := files[i]
 		fp := fps[i]
 
-		var reader *reader.Reader
+		var fileReader *reader.Reader
 		var err error
 
 		if md != nil {
-			reader, err = m.readerFactory.NewReaderFromMetadata(file, md)
+			fileReader, err = m.readerFactory.NewReaderFromMetadata(file, md)
 			if m.tracker.Name() != tracker.NoStateTracker {
 				m.set.Logger.Info("File found in archive. Started watching file again", zap.String("path", file.Name()))
 			}
@@ -260,7 +260,7 @@ func (m *Manager) handleUnmatchedFiles(ctx context.Context) {
 			if m.tracker.Name() != tracker.NoStateTracker {
 				m.set.Logger.Info("Started watching file", zap.String("path", file.Name()))
 			}
-			reader, err = m.readerFactory.NewReader(file, fp)
+			fileReader, err = m.readerFactory.NewReader(file, fp)
 		}
 
 		if err != nil {
@@ -269,7 +269,7 @@ func (m *Manager) handleUnmatchedFiles(ctx context.Context) {
 		}
 
 		m.telemetryBuilder.FileconsumerOpenFiles.Add(ctx, 1)
-		m.tracker.Add(reader)
+		m.tracker.Add(fileReader)
 	}
 }
 
