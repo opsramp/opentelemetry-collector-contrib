@@ -126,11 +126,50 @@ func (kp *kubernetesprocessor) processTraces(ctx context.Context, td ptrace.Trac
 }
 
 // processMetrics process metrics and add k8s metadata using resource IP, hostname or incoming IP as pod origin.
+// For DCGM metrics, the ResourceMetrics is split per GPU UUID
+// For RDMA metrics, the ResourceMetrics is split per NIC UUID
 func (kp *kubernetesprocessor) processMetrics(ctx context.Context, md pmetric.Metrics) (pmetric.Metrics, error) {
 	rm := md.ResourceMetrics()
+
+	var dcgmSplits []pmetric.ResourceMetrics
+	var rdmaSplits []pmetric.ResourceMetrics
+
 	for i := 0; i < rm.Len(); i++ {
 		kp.processResource(ctx, rm.At(i).Resource())
-		kp.processopsrampResources(ctx, rm.At(i).Resource())
+		// Addons (e.g. k8s.cluster.name) must be injected before any per-device split so that
+		kp.addAddonsToResource(rm.At(i).Resource())
+
+		// For hardware-device exporters (DCGM/GPU, RDMA/NIC), we split batch into one ResourceMetrics per device and set the per-device uuid
+		// If no split is performed, fall back to normal pod/node/workload UUID resolution.
+		if perGpuRMs, isDCGMBatch := kp.processDcgmMetricByGpu(ctx, rm.At(i)); isDCGMBatch {
+			rm.At(i).Resource().Attributes().PutBool("_dcgm_processed", true)
+			dcgmSplits = append(dcgmSplits, perGpuRMs...)
+		} else if perNicRMs, isRDMABatch := kp.processRdmaMetricByNic(ctx, rm.At(i)); isRDMABatch {
+			rm.At(i).Resource().Attributes().PutBool("_rdma_processed", true)
+			rdmaSplits = append(rdmaSplits, perNicRMs...)
+		} else {
+			kp.processopsrampResources(ctx, rm.At(i).Resource())
+		}
+	}
+
+	// Remove originals that were replaced by per-device ResourceMetrics entries.
+	md.ResourceMetrics().RemoveIf(func(r pmetric.ResourceMetrics) bool {
+		if v, found := r.Resource().Attributes().Get("_dcgm_processed"); found && v.Bool() {
+			return true
+		}
+		if v, found := r.Resource().Attributes().Get("_rdma_processed"); found && v.Bool() {
+			return true
+		}
+		return false
+	})
+
+	// Append the per-GPU ResourceMetrics.
+	for i := range dcgmSplits {
+		dcgmSplits[i].CopyTo(md.ResourceMetrics().AppendEmpty())
+	}
+	// Append the per-NIC ResourceMetrics.
+	for i := range rdmaSplits {
+		rdmaSplits[i].CopyTo(md.ResourceMetrics().AppendEmpty())
 	}
 
 	kp.filterOnlyOpsrampMetrics(md)
@@ -272,22 +311,24 @@ func (kp *kubernetesprocessor) addOpsrampEventResourceAttributes(ctx context.Con
 	}
 }
 
+// addAddonsToResource injects addon key-value pairs into resource attributes.
+// Existing attributes are not overwritten (e.g. type=event set by kube-events receiver).
+func (kp *kubernetesprocessor) addAddonsToResource(resource pcommon.Resource) {
+	for _, addon := range kp.addons {
+		kp.logger.Debug("addon", zap.Any("key", addon.Key))
+		if _, found := resource.Attributes().Get(addon.Key); !found {
+			kp.logger.Debug("addon not found adding it", zap.Any("key", addon.Key))
+			resource.Attributes().PutStr(addon.Key, addon.Value)
+		}
+	}
+}
+
 // processResource adds Pod metadata tags to resource based on pod association configuration
 func (kp *kubernetesprocessor) processopsrampResources(ctx context.Context, resource pcommon.Resource) {
 
 	var resourceUuid string
 
-	for _, addon := range kp.addons {
-		// If receiver has already added some attributes with some value, then we do not overwrite here.
-		// For ex. type = event is already added for kube events. We should not overwrite it with type = RESOURCE.
-		kp.logger.Debug("addon", zap.Any("key", addon.Key))
-
-		if _, found := resource.Attributes().Get(addon.Key); !found {
-			kp.logger.Debug("addon not found adding it", zap.Any("key", addon.Key))
-
-			resource.Attributes().PutStr(addon.Key, addon.Value)
-		}
-	}
+	kp.addAddonsToResource(resource)
 	var resourceType string
 
 	if _, found := resource.Attributes().Get("map.to.namespace"); found {
