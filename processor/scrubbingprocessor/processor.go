@@ -70,15 +70,17 @@ func (sp *scrubbingProcessor) applyMasking(ld plog.Logs) {
 						}
 					}
 
-					// masking body
-					switch log.Body().Type() {
-					case pcommon.ValueTypeMap:
-						log.Body().Map().Range(func(k string, v pcommon.Value) bool {
-							v.SetStr(rExp.ReplaceAllString(v.AsString(), setting.Placeholder))
-							return true
-						})
-					case pcommon.ValueTypeStr:
-						log.Body().SetStr(rExp.ReplaceAllString(log.Body().AsString(), setting.Placeholder))
+					// masking body - only when attribute_type and attribute_key are both empty
+					if setting.AttributeType == EmptyAttribute && setting.AttributeKey == "" {
+						switch log.Body().Type() {
+						case pcommon.ValueTypeMap:
+							log.Body().Map().Range(func(k string, v pcommon.Value) bool {
+								v.SetStr(rExp.ReplaceAllString(v.AsString(), setting.Placeholder))
+								return true
+							})
+						case pcommon.ValueTypeStr:
+							log.Body().SetStr(rExp.ReplaceAllString(log.Body().AsString(), setting.Placeholder))
+						}
 					}
 				}
 			}
