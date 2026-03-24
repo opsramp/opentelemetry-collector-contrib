@@ -8,11 +8,10 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
-	"io"
-	"os"
-
 	"go.opentelemetry.io/collector/component"
 	"go.uber.org/zap"
+	"io"
+	"os"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/decode"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/attrs"
@@ -164,14 +163,16 @@ func (r *Reader) readHeader(ctx context.Context) (doneReadingFile bool) {
 	}
 	r.headerReader = nil
 	r.HeaderFinalized = true
-	r.initialBufferSize = scanner.DefaultBufferSize
+
+	if r.initialBufferSize <= 0 {
+		r.initialBufferSize = scanner.DefaultBufferSize
+	}
 
 	// Reset position in file to r.Offest after the header scanner might have moved it past a content token.
 	if _, err := r.file.Seek(r.Offset, 0); err != nil {
 		r.set.Logger.Error("failed to seek post-header", zap.Error(err))
 		return true
 	}
-
 	return false
 }
 

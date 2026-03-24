@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/scanner"
 	"runtime"
 	"time"
 
@@ -24,7 +25,6 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/header"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/metadata"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/reader"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/scanner"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/matcher"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
@@ -77,6 +77,7 @@ type Config struct {
 	MaxBatches              int             `mapstructure:"max_batches,omitempty"`
 	StartAt                 string          `mapstructure:"start_at,omitempty"`
 	FingerprintSize         helper.ByteSize `mapstructure:"fingerprint_size,omitempty"`
+	InitialBufferSize       int             `mapstructure:"initial_buffer_size,omitempty"`
 	MaxLogSize              helper.ByteSize `mapstructure:"max_log_size,omitempty"`
 	Encoding                string          `mapstructure:"encoding,omitempty"`
 	SplitConfig             split.Config    `mapstructure:"multiline,omitempty"`
@@ -86,7 +87,7 @@ type Config struct {
 	DeleteAfterRead         bool            `mapstructure:"delete_after_read,omitempty"`
 	IncludeFileRecordNumber bool            `mapstructure:"include_file_record_number,omitempty"`
 	Compression             string          `mapstructure:"compression,omitempty"`
-	PollsToArchive          int             `mapstructure:"-"` // TODO: activate this config once archiving is set up
+	PollsToArchive          int             `mapstructure:"polls_to_archive,omitempty"` // Now configurable
 	AcquireFSLock           bool            `mapstructure:"acquire_fs_lock,omitempty"`
 }
 
@@ -154,12 +155,17 @@ func (c Config) Build(set component.TelemetrySettings, emit emit.Callback, opts 
 		return nil, err
 	}
 
+	// when no values defined, default buffer size take precedence
+	if c.InitialBufferSize <= 0 {
+		c.InitialBufferSize = scanner.DefaultBufferSize
+	}
+
 	set.Logger = set.Logger.With(zap.String("component", "fileconsumer"))
 	readerFactory := reader.Factory{
 		TelemetrySettings:       set,
 		FromBeginning:           startAtBeginning,
 		FingerprintSize:         int(c.FingerprintSize),
-		InitialBufferSize:       scanner.DefaultBufferSize,
+		InitialBufferSize:       c.InitialBufferSize,
 		MaxLogSize:              int(c.MaxLogSize),
 		Encoding:                enc,
 		SplitFunc:               splitFunc,
