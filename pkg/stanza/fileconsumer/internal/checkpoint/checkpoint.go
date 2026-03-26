@@ -9,31 +9,32 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 
+	"go.opentelemetry.io/collector/extension/xextension/storage"
+	"go.uber.org/multierr"
+	"go.uber.org/zap"
+
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/metadata"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/reader"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 )
 
 const knownFilesKey = "knownFiles"
 
-// Checkpoint Retention Policy:
-// -----------------------------------
-// Checkpoints for file offsets are not kept forever. Instead, a ring buffer mechanism is used (see tracker.go),
-// controlled by the 'pollsToArchive' parameter. This limits the number of archived checkpoint sets (e.g., knownFiles0, knownFiles1, ...).
-// When the buffer wraps, old checkpoints are overwritten, bounding storage usage.
-//
-// Tradeoff: If a file is inactive for longer than the buffer covers, its checkpoint may be lost, and if updated later,
-// the file will be reprocessed from the beginning, causing data duplication. Set 'pollsToArchive' high enough to cover
-// the maximum expected inactivity period for files that may be updated again. For files that are truly finalized, their
-// checkpoints can be removed immediately if desired.
-// -----------------------------------
-
 // Save syncs the most recent set of files to the database
+// Uses protobuf encoding if the feature gate is enabled, otherwise uses JSON
 func Save(ctx context.Context, persister operator.Persister, rmds []*reader.Metadata) error {
 	return SaveKey(ctx, persister, rmds, knownFilesKey)
 }
 
-func SaveKey(ctx context.Context, persister operator.Persister, rmds []*reader.Metadata, key string) error {
+func SaveKey(ctx context.Context, persister operator.Persister, rmds []*reader.Metadata, key string, ops ...*storage.Operation) error {
+	// Use protobuf if feature gate is enabled
+	if metadata.FilelogProtobufCheckpointEncodingFeatureGate.IsEnabled() {
+		return SaveKeyProto(ctx, persister, rmds, key, ops...)
+	}
+
+	// Otherwise use JSON (default)
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 
@@ -42,60 +43,28 @@ func SaveKey(ctx context.Context, persister operator.Persister, rmds []*reader.M
 		return fmt.Errorf("encode num files: %w", err)
 	}
 
-	var errs []error
+	var errs error
 	// Encode each known file
 	for _, rmd := range rmds {
 		if err := enc.Encode(rmd); err != nil {
-			errs = append(errs, fmt.Errorf("encode metadata: %w", err))
+			errs = multierr.Append(errs, fmt.Errorf("encode metadata: %w", err))
 		}
 	}
-
-	if err := persister.Set(ctx, key, buf.Bytes()); err != nil {
-		errs = append(errs, fmt.Errorf("persist known files: %w", err))
+	ops = append(ops, storage.SetOperation(key, buf.Bytes()))
+	if err := persister.Batch(ctx, ops...); err != nil {
+		errs = multierr.Append(errs, fmt.Errorf("persist known files: %w", err))
 	}
 
-	return errors.Join(errs...)
+	return errs
 }
 
-// Load loads the most recent set of files to the database
-func Load(ctx context.Context, persister operator.Persister) ([]*reader.Metadata, error) {
-	encoded, err := persister.Get(ctx, knownFilesKey)
-	if err != nil {
-		return nil, err
-	}
-
-	if encoded == nil {
-		return []*reader.Metadata{}, nil
-	}
-
-	dec := json.NewDecoder(bytes.NewReader(encoded))
-
-	// Decode the number of entries
-	var knownFileCount int
-	if err = dec.Decode(&knownFileCount); err != nil {
-		return nil, fmt.Errorf("decoding file count: %w", err)
-	}
-
-	// Decode each of the known files
-	var errs []error
-	rmds := make([]*reader.Metadata, 0, knownFileCount)
-	for i := 0; i < knownFileCount; i++ {
-		rmd := new(reader.Metadata)
-		if err = dec.Decode(rmd); err != nil {
-			return nil, err
-		}
-		if rmd.FileAttributes == nil {
-			rmd.FileAttributes = map[string]any{}
-		}
-		// This reader won't be used for anything other than metadata reference, so just wrap the metadata
-		rmds = append(rmds, rmd)
-	}
-	return rmds, errors.Join(errs...)
+// Load loads the most recent set of files from the database
+// Tries protobuf first for backward compatibility, falls back to JSON if protobuf fails
+func Load(ctx context.Context, persister operator.Persister, logger *zap.Logger) ([]*reader.Metadata, error) {
+	return LoadKey(ctx, persister, knownFilesKey, logger)
 }
 
-func LoadKey(ctx context.Context, persister operator.Persister, key string) ([]*reader.Metadata, error) {
-	// Note: This function loads a specific archived checkpoint set (by key) as part of the ring buffer retention policy.
-	// See the file-level comment above for details on retention and tradeoffs.
+func LoadKey(ctx context.Context, persister operator.Persister, key string, logger *zap.Logger) ([]*reader.Metadata, error) {
 	encoded, err := persister.Get(ctx, key)
 	if err != nil {
 		return nil, err
@@ -105,6 +74,15 @@ func LoadKey(ctx context.Context, persister operator.Persister, key string) ([]*
 		return []*reader.Metadata{}, nil
 	}
 
+	// Try protobuf first (for backward compatibility with existing protobuf checkpoints)
+	// This allows seamless migration even when the feature gate is disabled
+	rmds, err := tryLoadProtobuf(encoded)
+	if err == nil {
+		return rmds, nil
+	}
+	logger.Debug("failed to load checkpoint as protobuf, falling back to JSON", zap.Error(err))
+
+	// Fall back to JSON if protobuf fails
 	dec := json.NewDecoder(bytes.NewReader(encoded))
 
 	// Decode the number of entries
@@ -113,24 +91,34 @@ func LoadKey(ctx context.Context, persister operator.Persister, key string) ([]*
 		return nil, fmt.Errorf("decoding file count: %w", err)
 	}
 
-	rmds := make([]*reader.Metadata, 0, knownFileCount)
+	// Decode each of the known files
+	var errs error
+	rmds = make([]*reader.Metadata, 0, knownFileCount)
 	for i := 0; i < knownFileCount; i++ {
 		rmd := new(reader.Metadata)
-		if err = dec.Decode(rmd); err != nil {
+		err = dec.Decode(rmd)
+		if err != nil {
 			return nil, err
 		}
 		if rmd.FileAttributes == nil {
 			rmd.FileAttributes = map[string]any{}
 		}
+
+		// Migrate readers that used FileAttributes.HeaderAttributes
+		// This block can be removed in a future release, tentatively v0.90.0
 		if ha, ok := rmd.FileAttributes["HeaderAttributes"]; ok {
-			if hat, ok := ha.(map[string]any); ok {
-				for k, v := range hat {
-					rmd.FileAttributes[k] = v
-				}
+			switch hat := ha.(type) {
+			case map[string]any:
+				maps.Copy(rmd.FileAttributes, hat)
 				delete(rmd.FileAttributes, "HeaderAttributes")
+			default:
+				errs = multierr.Append(errs, errors.New("migrate header attributes: unexpected format"))
 			}
 		}
+
+		// This reader won't be used for anything other than metadata reference, so just wrap the metadata
 		rmds = append(rmds, rmd)
 	}
-	return rmds, nil
+
+	return rmds, errs
 }

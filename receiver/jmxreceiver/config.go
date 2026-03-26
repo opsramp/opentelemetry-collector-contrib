@@ -16,6 +16,7 @@ import (
 
 	"go.opentelemetry.io/collector/config/configopaque"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
+	"go.opentelemetry.io/collector/scraper/scraperhelper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -32,6 +33,8 @@ type Config struct {
 }
 
 type ApplicationConfig struct {
+	scraperhelper.ControllerConfig `mapstructure:",squash"`
+
 	// The path for the JMX Metric Gatherer or JMX Scraper JAR (/opt/opentelemetry-java-contrib-jmx-metrics.jar by default).
 	// Supported by: jmx-scraper and jmx-metric-gatherer
 	JARPath string `mapstructure:"jar_path"`

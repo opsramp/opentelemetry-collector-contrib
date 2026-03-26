@@ -5,7 +5,9 @@ package fileconsumer // import "github.com/open-telemetry/opentelemetry-collecto
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"sync"
 	"time"
@@ -20,6 +22,12 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/tracker"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/matcher"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
+)
+
+const (
+	// maxUnreadableEntries limits the number of paths tracked in the unreadable map
+	// to prevent memory issues when many files have permission errors.
+	maxUnreadableEntries = 10000
 )
 
 type Manager struct {
@@ -39,22 +47,23 @@ type Manager struct {
 	pollsToArchive int
 
 	telemetryBuilder *metadata.TelemetryBuilder
+
+	unreadable map[string]struct{}
 }
 
 func (m *Manager) Start(persister operator.Persister) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
 
-	if _, _, err := m.fileMatcher.MatchFiles(); err != nil {
-		m.set.Logger.Warn("finding files", zap.Error(err))
-	}
+	// initialize runtime-only tracking of unreadable paths
+	m.unreadable = make(map[string]struct{})
 
 	// instantiate the tracker
 	m.instantiateTracker(ctx, persister)
 
 	if persister != nil {
 		m.persister = persister
-		offsets, err := checkpoint.Load(ctx, m.persister)
+		offsets, err := checkpoint.Load(ctx, m.persister, m.set.Logger)
 		if err != nil {
 			return fmt.Errorf("read known files from database: %w", err)
 		}
@@ -94,9 +103,7 @@ func (m *Manager) Stop() error {
 // startPoller kicks off a goroutine that will poll the filesystem periodically,
 // checking if there are new files or new logs in the watched files
 func (m *Manager) startPoller(ctx context.Context) {
-	m.wg.Add(1)
-	go func() {
-		defer m.wg.Done()
+	m.wg.Go(func() {
 		globTicker := time.NewTicker(m.pollInterval)
 		defer globTicker.Stop()
 
@@ -109,7 +116,7 @@ func (m *Manager) startPoller(ctx context.Context) {
 
 			m.poll(ctx)
 		}
-	}()
+	})
 }
 
 // poll checks all the watched paths for new entries
@@ -118,7 +125,7 @@ func (m *Manager) poll(ctx context.Context) {
 	batchesProcessed := 0
 
 	// Get the list of paths on disk
-	matches, _, err := m.fileMatcher.MatchFiles()
+	matches, err := m.fileMatcher.MatchFiles()
 	if err != nil {
 		m.set.Logger.Debug("finding files", zap.Error(err))
 	}
@@ -142,9 +149,9 @@ func (m *Manager) poll(ctx context.Context) {
 	// Any new files that appear should be consumed entirely
 	m.readerFactory.FromBeginning = true
 	if m.persister != nil {
-		fileMetadata := m.tracker.GetMetadata()
-		if fileMetadata != nil {
-			if err := checkpoint.Save(context.Background(), m.persister, fileMetadata); err != nil {
+		metadata := m.tracker.GetMetadata()
+		if metadata != nil {
+			if err := checkpoint.Save(context.Background(), m.persister, metadata); err != nil {
 				m.set.Logger.Error("save offsets", zap.Error(err))
 			}
 		}
@@ -175,11 +182,37 @@ func (m *Manager) consume(ctx context.Context, paths []string) {
 	m.telemetryBuilder.FileconsumerOpenFiles.Add(ctx, int64(0-m.tracker.EndConsume()))
 }
 
+// makeFingerprint opens `path` and computes a fingerprint for the file
+// and contains logic to only log file permission errors once per file per startup
 func (m *Manager) makeFingerprint(path string) (*fingerprint.Fingerprint, *os.File) {
-	file, err := os.Open(path) // #nosec - operator must read in files defined by user
+	// Normalize the path to handle Windows UNC paths correctly
+	normalizedPath, wasCorrupted := normalizePath(path)
+	if wasCorrupted {
+		m.set.Logger.Debug("Detected and repaired corrupted UNC path", zap.String("original_path", path), zap.String("normalized_path", normalizedPath))
+	}
+	file, err := openFile(normalizedPath) // #nosec - operator must read in files defined by user
 	if err != nil {
-		m.set.Logger.Error("Failed to open file", zap.Error(err))
+		// If a file is unreadable due to permissions error, store path in map and log error once (unless in debug mode)
+		if errors.Is(err, fs.ErrPermission) {
+			_, seen := m.unreadable[path]
+			if !seen {
+				// Limit map size to prevent unbounded growth
+				if len(m.unreadable) < maxUnreadableEntries {
+					m.unreadable[path] = struct{}{}
+				}
+				m.set.Logger.Error("Failed to open file - unreadable", zap.Error(err), zap.String("original_path", path), zap.String("normalized_path", normalizedPath))
+			}
+		} else {
+			// For non-permission errors, always log
+			m.set.Logger.Error("Failed to open file", zap.Error(err), zap.String("original_path", path), zap.String("normalized_path", normalizedPath))
+		}
 		return nil, nil
+	}
+
+	// Notify if previously unreadable file is now able to be read
+	if _, seen := m.unreadable[path]; seen {
+		m.set.Logger.Info("Previously unreadable file is now readable", zap.String("path", path))
+		delete(m.unreadable, path)
 	}
 
 	fp, err := m.readerFactory.NewFingerprint(file)
@@ -248,11 +281,11 @@ func (m *Manager) handleUnmatchedFiles(ctx context.Context) {
 		file := files[i]
 		fp := fps[i]
 
-		var fileReader *reader.Reader
+		var reader *reader.Reader
 		var err error
 
 		if md != nil {
-			fileReader, err = m.readerFactory.NewReaderFromMetadata(file, md)
+			reader, err = m.readerFactory.NewReaderFromMetadata(file, md)
 			if m.tracker.Name() != tracker.NoStateTracker {
 				m.set.Logger.Info("File found in archive. Started watching file again", zap.String("path", file.Name()))
 			}
@@ -260,7 +293,7 @@ func (m *Manager) handleUnmatchedFiles(ctx context.Context) {
 			if m.tracker.Name() != tracker.NoStateTracker {
 				m.set.Logger.Info("Started watching file", zap.String("path", file.Name()))
 			}
-			fileReader, err = m.readerFactory.NewReader(file, fp)
+			reader, err = m.readerFactory.NewReader(file, fp)
 		}
 
 		if err != nil {
@@ -269,7 +302,7 @@ func (m *Manager) handleUnmatchedFiles(ctx context.Context) {
 		}
 
 		m.telemetryBuilder.FileconsumerOpenFiles.Add(ctx, 1)
-		m.tracker.Add(fileReader)
+		m.tracker.Add(reader)
 	}
 }
 
