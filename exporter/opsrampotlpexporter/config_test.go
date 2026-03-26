@@ -52,11 +52,10 @@ func TestLoadConfig(t *testing.T) {
 				MaxInterval:     1 * time.Minute,
 				MaxElapsedTime:  10 * time.Minute,
 			},
-			QueueConfig: exporterhelper.QueueBatchConfig{
-				Enabled:      true,
+			QueueConfig: configoptional.Some(exporterhelper.QueueBatchConfig{
 				NumConsumers: 2,
 				QueueSize:    10,
-			},
+			}),
 			Security: SecuritySettings{
 				ClientID:        "id",
 				ClientSecret:    "secret",

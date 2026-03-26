@@ -21,6 +21,7 @@ import (
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configgrpc"
+	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 )
@@ -74,7 +75,7 @@ func (s *SecuritySettings) Validate() error {
 // Config defines configuration for OpenCensus exporter.
 type Config struct {
 	TimeoutConfig exporterhelper.TimeoutConfig    `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct.
-	QueueConfig   exporterhelper.QueueBatchConfig `mapstructure:"sending_queue"`
+	QueueConfig   configoptional.Optional[exporterhelper.QueueBatchConfig] `mapstructure:"sending_queue"`
 	RetryConfig   configretry.BackOffConfig       `mapstructure:"retry_on_failure"`
 
 	Security                SecuritySettings         `mapstructure:"security"`
@@ -87,8 +88,10 @@ var _ component.Config = (*Config)(nil)
 
 // Validate checks if the exporter configuration is valid
 func (cfg *Config) Validate() error {
-	if err := cfg.QueueConfig.Validate(); err != nil {
-		return fmt.Errorf("queue settings has invalid configuration: %w", err)
+	if queueCfg := cfg.QueueConfig.Get(); queueCfg != nil {
+		if err := queueCfg.Validate(); err != nil {
+			return fmt.Errorf("queue settings has invalid configuration: %w", err)
+		}
 	}
 
 	if err := cfg.Security.Validate(); err != nil {
