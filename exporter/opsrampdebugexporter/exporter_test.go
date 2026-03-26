@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/opsrampdebugexporter/internal/metadata"
+	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/config/configtelemetry"
 	"go.opentelemetry.io/collector/exporter/exportertest"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -93,7 +94,9 @@ func createTestCases() []testCase {
 			name: "default config",
 			config: func() *Config {
 				c := createDefaultConfig().(*Config)
-				c.QueueConfig.QueueSize = 10
+				qCfg := *c.QueueConfig.Get()
+				qCfg.QueueSize = 10
+				c.QueueConfig = configoptional.Some(qCfg)
 				return c
 			}(),
 		},
@@ -101,7 +104,9 @@ func createTestCases() []testCase {
 			name: "don't use internal logger",
 			config: func() *Config {
 				cfg := createDefaultConfig().(*Config)
-				cfg.QueueConfig.QueueSize = 10
+				qCfg := *cfg.QueueConfig.Get()
+				qCfg.QueueSize = 10
+				cfg.QueueConfig = configoptional.Some(qCfg)
 				cfg.UseInternalLogger = false
 				return cfg
 			}(),
