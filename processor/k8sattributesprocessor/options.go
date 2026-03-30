@@ -4,6 +4,7 @@
 package k8sattributesprocessor // import "github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor"
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"time"

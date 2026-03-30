@@ -5,8 +5,8 @@ package k8sattributesprocessor // import "github.com/open-telemetry/opentelemetr
 
 import (
 	"context"
-	"errors"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -25,14 +25,12 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/pprofile"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	semconv "go.opentelemetry.io/collector/semconv/v1.5.0"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	conventions "go.opentelemetry.io/otel/semconv/v1.40.0"
-	semconv "go.opentelemetry.io/collector/semconv/v1.5.0"
 	"go.uber.org/zap"
 
-	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/kube"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/metadata"
 )
 
@@ -199,8 +197,8 @@ func (kp *kubernetesprocessor) processMetrics(ctx context.Context, md pmetric.Me
 func (kp *kubernetesprocessor) processLogs(ctx context.Context, ld plog.Logs) (plog.Logs, error) {
 	rl := ld.ResourceLogs()
 	for i := 0; i < rl.Len(); i++ {
-		kp.processResource(ctx, rl.At(i).Resource())
-		kp.processopsrampResources(ctx, rl.At(i).Resource(), "logs")
+		kp.processResource(ctx, rl.At(i).Resource(), "logs")
+		kp.processopsrampResources(ctx, rl.At(i).Resource())
 		kp.addOpsrampEventResourceAttributes(ctx, rl.At(i).Resource())
 		kp.processEventBody(rl.At(i))
 	}
@@ -219,7 +217,7 @@ func (kp *kubernetesprocessor) processProfiles(ctx context.Context, pd pprofile.
 }
 
 // processResource adds Pod metadata tags to resource based on pod association configuration
-func (kp *kubernetesprocessor) processResource(ctx context.Context, resource pcommon.Resource,  signalType string) {
+func (kp *kubernetesprocessor) processResource(ctx context.Context, resource pcommon.Resource, signalType string) {
 	resource.Attributes().Range(func(k string, v pcommon.Value) bool {
 		kp.logger.Debug("res-attributes", zap.Any(k, v.Str()))
 		return true

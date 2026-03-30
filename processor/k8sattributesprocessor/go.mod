@@ -4,12 +4,15 @@ go 1.25.0
 
 require (
 	github.com/distribution/reference v0.6.0
+	github.com/go-pkgz/expirable-cache/v3 v3.1.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.148.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.148.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig v0.148.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/xk8stest v0.148.0
+	github.com/redis/go-redis/v9 v9.18.0
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/collector/client v1.54.0
 	go.opentelemetry.io/collector/component v1.54.0
@@ -34,6 +37,7 @@ require (
 	go.opentelemetry.io/collector/receiver/otlpreceiver v0.148.0
 	go.opentelemetry.io/collector/receiver/receivertest v0.148.0
 	go.opentelemetry.io/collector/receiver/xreceiver v0.148.0
+	go.opentelemetry.io/collector/semconv v0.128.0
 	go.opentelemetry.io/otel v1.42.0
 	go.opentelemetry.io/otel/metric v1.42.0
 	go.opentelemetry.io/otel/sdk/metric v1.42.0
@@ -52,6 +56,7 @@ require (
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/docker/docker v28.5.2+incompatible // indirect
 	github.com/docker/go-connections v0.6.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
@@ -118,6 +123,7 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.67.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.67.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.42.0 // indirect
+	go.uber.org/atomic v1.11.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
@@ -128,7 +134,7 @@ require (
 	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260226221140-a57be14db171 // indirect
-	google.golang.org/grpc v1.79.2 // indirect
+	google.golang.org/grpc v1.79.3 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
