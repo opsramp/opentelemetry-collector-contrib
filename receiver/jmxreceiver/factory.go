@@ -32,8 +32,7 @@ func createDefaultConfig() component.Config {
 	scs.CollectionInterval = 10 * time.Second
 	scs.InitialDelay = 1 * time.Second
 	return &Config{
-		JARPath:          "/opt/opentelemetry-java-contrib-jmx-metrics.jar",
-		ControllerConfig: scs,
+		Applications: make(map[string]ApplicationConfig),
 		OTLPExporterConfig: otlpExporterConfig{
 			Endpoint: otlpEndpoint,
 			TimeoutSettings: exporterhelper.TimeoutConfig{
