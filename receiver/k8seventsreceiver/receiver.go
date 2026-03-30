@@ -192,8 +192,8 @@ func (kr *k8seventsReceiver) startWatchers() {
 
 // handleEvent processes a Kubernetes event and sends it to the logs consumer
 func (kr *k8seventsReceiver) handleEvent(ev *corev1.Event) {
-	if kr.allowEvent(ev) {
-		ld := k8sEventToLogData(kr.settings.Logger, ev, kr.settings.BuildInfo.Version)
+	if attributes, allow := kr.allowEvent(ev); allow {
+		ld := k8sEventToLogData(kr.settings.Logger, ev, kr.settings.BuildInfo.Version, attributes)
 
 		ctx := kr.obsrecv.StartLogsOp(kr.ctx)
 		consumerErr := kr.logsConsumer.ConsumeLogs(ctx, ld)
@@ -204,9 +204,7 @@ func (kr *k8seventsReceiver) handleEvent(ev *corev1.Event) {
 // Allow events with eventTimestamp(EventTime/LastTimestamp/FirstTimestamp)
 // not older than the receiver start time so that
 // event flood can be avoided upon startup.
-func (kr *k8seventsReceiver) allowEvent(ev *corev1.Event) bool {
-	eventTimestamp := k8sinventory.GetEventTimestamp(ev)
-	return !eventTimestamp.Before(kr.startTime)
+
 func (kr *k8seventsReceiver) allowEvent(ev *corev1.Event) (attributes []KeyValue, allow bool) {
 	eventTimestamp := getEventTimestamp(ev)
 	if eventTimestamp.Before(kr.startTime) {
@@ -261,4 +259,21 @@ func (kr *k8seventsReceiver) allowEvent(ev *corev1.Event) (attributes []KeyValue
 	}
 
 	return attributes, true
+}
+
+// Return the EventTimestamp based on the populated k8s event timestamps.
+// Priority: EventTime > LastTimestamp > FirstTimestamp.
+func getEventTimestamp(ev *corev1.Event) time.Time {
+	var eventTimestamp time.Time
+
+	switch {
+	case ev.EventTime.Time != time.Time{}:
+		eventTimestamp = ev.EventTime.Time
+	case ev.LastTimestamp.Time != time.Time{}:
+		eventTimestamp = ev.LastTimestamp.Time
+	case ev.FirstTimestamp.Time != time.Time{}:
+		eventTimestamp = ev.FirstTimestamp.Time
+	}
+
+	return eventTimestamp
 }

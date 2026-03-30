@@ -316,7 +316,7 @@ func TestAllowEventWithZeroTimestamp(t *testing.T) {
 	k8sEvent.LastTimestamp = v1.Time{}
 	k8sEvent.FirstTimestamp = v1.Time{}
 
-	shouldAllowEvent := recv.allowEvent(k8sEvent)
+	_, shouldAllowEvent := recv.allowEvent(k8sEvent)
 	assert.False(t, shouldAllowEvent)
 }
 

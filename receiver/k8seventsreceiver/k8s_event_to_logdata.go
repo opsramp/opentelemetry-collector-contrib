@@ -52,7 +52,7 @@ func k8sEventToLogData(logger *zap.Logger, ev *corev1.Event, version string, att
 		eventHost = ev.Source.Host
 	}
 	if eventHost != "" {
-		resourceAttrs.PutStr(string(semconv.K8SNodeNameKey), eventHost)
+		resourceAttrs.PutStr(string(conventions.K8SNodeNameKey), eventHost)
 	}
 	// Attributes related to the object causing the event.
 	resourceAttrs.PutStr("k8s.object.kind", ev.InvolvedObject.Kind)
@@ -62,7 +62,7 @@ func k8sEventToLogData(logger *zap.Logger, ev *corev1.Event, version string, att
 	resourceAttrs.PutStr("k8s.object.api_version", ev.InvolvedObject.APIVersion)
 	resourceAttrs.PutStr("k8s.object.resource_version", ev.InvolvedObject.ResourceVersion)
 	if ev.InvolvedObject.Namespace != "" {
-		resourceAttrs.PutStr(string(semconv.K8SNamespaceNameKey), ev.InvolvedObject.Namespace)
+		resourceAttrs.PutStr(string(conventions.K8SNamespaceNameKey), ev.InvolvedObject.Namespace)
 	}
 
 	//adding resource name and k8s.pod.name/ k8s.node.name/ k8s.daemonset.name etc accrording to kind
