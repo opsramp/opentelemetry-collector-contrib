@@ -43,6 +43,8 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric/pmetricotlp"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/collector/pdata/ptrace/ptraceotlp"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/net/http/httpproxy"
 	"golang.org/x/net/proxy"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
@@ -50,6 +52,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var (
@@ -77,7 +80,7 @@ type opsrampOTLPExporter struct {
 	userAgent   string
 	accessToken string
 
-	//logger *zap.Logger
+	logger *zap.Logger
 }
 
 // Crete new exporter and start it. The exporter will begin connecting, but
@@ -99,11 +102,9 @@ func newExporter(cfg component.Config, set exporter.Settings) (*opsrampOTLPExpor
 	userAgent := fmt.Sprintf("%s/%s (%s/%s)",
 		set.BuildInfo.Description, set.BuildInfo.Version, runtime.GOOS, runtime.GOARCH)
 
-	// REMOVE after testing...
-	//logger := initLogger()
-
+	logger := initLogger()
 	return &opsrampOTLPExporter{config: oCfg, settings: set.TelemetrySettings,
-		userAgent: userAgent, accessToken: accessToken}, nil
+		userAgent: userAgent, accessToken: accessToken, logger: logger}, nil
 }
 
 type Creds struct {
@@ -174,9 +175,19 @@ func getAuthToken(cfg SecuritySettings) (string, error) {
 		return "", err
 	}
 
+	if resp.StatusCode != http.StatusOK {
+		tokenRenewInProgress = false
+		return "", fmt.Errorf("AUTH_DIAG: OAuth token request failed with status=%d body=%s", resp.StatusCode, string(jsonResp))
+	}
+
 	if err := json.Unmarshal(jsonResp, &credentials); err != nil {
 		tokenRenewInProgress = false
-		return "", err
+		return "", fmt.Errorf("AUTH_DIAG: failed to unmarshal OAuth response: %w body=%s", err, string(jsonResp))
+	}
+
+	if credentials.AccessToken == "" {
+		tokenRenewInProgress = false
+		return "", fmt.Errorf("AUTH_DIAG: OAuth returned empty access_token, response body=%s", string(jsonResp))
 	}
 	tokenRenewInProgress = false
 	return credentials.AccessToken, nil
@@ -222,6 +233,30 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 	}
 	e.metadata = metadata.New(headers)
 	e.metadata.Set("Authorization", fmt.Sprintf("Bearer %s", e.accessToken))
+
+	// AUTH_DIAG: Log metadata keys being sent with gRPC calls
+	var mdKeys []string
+	for k, v := range e.metadata {
+		if k == "authorization" {
+			if len(v) > 0 && len(v[0]) > 15 {
+				mdKeys = append(mdKeys, fmt.Sprintf("%s=len(%d)", k, len(v[0])))
+			} else {
+				mdKeys = append(mdKeys, fmt.Sprintf("%s=EMPTY_OR_SHORT", k))
+			}
+		} else {
+			mdKeys = append(mdKeys, fmt.Sprintf("%s=%v", k, v))
+		}
+	}
+	if e.logger != nil {
+		e.logger.Debug("AUTH_DIAG: exporter start() metadata", zap.Strings("metadata_entries", mdKeys))
+	}
+	e.settings.Logger.Debug("AUTH_DIAG: exporter start() metadata", zap.Strings("metadata_entries", mdKeys))
+	e.settings.Logger.Debug("AUTH_DIAG: exporter endpoints",
+		zap.String("grpc_endpoint", e.config.ClientConfig.Endpoint),
+		zap.String("oauth_url", e.config.Security.OAuthServiceURL),
+		zap.Int("access_token_len", len(e.accessToken)),
+	)
+
 	e.callOptions = []grpc.CallOption{
 		grpc.MaxCallSendMsgSize(e.config.Security.OtelExporterSetting.GrpcMaxSendSize),
 		grpc.MaxCallRecvMsgSize(e.config.Security.OtelExporterSetting.GrpcMaxRecvSize),
@@ -347,13 +382,42 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 	// trying to get a new access token in case of expiration
 	if err != nil {
 		st := status.Convert(err)
+		e.settings.Logger.Warn("AUTH_DIAG: pushLogs Export failed",
+			zap.String("grpc_code", st.Code().String()),
+			zap.String("error", err.Error()),
+			zap.Int("metadata_len", e.metadata.Len()),
+			zap.Bool("has_tenantId", len(e.metadata.Get("tenantid")) > 0),
+			zap.String("tenantId_value", strings.Join(e.metadata.Get("tenantid"), ",")),
+			zap.Bool("has_authorization", len(e.metadata.Get("authorization")) > 0),
+			zap.Int("access_token_len", len(e.accessToken)),
+		)
+		if e.logger != nil {
+			e.logger.Warn("AUTH_DIAG: pushLogs Export failed",
+				zap.String("grpc_code", st.Code().String()),
+				zap.String("error", err.Error()),
+				zap.Int("metadata_len", e.metadata.Len()),
+				zap.Bool("has_tenantId", len(e.metadata.Get("tenantid")) > 0),
+				zap.String("tenantId_value", strings.Join(e.metadata.Get("tenantid"), ",")),
+				zap.Bool("has_authorization", len(e.metadata.Get("authorization")) > 0),
+				zap.Int("access_token_len", len(e.accessToken)),
+			)
+		}
 		if st.Code() == codes.Unauthenticated {
 			if err = e.updateExpiredToken(); err != nil {
+				e.settings.Logger.Error("AUTH_DIAG: token refresh failed", zap.Error(err))
 				return fmt.Errorf("couldn't retrieve new token instead of expired: %w", err)
 			}
+			e.settings.Logger.Debug("AUTH_DIAG: token refreshed, retrying Export",
+				zap.Int("new_token_len", len(e.accessToken)),
+			)
 
 			_, err = e.logExporter.Export(e.enhanceContext(context.Background()), req, e.callOptions...)
 			if err != nil {
+				e.settings.Logger.Error("AUTH_DIAG: retry Export also failed after token refresh",
+					zap.Error(err),
+					zap.String("tenantId_value", strings.Join(e.metadata.Get("tenantid"), ",")),
+					zap.Int("access_token_len", len(e.accessToken)),
+				)
 				return err
 			}
 		}
@@ -369,6 +433,11 @@ func (e *opsrampOTLPExporter) updateExpiredToken() error {
 	}
 	e.mut.Lock()
 	defer e.mut.Unlock()
+	e.settings.Logger.Debug("AUTH_DIAG: updateExpiredToken refreshed",
+		zap.Int("old_token_len", len(e.accessToken)),
+		zap.Int("new_token_len", len(accessToken)),
+		zap.Bool("token_changed", e.accessToken != accessToken),
+	)
 	e.accessToken = accessToken
 	// Always update the metadata when token is refreshed
 	e.metadata.Set("Authorization", fmt.Sprintf("Bearer %s", e.accessToken))
@@ -535,27 +604,35 @@ func getAuthTokenWithTlsDisabled(cfg SecuritySettings) (string, error) {
 		return "", err
 	}
 
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("AUTH_DIAG: OAuth (TLS disabled) token request failed with status=%d body=%s", resp.StatusCode, string(body))
+	}
+
 	if err := json.Unmarshal(body, &credentials); err != nil {
 		return "", err
+	}
+
+	if credentials.AccessToken == "" {
+		return "", fmt.Errorf("AUTH_DIAG: OAuth (TLS disabled) returned empty access_token, response body=%s", string(body))
 	}
 
 	return credentials.AccessToken, nil
 }
 
-//func initLogger() *zap.Logger {
-//	writer := &lumberjack.Logger{
-//		Filename:   "/var/log/opsramp/exporter-info.log", // or any path you prefer
-//		MaxSize:    10,                                   // megabytes
-//		MaxBackups: 5,                                    // number of old files to keep
-//		MaxAge:     30,                                   // days to keep
-//		Compress:   true,                                 // gzip
-//	}
-//
-//	core := zapcore.NewCore(
-//		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
-//		zapcore.AddSync(writer),
-//		zap.DebugLevel,
-//	)
-//
-//	return zap.New(core)
-//}
+func initLogger() *zap.Logger {
+	writer := &lumberjack.Logger{
+		Filename:   "/var/log/opsramp/exporter-info.log", // or any path you prefer
+		MaxSize:    10,                                   // megabytes
+		MaxBackups: 5,                                    // number of old files to keep
+		MaxAge:     30,                                   // days to keep
+		Compress:   true,                                 // gzip
+	}
+
+	core := zapcore.NewCore(
+		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+		zapcore.AddSync(writer),
+		zap.DebugLevel,
+	)
+
+	return zap.New(core)
+}
