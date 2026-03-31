@@ -298,19 +298,19 @@ func (e Correlation) asMap() map[string]any {
 	return result
 }
 
-// unmarshalEventXML will unmarshal EventXML from xml bytes.
+// UnmarshalEventXML will unmarshal EventXML from xml bytes.
 // Illegal XML 1.0 characters (e.g. U+0001 found in some Sysmon events) are
 // stripped before parsing so that a single malformed event does not halt the
 // entire receiver.
-func unmarshalEventXML(data []byte) (*EventXML, error) {
+func UnmarshalEventXML(data []byte) (*EventXML, error) {
 	sanitized := sanitizeXMLBytes(data)
-	var eventXML EventXML
+	var eventXML *EventXML
 	if err := xml.Unmarshal(sanitized, &eventXML); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal xml bytes into event: %w (%s)", err, string(sanitized))
 	}
 	// The sanitized bytes are only required for XML unmarshalling - the original data is preserved.
 	eventXML.Original = string(data)
-	return &eventXML, nil
+	return eventXML, nil
 }
 
 // sanitizeXMLBytes removes characters that are illegal in XML 1.0 documents.

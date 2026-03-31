@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/featuregate"
-	"go.uber.org/zap"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/fingerprint"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/metadata"
@@ -21,7 +20,7 @@ import (
 )
 
 func TestLoadNothing(t *testing.T) {
-	reloaded, err := Load(t.Context(), testutil.NewUnscopedMockPersister(), zap.NewNop())
+	reloaded, err := Load(t.Context(), testutil.NewUnscopedMockPersister())
 	assert.NoError(t, err)
 	assert.Equal(t, []*reader.Metadata{}, reloaded)
 }
@@ -37,7 +36,7 @@ func TestLoadErr(t *testing.T) {
 	_, err := Load(t.Context(),
 		testutil.NewErrPersister(map[string]error{
 			"knownFiles": assert.AnError,
-		}), zap.NewNop())
+		}))
 	assert.Error(t, err)
 }
 
@@ -107,7 +106,7 @@ func TestNopEncodingDifferentLogSizes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p := testutil.NewUnscopedMockPersister()
 			assert.NoError(t, Save(t.Context(), p, tc.rmds))
-			reloaded, err := Load(t.Context(), p, zap.NewNop())
+			reloaded, err := Load(t.Context(), p)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.rmds, reloaded)
 		})
@@ -132,7 +131,7 @@ func TestMigrateHeaderAttributes(t *testing.T) {
 			},
 		},
 	})
-	reloaded, err := Load(t.Context(), p, zap.NewNop())
+	reloaded, err := Load(t.Context(), p)
 	assert.NoError(t, err)
 	assert.Equal(t, []*reader.Metadata{
 		{
@@ -214,7 +213,7 @@ func TestProtobufEncodingDifferentLogSizes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p := testutil.NewUnscopedMockPersister()
 			require.NoError(t, Save(t.Context(), p, tc.rmds))
-			reloaded, err := Load(t.Context(), p, zap.NewNop())
+			reloaded, err := Load(t.Context(), p)
 			require.NoError(t, err)
 			require.Equal(t, tc.rmds, reloaded)
 		})
@@ -245,7 +244,7 @@ func TestCrossFormatCompatibility(t *testing.T) {
 
 		// Load with protobuf feature gate enabled (should fallback to JSON)
 		setProtobufEncoding(t, true)
-		reloaded, err := Load(t.Context(), p, zap.NewNop())
+		reloaded, err := Load(t.Context(), p)
 		require.NoError(t, err)
 		require.Equal(t, testData, reloaded)
 	})
@@ -259,7 +258,7 @@ func TestCrossFormatCompatibility(t *testing.T) {
 
 		// Load with feature gate disabled (should try protobuf first, succeed)
 		setProtobufEncoding(t, false)
-		reloaded, err := Load(t.Context(), p, zap.NewNop())
+		reloaded, err := Load(t.Context(), p)
 		require.NoError(t, err)
 		require.Equal(t, testData, reloaded)
 	})
@@ -285,7 +284,7 @@ func TestFeatureGateToggle(t *testing.T) {
 	require.NoError(t, Save(t.Context(), p, testData))
 
 	// Step 2: Load with JSON, verify
-	reloaded, err := Load(t.Context(), p, zap.NewNop())
+	reloaded, err := Load(t.Context(), p)
 	require.NoError(t, err)
 	require.Equal(t, testData, reloaded)
 
@@ -294,13 +293,13 @@ func TestFeatureGateToggle(t *testing.T) {
 	require.NoError(t, Save(t.Context(), p, testData))
 
 	// Step 4: Load with protobuf enabled, verify
-	reloaded, err = Load(t.Context(), p, zap.NewNop())
+	reloaded, err = Load(t.Context(), p)
 	require.NoError(t, err)
 	require.Equal(t, testData, reloaded)
 
 	// Step 5: Disable protobuf again
 	setProtobufEncoding(t, false)
-	reloaded, err = Load(t.Context(), p, zap.NewNop())
+	reloaded, err = Load(t.Context(), p)
 	require.NoError(t, err)
 	require.Equal(t, testData, reloaded)
 
@@ -308,7 +307,7 @@ func TestFeatureGateToggle(t *testing.T) {
 	require.NoError(t, Save(t.Context(), p, testData))
 
 	// Step 7: Load with JSON, verify still works
-	reloaded, err = Load(t.Context(), p, zap.NewNop())
+	reloaded, err = Load(t.Context(), p)
 	require.NoError(t, err)
 	require.Equal(t, testData, reloaded)
 }
@@ -330,7 +329,7 @@ func TestMigrateHeaderAttributesWithProtobuf(t *testing.T) {
 			},
 		},
 	})
-	reloaded, err := Load(t.Context(), p, zap.NewNop())
+	reloaded, err := Load(t.Context(), p)
 	require.NoError(t, err)
 	require.Equal(t, []*reader.Metadata{
 		{
@@ -371,7 +370,7 @@ func TestProtobufWithComplexMetadata(t *testing.T) {
 	p := testutil.NewUnscopedMockPersister()
 	require.NoError(t, Save(t.Context(), p, testData))
 
-	reloaded, err := Load(t.Context(), p, zap.NewNop())
+	reloaded, err := Load(t.Context(), p)
 	require.NoError(t, err)
 	require.Equal(t, testData, reloaded)
 

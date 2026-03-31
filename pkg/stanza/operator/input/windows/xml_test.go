@@ -572,7 +572,7 @@ func TestUnmarshalWithIllegalXMLChars(t *testing.T) {
     </EventData>
 </Event>`
 
-	event, err := unmarshalEventXML([]byte(xmlTemplate))
+	event, err := UnmarshalEventXML([]byte(xmlTemplate))
 	require.NoError(t, err)
 	require.Equal(t, "Microsoft-Windows-Sysmon/Operational", event.Channel)
 	require.Equal(t, uint64(12345), event.RecordID)
@@ -631,7 +631,7 @@ func TestUnmarshalWithCorrelation(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("testdata", "xmlWithCorrelation.xml"))
 	require.NoError(t, err)
 
-	event, err := unmarshalEventXML(data)
+	event, err := UnmarshalEventXML(data)
 	require.NoError(t, err)
 
 	activityIDGuid := "{11111111-1111-1111-1111-111111111111}"
@@ -788,7 +788,7 @@ func BenchmarkXMLUnmarshal_Baseline(b *testing.B) {
 // be minimal.
 func BenchmarkUnmarshalEventXML_CleanInput(b *testing.B) {
 	for b.Loop() {
-		_, _ = unmarshalEventXML(benchmarkXMLClean)
+		_, _ = UnmarshalEventXML(benchmarkXMLClean)
 	}
 }
 
@@ -796,7 +796,7 @@ func BenchmarkUnmarshalEventXML_CleanInput(b *testing.B) {
 // contains illegal XML 1.0 characters (as seen in some Sysmon events).
 func BenchmarkUnmarshalEventXML_DirtyInput(b *testing.B) {
 	for b.Loop() {
-		_, _ = unmarshalEventXML(benchmarkXMLDirty)
+		_, _ = UnmarshalEventXML(benchmarkXMLDirty)
 	}
 }
 
@@ -1098,7 +1098,7 @@ func TestUnmarshalAndFormatAnonymousEventData(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("testdata", "xmlWithAnonymousEventDataEntries.xml"))
 	require.NoError(t, err)
 
-	event, err := unmarshalEventXML(data)
+	event, err := UnmarshalEventXML(data)
 	require.NoError(t, err)
 
 	mapBody := formattedBody(event, EventDataFormatMap)
@@ -1122,7 +1122,7 @@ func TestUnmarshalAndFormatNamedEventData(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("testdata", "xmlSample.xml"))
 	require.NoError(t, err)
 
-	event, err := unmarshalEventXML(data)
+	event, err := UnmarshalEventXML(data)
 	require.NoError(t, err)
 
 	mapBody := formattedBody(event, EventDataFormatMap)

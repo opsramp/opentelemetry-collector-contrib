@@ -794,7 +794,7 @@ func TestMatcher(t *testing.T) {
 			})
 			require.NoError(t, err)
 
-			files, err := matcher.MatchFiles()
+			files, _, err := matcher.MatchFiles()
 			if tc.expectErr != "" {
 				assert.EqualError(t, err, tc.expectErr)
 			} else {

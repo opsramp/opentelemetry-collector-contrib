@@ -6,14 +6,13 @@ package matcher // import "github.com/open-telemetry/opentelemetry-collector-con
 import (
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"time"
 
-	"go.uber.org/multierr"
-
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/metadata"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/matcher/internal/filter"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/matcher/internal/finder"
+	"go.opentelemetry.io/collector/featuregate"
 )
 
 const (
@@ -21,44 +20,56 @@ const (
 	sortTypeTimestamp    = "timestamp"
 	sortTypeAlphabetical = "alphabetical"
 	sortTypeMtime        = "mtime"
-)
 
-const (
 	defaultOrderingCriteriaTopN = 1
 )
 
-type Criteria struct {
-	Include []string `mapstructure:"include,omitempty"`
-	Exclude []string `mapstructure:"exclude,omitempty"`
+var mtimeSortTypeFeatureGate = featuregate.GlobalRegistry().MustRegister(
+	"filelog.mtimeSortType",
+	featuregate.StageAlpha,
+	featuregate.WithRegisterDescription("When enabled, allows usage of `ordering_criteria.mode` = `mtime`."),
+	featuregate.WithRegisterReferenceURL("https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/27812"),
+)
 
-	// ExcludeOlderThan allows excluding files whose modification time is older
-	// than the specified age.
-	ExcludeOlderThan time.Duration    `mapstructure:"exclude_older_than"`
-	OrderingCriteria OrderingCriteria `mapstructure:"ordering_criteria,omitempty"`
-}
+type (
+	Criteria struct {
+		Include                   []string `mapstructure:"include,omitempty"`
+		Exclude                   []string `mapstructure:"exclude,omitempty"`
+		CapturePathSubstringRegex string   `mapstructure:"capture_path_substring_regex,omitempty"`
+		CapturedPathIncludeRegex  []string `mapstructure:"captured_path_include_regex,omitempty"`
+		CapturedPathExcludeRegex  []string `mapstructure:"captured_path_exclude_regex,omitempty"`
+		// ExcludeOlderThan allows excluding files whose modification time is older
+		// than the specified age.
+		ExcludeOlderThan time.Duration    `mapstructure:"exclude_older_than"`
+		OrderingCriteria OrderingCriteria `mapstructure:"ordering_criteria,omitempty"`
 
-type OrderingCriteria struct {
-	Regex   string `mapstructure:"regex,omitempty"`
-	TopN    int    `mapstructure:"top_n,omitempty"`
-	SortBy  []Sort `mapstructure:"sort_by,omitempty"`
-	GroupBy string `mapstructure:"group_by,omitempty"`
-}
+		RefreshInterval time.Duration `mapstructure:"refresh_interval,omitempty"`
+	}
 
-type Sort struct {
-	SortType  string `mapstructure:"sort_type,omitempty"`
-	RegexKey  string `mapstructure:"regex_key,omitempty"`
-	Ascending bool   `mapstructure:"ascending,omitempty"`
+	OrderingCriteria struct {
+		Regex  string `mapstructure:"regex,omitempty"`
+		TopN   int    `mapstructure:"top_n,omitempty"`
+		SortBy []Sort `mapstructure:"sort_by,omitempty"`
+	}
 
-	// Timestamp only
-	Layout   string `mapstructure:"layout,omitempty"`
-	Location string `mapstructure:"location,omitempty"`
-}
+	Sort struct {
+		SortType  string `mapstructure:"sort_type,omitempty"`
+		RegexKey  string `mapstructure:"regex_key,omitempty"`
+		Ascending bool   `mapstructure:"ascending,omitempty"`
+
+		// Timestamp only
+		Layout   string `mapstructure:"layout,omitempty"`
+		Location string `mapstructure:"location,omitempty"`
+
+		// mtime only
+		MaxTime time.Duration `mapstructure:"max_time,omitempty"`
+	}
+)
 
 func New(c Criteria) (*Matcher, error) {
 	if len(c.Include) == 0 {
-		return nil, errors.New("'include' must be specified")
+		return nil, fmt.Errorf("'include' must be specified")
 	}
-
 	if err := finder.Validate(c.Include); err != nil {
 		return nil, fmt.Errorf("include: %w", err)
 	}
@@ -66,21 +77,23 @@ func New(c Criteria) (*Matcher, error) {
 		return nil, fmt.Errorf("exclude: %w", err)
 	}
 
+	if c.RefreshInterval.Seconds() == 0 {
+		c.RefreshInterval = time.Minute
+	}
+
 	m := &Matcher{
-		include: c.Include,
-		exclude: c.Exclude,
+		include:         c.Include,
+		exclude:         c.Exclude,
+		refreshInterval: c.RefreshInterval,
+		cache:           newCache(),
 	}
 
 	if c.ExcludeOlderThan != 0 {
 		m.filterOpts = append(m.filterOpts, filter.ExcludeOlderThan(c.ExcludeOlderThan))
 	}
 
-	if c.OrderingCriteria.GroupBy != "" {
-		r, err := regexp.Compile(c.OrderingCriteria.GroupBy)
-		if err != nil {
-			return nil, fmt.Errorf("compile group_by regex: %w", err)
-		}
-		m.groupBy = r
+	if c.CapturePathSubstringRegex != "" && (len(c.CapturedPathIncludeRegex) != 0 || len(c.CapturedPathExcludeRegex) != 0) {
+		m.filterOpts = append(m.filterOpts, filter.FilterRegex(c.CapturePathSubstringRegex, c.CapturedPathIncludeRegex, c.CapturedPathExcludeRegex))
 	}
 
 	if len(c.OrderingCriteria.SortBy) == 0 {
@@ -88,20 +101,22 @@ func New(c Criteria) (*Matcher, error) {
 	}
 
 	if c.OrderingCriteria.TopN < 0 {
-		return nil, errors.New("'top_n' must be a positive integer")
+		return nil, fmt.Errorf("'top_n' must be a positive integer")
 	}
 
 	if c.OrderingCriteria.TopN == 0 {
 		c.OrderingCriteria.TopN = defaultOrderingCriteriaTopN
 	}
+	m.topN = c.OrderingCriteria.TopN
 
+	var regex *regexp.Regexp
 	if orderingCriteriaNeedsRegex(c.OrderingCriteria.SortBy) {
 		if c.OrderingCriteria.Regex == "" {
-			return nil, errors.New("'regex' must be specified when 'sort_by' is specified")
+			return nil, fmt.Errorf("'regex' must be specified when 'sort_by' is specified")
 		}
 
 		var err error
-		regex, err := regexp.Compile(c.OrderingCriteria.Regex)
+		regex, err = regexp.Compile(c.OrderingCriteria.Regex)
 		if err != nil {
 			return nil, fmt.Errorf("compile regex: %w", err)
 		}
@@ -130,12 +145,13 @@ func New(c Criteria) (*Matcher, error) {
 			}
 			m.filterOpts = append(m.filterOpts, f)
 		case sortTypeMtime:
-			if !metadata.FilelogMtimeSortTypeFeatureGate.IsEnabled() {
-				return nil, fmt.Errorf("the %q feature gate must be enabled to use %q sort type", metadata.FilelogMtimeSortTypeFeatureGate.ID(), sortTypeMtime)
+			if !mtimeSortTypeFeatureGate.IsEnabled() {
+				return nil, fmt.Errorf("the %q feature gate must be enabled to use %q sort type", mtimeSortTypeFeatureGate.ID(), sortTypeMtime)
 			}
-			m.filterOpts = append(m.filterOpts, filter.SortMtime(sc.Ascending))
+			m.maxAge = sc.MaxTime
+			m.filterOpts = append(m.filterOpts, filter.SortMtime(sc.Ascending, sc.MaxTime))
 		default:
-			return nil, errors.New("'sort_type' must be specified")
+			return nil, fmt.Errorf("'sort_type' must be specified")
 		}
 	}
 
@@ -155,47 +171,90 @@ func orderingCriteriaNeedsRegex(sorts []Sort) bool {
 	return false
 }
 
+// cache stores the matched files and last updated time. No mutex is used since all calls are sequential
+type cache struct {
+	lastUpdatedTime time.Time
+
+	files []string
+}
+
+func newCache() *cache {
+	return &cache{}
+}
+
+func (c *cache) getFiles() []string {
+	return c.files
+}
+
+func (c *cache) update(files []string) {
+	c.files = files
+	c.lastUpdatedTime = time.Now()
+}
+
+func (c *cache) getLastUpdatedTime() time.Time {
+	return c.lastUpdatedTime
+}
+
 type Matcher struct {
 	include    []string
 	exclude    []string
 	regex      *regexp.Regexp
+	topN       int
 	filterOpts []filter.Option
-	groupBy    *regexp.Regexp
+
+	refreshInterval time.Duration
+	maxAge          time.Duration
+	cache           *cache
 }
 
 // MatchFiles gets a list of paths given an array of glob patterns to include and exclude
-func (m Matcher) MatchFiles() ([]string, error) {
-	var errs error
-	files, err := finder.FindFiles(m.include, m.exclude)
-	errs = multierr.Append(errs, err)
+func (m Matcher) MatchFiles() ([]string, []string, error) {
+	var err, errs error
+
+	files := m.cache.getFiles()
+	if time.Since(m.cache.getLastUpdatedTime()) < m.refreshInterval {
+		return files, []string{}, nil
+	}
+
+	files, oldFiles, err := finder.FindFiles(m.include, m.exclude, m.maxAge)
+	if err != nil {
+		errs = errors.Join(errs, err)
+	}
+
 	if len(files) == 0 {
-		return files, multierr.Append(errors.New("no files match the configured criteria"), errs)
+		return files, oldFiles, errors.Join(fmt.Errorf("no files match the configured criteria"), errs)
 	}
+
 	if len(m.filterOpts) == 0 {
-		return files, errs
+		return files, oldFiles, errs
 	}
 
-	groups := make(map[string][]string)
-	if m.groupBy != nil {
-		for _, f := range files {
-			matches := m.groupBy.FindStringSubmatch(f)
-			if len(matches) > 1 {
-				group := matches[1]
-				groups[group] = append(groups[group], f)
-			}
-		}
-	} else {
-		groups["1"] = files
+	files, err = filter.Filter(files, m.regex, m.filterOpts...)
+	if len(files) == 0 {
+		return files, oldFiles, errors.Join(err, errs)
 	}
 
-	var result []string
-	for _, groupedFiles := range groups {
-		groupResult, err := filter.Filter(groupedFiles, m.regex, m.filterOpts...)
-		if len(groupResult) == 0 {
-			return groupResult, multierr.Append(err, errs)
-		}
-		result = append(result, groupResult...)
+	if len(files) <= m.topN {
+		m.cache.update(files)
+		return files, oldFiles, errors.Join(err, errs)
 	}
 
-	return result, errs
+	//topN will be 0 in case of orderingCriteria.sortBy is not provided.
+	//This means filteropts has only filtering and no sorting. In this case we should not filter topN files.
+	if m.topN > 0 && os.Getenv("OTEL_K8S_AGENT") == "TRUE" {
+		files = files[:m.topN]
+	}
+
+	m.cache.update(files)
+	return files, oldFiles, errors.Join(err, errs)
+}
+
+func (m Matcher) IsFileIncludedAndTracked(path string, oldfiles []string) bool {
+	oldFileMap := make(map[string]struct{}, len(oldfiles))
+	for _, f := range oldfiles {
+		oldFileMap[f] = struct{}{}
+	}
+
+	_, ok := oldFileMap[path]
+	return ok
 }
