@@ -21,6 +21,8 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sinventory"
 )
 
+type mode string
+
 const (
 	PullMode      mode = "pull"
 	WatchMode     mode = "watch"
@@ -31,11 +33,10 @@ const (
 	defaultResourceVersion                   = "1"
 )
 
-
 var modeMap = map[k8sinventory.Mode]bool{
-	k8sinventory.PullMode:  true,
-	k8sinventory.WatchMode: true,
-	ListWatchMode: true,
+	k8sinventory.PullMode:      true,
+	k8sinventory.WatchMode:     true,
+	k8sinventory.ListWatchMode: true,
 }
 
 type ErrorMode string
@@ -47,20 +48,20 @@ const (
 )
 
 type K8sObjectsConfig struct {
-	Name             string               `mapstructure:"name"`
-	Group            string               `mapstructure:"group"`
-	Namespaces       []string             `mapstructure:"namespaces"`
+	Name              string               `mapstructure:"name"`
+	Group             string               `mapstructure:"group"`
+	Namespaces        []string             `mapstructure:"namespaces"`
 	ExcludeNamespaces []filter.Config      `mapstructure:"exclude_namespaces"`
-	Mode             k8sinventory.Mode                 `mapstructure:"mode"`
-	LabelSelector    string               `mapstructure:"label_selector"`
-	FieldSelector    string               `mapstructure:"field_selector"`
-	Interval         time.Duration        `mapstructure:"interval"`
-	ResourceVersion  string               `mapstructure:"resource_version"`
-	ExcludeWatchType []apiWatch.EventType `mapstructure:"exclude_watch_type"`
-	PageLimit        int                  `mapstructure:"page_limit"`
-	PageInterval     time.Duration        `mapstructure:"page_interval"`
-	exclude          map[apiWatch.EventType]bool
-	gvr              *schema.GroupVersionResource
+	Mode              k8sinventory.Mode    `mapstructure:"mode"`
+	LabelSelector     string               `mapstructure:"label_selector"`
+	FieldSelector     string               `mapstructure:"field_selector"`
+	Interval          time.Duration        `mapstructure:"interval"`
+	ResourceVersion   string               `mapstructure:"resource_version"`
+	ExcludeWatchType  []apiWatch.EventType `mapstructure:"exclude_watch_type"`
+	PageLimit         int                  `mapstructure:"page_limit"`
+	PageInterval      time.Duration        `mapstructure:"page_interval"`
+	exclude           map[apiWatch.EventType]bool
+	gvr               *schema.GroupVersionResource
 }
 
 type Config struct {

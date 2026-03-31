@@ -10,8 +10,9 @@ import (
 type Mode string
 
 const (
-	PullMode  Mode = "pull"
-	WatchMode Mode = "watch"
+	PullMode      Mode = "pull"
+	WatchMode     Mode = "watch"
+	ListWatchMode Mode = "list-watch"
 
 	DefaultMode = PullMode
 )
