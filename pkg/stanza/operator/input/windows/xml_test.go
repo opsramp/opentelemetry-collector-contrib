@@ -577,7 +577,7 @@ func TestUnmarshalSystemEventWithRenderingInfo(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("testdata", "xmlRenderingInfoSystem.xml"))
 	require.NoError(t, err)
 
-	event, err := unmarshalEventXML(data)
+	event, err := UnmarshalEventXML(data)
 	require.NoError(t, err)
 
 	require.NotNil(t, event.RenderingInfo)
@@ -612,7 +612,7 @@ func TestUnmarshalSecurityEventWithRenderingInfo(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("testdata", "xmlRenderingInfoSecurity.xml"))
 	require.NoError(t, err)
 
-	event, err := unmarshalEventXML(data)
+	event, err := UnmarshalEventXML(data)
 	require.NoError(t, err)
 
 	require.NotNil(t, event.RenderingInfo)
@@ -1051,7 +1051,7 @@ func TestUnmarshalWithProcessingErrorData(t *testing.T) {
 	</ProcessingErrorData>
 </Event>`
 
-	event, err := unmarshalEventXML([]byte(xmlStr))
+	event, err := UnmarshalEventXML([]byte(xmlStr))
 	require.NoError(t, err)
 	require.NotNil(t, event.ProcessingErrorData)
 	require.Equal(t, uint32(15005), event.ProcessingErrorData.ErrorCode)
@@ -1109,7 +1109,7 @@ func TestUnmarshalWithDebugData(t *testing.T) {
 	</DebugData>
 </Event>`
 
-	event, err := unmarshalEventXML([]byte(xmlStr))
+	event, err := UnmarshalEventXML([]byte(xmlStr))
 	require.NoError(t, err)
 	require.NotNil(t, event.DebugData)
 	require.Equal(t, uint32(42), event.DebugData.SequenceNumber)
@@ -1145,7 +1145,7 @@ func TestUnmarshalWithBinaryEventData(t *testing.T) {
 	<BinaryEventData>AABBCCDD</BinaryEventData>
 </Event>`
 
-	event, err := unmarshalEventXML([]byte(xmlStr))
+	event, err := UnmarshalEventXML([]byte(xmlStr))
 	require.NoError(t, err)
 	require.Equal(t, "AABBCCDD", event.BinaryEventData)
 }
