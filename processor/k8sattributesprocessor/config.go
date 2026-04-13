@@ -122,32 +122,36 @@ func (cfg *Config) Validate() error {
 		}
 	}
 
-	if cfg.RedisConfig.RedisHost == "" || cfg.RedisConfig.RedisPort == "" || cfg.RedisConfig.RedisPass == "" {
-		return fmt.Errorf("redis host, redis port and redis pass is mandatory")
-	}
+	// Redis is optional: when RedisHost is empty the processor falls back to
+	// pure K8s API lookups (no OpsRamp resourceUUID enrichment via Redis).
+	if cfg.RedisConfig.RedisHost != "" {
+		if cfg.RedisConfig.RedisPort == "" || cfg.RedisConfig.RedisPass == "" {
+			return fmt.Errorf("redis port and redis pass are required when redis host is set")
+		}
 
-	if cfg.RedisConfig.ClusterName == "" || cfg.RedisConfig.ClusterUid == "" {
-		return fmt.Errorf("cluster name and cluster uid is mandatory")
-	}
+		if cfg.RedisConfig.ClusterName == "" || cfg.RedisConfig.ClusterUid == "" {
+			return fmt.Errorf("cluster name and cluster uid is mandatory")
+		}
 
-	if cfg.RedisConfig.NodeName == "" {
-		return fmt.Errorf("node name is mandatory")
-	}
+		if cfg.RedisConfig.NodeName == "" {
+			return fmt.Errorf("node name is mandatory")
+		}
 
-	if cfg.RedisConfig.PrimaryCacheEvictionTime == 0 {
-		cfg.RedisConfig.PrimaryCacheEvictionTime = cache.DEFAULT_PRIMARY_CACHE_EXPIRATION_INTERVAL
-	}
+		if cfg.RedisConfig.PrimaryCacheEvictionTime == 0 {
+			cfg.RedisConfig.PrimaryCacheEvictionTime = cache.DEFAULT_PRIMARY_CACHE_EXPIRATION_INTERVAL
+		}
 
-	if cfg.RedisConfig.SecondaryCacheEvictionTime == 0 {
-		cfg.RedisConfig.SecondaryCacheEvictionTime = cache.DEFAULT_SECONDARY_CACHE_EXPIRATION_INTERVAL
-	}
+		if cfg.RedisConfig.SecondaryCacheEvictionTime == 0 {
+			cfg.RedisConfig.SecondaryCacheEvictionTime = cache.DEFAULT_SECONDARY_CACHE_EXPIRATION_INTERVAL
+		}
 
-	if cfg.RedisConfig.PrimaryCacheSize == 0 {
-		cfg.RedisConfig.PrimaryCacheSize = cache.DEFAULT_PRIMARY_CACHE_SIZE
-	}
+		if cfg.RedisConfig.PrimaryCacheSize == 0 {
+			cfg.RedisConfig.PrimaryCacheSize = cache.DEFAULT_PRIMARY_CACHE_SIZE
+		}
 
-	if cfg.RedisConfig.SecondaryCacheSize == 0 {
-		cfg.RedisConfig.SecondaryCacheSize = cache.DEFAULT_SECONDARY_CACHE_SIZE
+		if cfg.RedisConfig.SecondaryCacheSize == 0 {
+			cfg.RedisConfig.SecondaryCacheSize = cache.DEFAULT_SECONDARY_CACHE_SIZE
+		}
 	}
 
 	return nil
