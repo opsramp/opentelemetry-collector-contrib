@@ -59,26 +59,36 @@ func (sp *scrubbingProcessor) applyMasking(ld plog.Logs) {
 					rExp := regexp.MustCompile(setting.Regexp)
 
 					// masking in record attributes
-					if (setting.AttributeType == RecordAttribute || setting.AttributeType == EmptyAttribute) && setting.AttributeKey == "" {
+					if (isRecordAttributeType(setting.AttributeType) || setting.AttributeType == EmptyAttribute) && setting.AttributeKey == "" {
 						log.Attributes().Range(func(key string, attributeValue pcommon.Value) bool {
 							attributeValue.SetStr(rExp.ReplaceAllString(attributeValue.AsString(), setting.Placeholder))
 							return true
 						})
-					} else if (setting.AttributeType == RecordAttribute || setting.AttributeType == EmptyAttribute) && setting.AttributeKey != "" {
+					} else if (isRecordAttributeType(setting.AttributeType) || setting.AttributeType == EmptyAttribute) && setting.AttributeKey != "" {
 						if attributeValue, ok := log.Attributes().Get(setting.AttributeKey); ok {
 							attributeValue.SetStr(rExp.ReplaceAllString(attributeValue.AsString(), setting.Placeholder))
 						}
 					}
 
-					// masking body
-					switch log.Body().Type() {
-					case pcommon.ValueTypeMap:
-						log.Body().Map().Range(func(k string, v pcommon.Value) bool {
-							v.SetStr(rExp.ReplaceAllString(v.AsString(), setting.Placeholder))
-							return true
-						})
-					case pcommon.ValueTypeStr:
-						log.Body().SetStr(rExp.ReplaceAllString(log.Body().AsString(), setting.Placeholder))
+					// masking body — only when attribute type is body or empty
+					if setting.AttributeType == BodyAttribute || setting.AttributeType == EmptyAttribute {
+						switch log.Body().Type() {
+						case pcommon.ValueTypeMap:
+							if setting.AttributeKey != "" {
+								// Only mask the specific key in the body map
+								if v, ok := log.Body().Map().Get(setting.AttributeKey); ok {
+									v.SetStr(rExp.ReplaceAllString(v.AsString(), setting.Placeholder))
+								}
+							} else {
+								// Mask all values in the body map
+								log.Body().Map().Range(func(k string, v pcommon.Value) bool {
+									v.SetStr(rExp.ReplaceAllString(v.AsString(), setting.Placeholder))
+									return true
+								})
+							}
+						case pcommon.ValueTypeStr:
+							log.Body().SetStr(rExp.ReplaceAllString(log.Body().AsString(), setting.Placeholder))
+						}
 					}
 				}
 			}

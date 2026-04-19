@@ -12,7 +12,15 @@ const (
 	EmptyAttribute    AttributeType = ""
 	ResourceAttribute               = "resource"
 	RecordAttribute                 = "record"
+	BodyAttribute                   = "body"
 )
+
+// isRecordAttributeType returns true when the attribute type targets
+// log record attributes. It accepts both the legacy "record" value
+// and the OTEL-standard "attributes" value used in user configs.
+func isRecordAttributeType(at AttributeType) bool {
+	return at == RecordAttribute || at == "attributes"
+}
 
 type MaskingSettings struct {
 	AttributeType AttributeType `mapstructure:"attribute_type"`
