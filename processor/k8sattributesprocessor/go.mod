@@ -7,10 +7,12 @@ require (
 	github.com/go-pkgz/expirable-cache/v3 v3.1.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.149.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.149.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig v0.149.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/xk8stest v0.149.0
+	github.com/redis/go-redis/v9 v9.18.0
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/collector/client v1.55.0
 	go.opentelemetry.io/collector/component v1.55.0
@@ -35,6 +37,7 @@ require (
 	go.opentelemetry.io/collector/receiver/otlpreceiver v0.149.0
 	go.opentelemetry.io/collector/receiver/receivertest v0.149.0
 	go.opentelemetry.io/collector/receiver/xreceiver v0.149.0
+	go.opentelemetry.io/collector/semconv v0.128.0
 	go.opentelemetry.io/otel v1.42.0
 	go.opentelemetry.io/otel/metric v1.42.0
 	go.opentelemetry.io/otel/sdk/metric v1.42.0

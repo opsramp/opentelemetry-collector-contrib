@@ -10,9 +10,9 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/internal/metadata"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/matcher/internal/filter"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/matcher/internal/finder"
-	"go.opentelemetry.io/collector/featuregate"
 )
 
 const (
@@ -24,12 +24,8 @@ const (
 	defaultOrderingCriteriaTopN = 1
 )
 
-var mtimeSortTypeFeatureGate = featuregate.GlobalRegistry().MustRegister(
-	"filelog.mtimeSortType",
-	featuregate.StageAlpha,
-	featuregate.WithRegisterDescription("When enabled, allows usage of `ordering_criteria.mode` = `mtime`."),
-	featuregate.WithRegisterReferenceURL("https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/27812"),
-)
+// Use the gate registered in generated_feature_gates.go to avoid a duplicate-registration panic.
+var mtimeSortTypeFeatureGate = metadata.FilelogMtimeSortTypeFeatureGate
 
 type (
 	Criteria struct {

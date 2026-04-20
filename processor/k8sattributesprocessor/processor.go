@@ -12,12 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/cache"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/kube"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/moid"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/redis"
-
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componentstatus"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -31,7 +25,12 @@ import (
 	conventions "go.opentelemetry.io/otel/semconv/v1.40.0"
 	"go.uber.org/zap"
 
+	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/cache"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/kube"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/metadata"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/moid"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/redis"
 )
 
 const (
@@ -116,25 +115,20 @@ func (kp *kubernetesprocessor) Start(_ context.Context, host component.Host) err
 	}
 
 	kp.logger.Info("ops k8s attr processor start", zap.Any("redisHost", kp.redisConfig.RedisHost),
-		zap.Any("redisPort", kp.redisConfig.RedisPort),
-		zap.Any("redisPass", kp.redisConfig.RedisPass))
+		zap.Any("redisPort", kp.redisConfig.RedisPort))
 
-	// cache := lru.GetInstance(kp.redisConfig.LruCacheSize, kp.redisConfig.LruExpirationTime)
+	// Redis enrichment is optional: only initialize when a Redis host is configured.
+	// When RedisHost is empty the processor runs in K8s API-only mode.
+	if kp.redisConfig.RedisHost != "" {
+		cacheObj := cache.GetCacheInstance(kp.redisConfig.PrimaryCacheSize, kp.redisConfig.PrimaryCacheEvictionTime, kp.redisConfig.SecondaryCacheSize, kp.redisConfig.SecondaryCacheEvictionTime)
 
-	// if cache == nil {
-	// 	kp.logger.Error("Failed to initilize the cache with GetInstance()")
-	// 	return nil
-	// }
+		if cacheObj == nil {
+			kp.logger.Error("Failed to initialize the cache with GetInstance()")
+			return fmt.Errorf("failed to initialize cache")
+		}
 
-	// kp.redisClient = redis.NewClient(kp.logger, cache, kp.redisConfig.RedisHost, kp.redisConfig.RedisPort, kp.redisConfig.RedisPass)
-	cacheObj := cache.GetCacheInstance(kp.redisConfig.PrimaryCacheSize, kp.redisConfig.PrimaryCacheEvictionTime, kp.redisConfig.SecondaryCacheSize, kp.redisConfig.SecondaryCacheEvictionTime)
-
-	if cacheObj == nil {
-		kp.logger.Error("Failed to initilize the cache with GetInstance()")
-		return fmt.Errorf("failed to initialize cache")
+		kp.redisClient = redis.NewClient(kp.logger, cacheObj, kp.redisConfig.RedisHost, kp.redisConfig.RedisPort, kp.redisConfig.RedisPass, kp.redisConfig.PrimaryCacheEvictionTime, kp.redisConfig.SecondaryCacheEvictionTime)
 	}
-
-	kp.redisClient = redis.NewClient(kp.logger, cacheObj, kp.redisConfig.RedisHost, kp.redisConfig.RedisPort, kp.redisConfig.RedisPass, kp.redisConfig.PrimaryCacheEvictionTime, kp.redisConfig.SecondaryCacheEvictionTime)
 
 	// This might have been set by an option already
 	if kp.kc == nil {
@@ -185,7 +179,9 @@ func (kp *kubernetesprocessor) processMetrics(ctx context.Context, md pmetric.Me
 	rm := md.ResourceMetrics()
 	for i := 0; i < rm.Len(); i++ {
 		kp.processResource(ctx, rm.At(i).Resource(), "metrics")
-		kp.processopsrampResources(ctx, rm.At(i).Resource())
+		if kp.redisClient != nil {
+			kp.processopsrampResources(ctx, rm.At(i).Resource())
+		}
 	}
 
 	kp.filterOnlyOpsrampMetrics(md)
@@ -198,7 +194,9 @@ func (kp *kubernetesprocessor) processLogs(ctx context.Context, ld plog.Logs) (p
 	rl := ld.ResourceLogs()
 	for i := 0; i < rl.Len(); i++ {
 		kp.processResource(ctx, rl.At(i).Resource(), "logs")
-		kp.processopsrampResources(ctx, rl.At(i).Resource())
+		if kp.redisClient != nil {
+			kp.processopsrampResources(ctx, rl.At(i).Resource())
+		}
 		kp.addOpsrampEventResourceAttributes(ctx, rl.At(i).Resource())
 		kp.processEventBody(rl.At(i))
 	}
@@ -598,7 +596,6 @@ func (kp *kubernetesprocessor) processEventBody(resourceLogs plog.ResourceLogs) 
 }
 
 func (kp *kubernetesprocessor) addOpsrampEventResourceAttributes(ctx context.Context, resource pcommon.Resource) {
-
 	if val, found := resource.Attributes().Get("type"); found && val.Str() == "event" {
 		resource.Attributes().PutStr("source", "kubernetes")
 
@@ -606,7 +603,7 @@ func (kp *kubernetesprocessor) addOpsrampEventResourceAttributes(ctx context.Con
 		if val, found := resource.Attributes().Get(semconv.AttributeK8SNodeName); found {
 			host = val.Str()
 			if host != "" {
-				//overwrite node opsramp resource UUID in resourceUUID
+				// overwrite node opsramp resource UUID in resourceUUID
 				resource.Attributes().PutStr("k8s.node.name", host)
 
 				if resourceUuid := kp.GetResourceUuidUsingResourceNodeMoid(ctx, resource); resourceUuid != "" {
@@ -619,7 +616,6 @@ func (kp *kubernetesprocessor) addOpsrampEventResourceAttributes(ctx context.Con
 
 // processResource adds Pod metadata tags to resource based on pod association configuration
 func (kp *kubernetesprocessor) processopsrampResources(ctx context.Context, resource pcommon.Resource) {
-
 	var resourceUuid string
 
 	for _, addon := range kp.addons {
@@ -692,10 +688,8 @@ func (kp *kubernetesprocessor) processopsrampResources(ctx context.Context, reso
 			}
 		} else {
 			kp.logger.Debug("type resource attribute not found hence not adding uuid/resourceuuid")
-
 		}
 	}
-
 }
 
 // processTraceResource adds Pod metadata tags to resource based on pod association configuration
@@ -793,10 +787,10 @@ func (op *kubernetesprocessor) GetResourceUuidUsingPodMoid(ctx context.Context, 
 
 	if namespace, found = resource.Attributes().Get("k8s.namespace.name"); !found {
 		op.logger.Debug("k8s.namespace.name not found in resource attributes hence not able to get resource uuid using pod moid")
-		return
+		return resourceUuid
 	}
 	if podname, found = resource.Attributes().Get("k8s.pod.name"); !found {
-		return
+		return resourceUuid
 	}
 
 	podMoid := moid.NewMoid(op.redisConfig.ClusterName).WithNamespaceName(namespace.Str()).WithPodName(podname.Str())
@@ -833,7 +827,7 @@ func (op *kubernetesprocessor) GetResourceUuidUsingPodMoid(ctx context.Context, 
 		resourceUuid = op.redisClient.GetUuidValueInString(ctx, podMoidKey)
 		op.logger.Debug("redis KV ", zap.Any("key", podMoidKey), zap.Any("value", resourceUuid))
 	}
-	return
+	return resourceUuid
 }
 
 func (op *kubernetesprocessor) GetResourceUuidUsingWorkloadMoid(ctx context.Context, resource pcommon.Resource, workloadName pcommon.Value, workloadType string) (resourceUuid string) {
@@ -842,28 +836,29 @@ func (op *kubernetesprocessor) GetResourceUuidUsingWorkloadMoid(ctx context.Cont
 
 	if namespace, found = resource.Attributes().Get("k8s.namespace.name"); !found {
 		op.logger.Debug("k8s.namespace.name not found in resource attributes hence not able to get resource uuid using workload moid")
-		return
+		return resourceUuid
 	}
 
 	workloadMoid := moid.NewMoid(op.redisConfig.ClusterName).WithNamespaceName(namespace.Str())
 
 	var workloadMoidKey string
-	if workloadType == "deployment" {
+	switch workloadType {
+	case "deployment":
 		workloadMoidKey = workloadMoid.WithDeploymentName(workloadName.Str()).DeploymentMoid()
-	} else if workloadType == "replicaset" {
+	case "replicaset":
 		workloadMoidKey = workloadMoid.WithReplicasetName(workloadName.Str()).ReplicaSetMoid()
-	} else if workloadType == "daemonset" {
+	case "daemonset":
 		workloadMoidKey = workloadMoid.WithDaemonsetName(workloadName.Str()).DaemonSetMoid()
-	} else if workloadType == "statefulset" {
+	case "statefulset":
 		workloadMoidKey = workloadMoid.WithStatefulsetName(workloadName.Str()).StatefulSetMoid()
-	}
-	if workloadMoidKey == "" {
-		return
+	default:
+		op.logger.Debug("unsupported workload type for workload moid", zap.Any("workloadType", workloadType))
+		return resourceUuid
 	}
 
 	resourceUuid = op.redisClient.GetUuidValueInString(ctx, workloadMoidKey)
 	op.logger.Debug("redis KV ", zap.Any("key", workloadMoidKey), zap.Any("value", resourceUuid))
-	return
+	return resourceUuid
 }
 
 func (op *kubernetesprocessor) GetResourceUuidUsingResourceNodeMoid(ctx context.Context, resource pcommon.Resource) (resourceUuid string) {
@@ -871,23 +866,22 @@ func (op *kubernetesprocessor) GetResourceUuidUsingResourceNodeMoid(ctx context.
 	var found bool
 	if nodename, found = resource.Attributes().Get("k8s.node.name"); !found {
 		op.logger.Debug("k8s.node.name not found in resource attributes hence not able to get resource uuid using node moid")
-		return
+		return resourceUuid
 	}
 
 	nodeMoidKey := moid.NewMoid(op.redisConfig.ClusterName).WithNodeName(nodename.Str()).NodeMoid()
 
 	resourceUuid = op.redisClient.GetUuidValueInString(ctx, nodeMoidKey)
 	op.logger.Debug("redis KV ", zap.Any("key", nodeMoidKey), zap.Any("value", resourceUuid))
-	return
+	return resourceUuid
 }
 
 func (op *kubernetesprocessor) GetResourceUuidUsingCurrentNodeMoid(ctx context.Context, resource pcommon.Resource) (resourceUuid string) {
-
 	nodeMoidKey := moid.NewMoid(op.redisConfig.ClusterName).WithNodeName(op.redisConfig.NodeName).NodeMoid()
 
 	resourceUuid = op.redisClient.GetUuidValueInString(ctx, nodeMoidKey)
 	op.logger.Debug("redis KV ", zap.Any("key", nodeMoidKey), zap.Any("value", resourceUuid))
-	return
+	return resourceUuid
 }
 
 func (op *kubernetesprocessor) GetResourceUuidUsingNamespaceMoid(ctx context.Context, resource pcommon.Resource) (resourceUuid string) {
@@ -896,21 +890,20 @@ func (op *kubernetesprocessor) GetResourceUuidUsingNamespaceMoid(ctx context.Con
 
 	if namespace, found = resource.Attributes().Get("k8s.namespace.name"); !found {
 		op.logger.Debug("k8s.namespace.name not found in resource attributes hence not able to get resource uuid using namespace moid")
-		return
+		return resourceUuid
 	}
 
 	namespaceMoidKey := moid.NewMoid(op.redisConfig.ClusterName).WithNamespaceName(namespace.Str()).NamespaceMoid()
 
 	resourceUuid = op.redisClient.GetUuidValueInString(ctx, namespaceMoidKey)
 	op.logger.Debug("redis KV ", zap.Any("key", namespaceMoidKey), zap.Any("value", resourceUuid))
-	return
+	return resourceUuid
 }
 
 func (op *kubernetesprocessor) GetResourceUuidUsingClusterMoid(ctx context.Context, resource pcommon.Resource) (resourceUuid string) {
-
 	nodeMoidKey := moid.NewMoid(op.redisConfig.ClusterName).WithClusterUuid(op.redisConfig.ClusterUid).ClusterMoid()
 
 	resourceUuid = op.redisClient.GetUuidValueInString(ctx, nodeMoidKey)
 	op.logger.Debug("redis KV ", zap.Any("key", nodeMoidKey), zap.Any("value", resourceUuid))
-	return
+	return resourceUuid
 }

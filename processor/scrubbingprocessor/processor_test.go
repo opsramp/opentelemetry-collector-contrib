@@ -56,14 +56,15 @@ func TestApplyMasking(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ld := generateTestEntry(tt.input)
-			processor := &scrubbingProcessor{config: &Config{
+			processor, err := newScrubbingProcessorProcessor(zap.NewNop(), &Config{
 				Masking: []MaskingSettings{
 					{
 						Regexp:      tt.regexp,
 						Placeholder: tt.placeholder,
 					},
 				},
-			}}
+			})
+			assert.NoError(t, err)
 			processor.applyMasking(ld)
 			assert.Equal(t, ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0).Body().AsString(), tt.expected)
 		})
@@ -209,10 +210,8 @@ func Test_applyMasking(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sp := &scrubbingProcessor{
-				logger: tt.fields.logger,
-				config: tt.fields.config,
-			}
+			sp, err := newScrubbingProcessorProcessor(tt.fields.logger, tt.fields.config)
+			assert.NoError(t, err)
 			sp.applyMasking(tt.args.ld)
 
 			expected := tt.args.ld.ResourceLogs().At(0).Resource().Attributes()
@@ -226,6 +225,128 @@ func Test_applyMasking(t *testing.T) {
 			assert.EqualValues(t, tt.args.ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0).Body().AsString(), tt.expected.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0).Body().AsString())
 		})
 	}
+}
+
+func TestMaskingModes(t *testing.T) {
+	tests := []struct {
+		name        string
+		mode        MaskingMode
+		regexp      string
+		input       string
+		placeholder string
+		expected    string
+	}{
+		{
+			name:        "replace mode (default)",
+			mode:        ModeReplace,
+			regexp:      `\d{3}-\d{2}-\d{4}`,
+			input:       "SSN is 123-45-6789",
+			placeholder: "***-**-****",
+			expected:    "SSN is ***-**-****",
+		},
+		{
+			name:        "partial mode - credit card middle",
+			mode:        ModePartial,
+			regexp:      `\d{4}(-\d{4}-\d{4}-)\d{4}`,
+			input:       "card 1234-5678-9012-3456 ok",
+			placeholder: "-****-****-",
+			expected:    "card 1234-****-****-3456 ok",
+		},
+		{
+			name:        "partial mode - no capture group falls through",
+			mode:        ModePartial,
+			regexp:      `\d+`,
+			input:       "no capture group here 123",
+			placeholder: "****",
+			expected:    "no capture group here 123",
+		},
+		{
+			name:        "hash mode",
+			mode:        ModeHash,
+			regexp:      `secret-[a-z0-9]+`,
+			input:       "token is secret-abc123 here",
+			placeholder: "ignored",
+			expected:    "", // will verify length/format instead
+		},
+		{
+			name:        "redact_key mode on string body",
+			mode:        ModeRedactKey,
+			regexp:      `password`,
+			input:       "my password is hidden",
+			placeholder: "[REDACTED]",
+			expected:    "[REDACTED]",
+		},
+		{
+			name:        "empty mode defaults to replace",
+			mode:        "",
+			regexp:      `secret`,
+			input:       "this is a secret value",
+			placeholder: "****",
+			expected:    "this is a **** value",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ld := generateTestEntry(tt.input)
+			sp, err := newScrubbingProcessorProcessor(zap.NewNop(), &Config{
+				Masking: []MaskingSettings{
+					{
+						Regexp:      tt.regexp,
+						Placeholder: tt.placeholder,
+						Mode:        tt.mode,
+					},
+				},
+			})
+			assert.NoError(t, err)
+			sp.applyMasking(ld)
+
+			result := ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0).Body().AsString()
+			if tt.mode == ModeHash {
+				// Hash output is deterministic but not predictable in test table;
+				// just verify the original secret text is gone and result changed.
+				assert.NotContains(t, result, "secret-abc123")
+				assert.NotEqual(t, tt.input, result)
+			} else {
+				assert.Equal(t, tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestRedactKeyMode_MapBody(t *testing.T) {
+	ld := plog.NewLogs()
+	rl := ld.ResourceLogs().AppendEmpty()
+	sl := rl.ScopeLogs().AppendEmpty()
+	lr := sl.LogRecords().AppendEmpty()
+	lr.Body().SetEmptyMap()
+	lr.Body().Map().PutStr("username", "admin")
+	lr.Body().Map().PutStr("password", "s3cret!")
+	lr.Body().Map().PutStr("action", "login")
+
+	sp, err := newScrubbingProcessorProcessor(zap.NewNop(), &Config{
+		Masking: []MaskingSettings{
+			{
+				Regexp:      `s3cret`,
+				Placeholder: "[REDACTED]",
+				Mode:        ModeRedactKey,
+			},
+		},
+	})
+	assert.NoError(t, err)
+	sp.applyMasking(ld)
+
+	body := lr.Body().Map()
+	// "password" key should be removed because its value matched
+	_, ok := body.Get("password")
+	assert.False(t, ok, "password key should have been removed")
+	// other keys remain
+	v, ok := body.Get("username")
+	assert.True(t, ok)
+	assert.Equal(t, "admin", v.AsString())
+	v, ok = body.Get("action")
+	assert.True(t, ok)
+	assert.Equal(t, "login", v.AsString())
 }
 
 func generateLogs(body string, resourceAttributes, recordAttributes map[string]string) plog.Logs {

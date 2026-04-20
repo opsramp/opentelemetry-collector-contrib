@@ -143,6 +143,6 @@ func (s *debugExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 	if err != nil {
 		return err
 	}
-	s.logger.Info(string(buf))
+	s.logger.Debug(string(buf))
 	return nil
 }
