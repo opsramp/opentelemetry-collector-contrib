@@ -1,0 +1,86 @@
+{
+    "version": "1.0",
+    "description": "Skill activation triggers for GitHub Copilot in the opentelemetry-collector-contrib workspace.",
+    "skills": {
+        "k8s-events-receiver": {
+            "type": "domain",
+            "enforcement": "block",
+            "priority": "high",
+            "description": "MANDATORY for editing, debugging, or enhancing the k8s_events receiver — event filtering, event-to-log conversion, informer lifecycle, config, tests",
+            "promptTriggers": {
+                "keywords": [
+                    "k8s events receiver",
+                    "k8s_events",
+                    "k8seventsreceiver",
+                    "kubernetes events",
+                    "k8s event to log",
+                    "k8sEventToLogData",
+                    "allowEvent",
+                    "event filter",
+                    "event receiver",
+                    "k8s events config",
+                    "IncludeInvolvedObject",
+                    "event_types",
+                    "EventType",
+                    "k8s event severity",
+                    "k8s event attribute"
+                ],
+                "intentPatterns": [
+                    "(edit|fix|debug|add|enhance|modify|change).*?(k8s.?events?|kubernetes.?events?|event.?receiver)",
+                    "(add|new|modify).*?(filter|attribute|config|field).*?(k8s.?event|event.?receiver)",
+                    "(bug|issue|problem|error).*?(k8s.?event|event.?receiver|allowEvent|handleEvent)",
+                    "(convert|map|transform).*?(k8s.?event|event).*?(log|plog|logdata)",
+                    "(watch|informer|namespace).*?(k8s.?event|event.?receiver)"
+                ]
+            },
+            "fileTriggers": {
+                "pathPatterns": [
+                    "receiver/k8seventsreceiver/**/*.go",
+                    "receiver/k8seventsreceiver/**/*.yaml",
+                    "receiver/k8seventsreceiver/**/*.md"
+                ],
+                "contentPatterns": [
+                    "k8seventsreceiver",
+                    "k8sEventToLogData",
+                    "allowEvent",
+                    "handleEvent",
+                    "startWatch",
+                    "getEventTimestamp",
+                    "IncludeInvolvedObject",
+                    "EventTypeNormal",
+                    "EventTypeWarning",
+                    "corev1\\.Event"
+                ]
+            },
+            "blockedPatterns": {
+                "description": "Patterns forbidden in k8s events receiver code",
+                "patterns": [
+                    {
+                        "pattern": "ConsumeLogs.*without.*ObsReport",
+                        "description": "ConsumeLogs without ObsReport bracketing",
+                        "message": "FORBIDDEN: Every ConsumeLogs call must be wrapped in obsrecv.StartLogsOp/EndLogsOp"
+                    }
+                ]
+            },
+            "rules": {
+                "absolutelyForbidden": [
+                    "Editing generated files (generated_status.go, generated_component_test.go, generated_package_test.go) manually",
+                    "ConsumeLogs without ObsReport Start/End bracketing",
+                    "Bypassing the startTime guard in allowEvent",
+                    "Using real K8s clients in unit tests instead of fake.NewSimpleClientset()",
+                    "Hardcoding severity numbers instead of using severityMap",
+                    "Blocking operations inside informer Add/Update handlers"
+                ],
+                "required": [
+                    "ObsReport StartLogsOp/EndLogsOp wrapping every ConsumeLogs call",
+                    "fake.NewSimpleClientset() for all test K8s clients",
+                    "Event timestamp priority: EventTime > LastTimestamp > FirstTimestamp",
+                    "Stopper channel tracking in stopperChanList and close in Shutdown()",
+                    "Update totalLogAttributes/totalResourceAttributes capacity constants when adding attributes",
+                    "Changelog entry (.chloggen/*.yaml) for any behavior change",
+                    "goleak.VerifyTestMain for goroutine leak detection"
+                ]
+            }
+        }
+    }
+}
