@@ -29,6 +29,7 @@ import (
 
 type k8seventsReceiver struct {
 	config          *Config
+	excludedNSSet   map[string]struct{} // built from config.ExcludeNamespaces at startup; nil when no exclusions
 	settings        receiver.Settings
 	logsConsumer    consumer.Logs
 	stopperChanList []chan struct{}
@@ -58,12 +59,18 @@ func newReceiver(
 		return nil, err
 	}
 
+	var excludedNSSet map[string]struct{}
+	if len(config.ExcludeNamespaces) > 0 {
+		excludedNSSet = toSet(config.ExcludeNamespaces)
+	}
+
 	return &k8seventsReceiver{
-		settings:     set,
-		config:       config,
-		logsConsumer: consumer,
-		startTime:    time.Now(),
-		obsrecv:      obsrecv,
+		settings:      set,
+		config:        config,
+		excludedNSSet: excludedNSSet,
+		logsConsumer:  consumer,
+		startTime:     time.Now(),
+		obsrecv:       obsrecv,
 	}, nil
 }
 
@@ -132,6 +139,32 @@ func (kr *k8seventsReceiver) Shutdown(context.Context) error {
 	return nil
 }
 
+// toSet converts a string slice into a set (map[string]struct{}) for O(1) lookups.
+func toSet(items []string) map[string]struct{} {
+	s := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		s[item] = struct{}{}
+	}
+	return s
+}
+
+// computeNamespaceFilter returns namespaces with excludeNamespaces removed (set difference).
+// Returns the filtered list; len == 0 means all namespaces excluded (caller returns early).
+// Returns namespaces unchanged when either input is empty.
+func computeNamespaceFilter(namespaces, excludeNamespaces []string) []string {
+	if len(namespaces) == 0 || len(excludeNamespaces) == 0 {
+		return namespaces
+	}
+	excluded := toSet(excludeNamespaces)
+	var filtered []string
+	for _, ns := range namespaces {
+		if _, skip := excluded[ns]; !skip {
+			filtered = append(filtered, ns)
+		}
+	}
+	return filtered // nil when all namespaces excluded
+}
+
 // startWatchers creates and starts the k8sinventory watch observer
 func (kr *k8seventsReceiver) startWatchers() {
 	// Events GVR (GroupVersionResource)
@@ -142,6 +175,18 @@ func (kr *k8seventsReceiver) startWatchers() {
 	}
 
 	namespaces := kr.config.Namespaces
+
+	// Rule 4: when both Namespaces and ExcludeNamespaces are non-empty,
+	// compute set difference to minimize K8s API watch connections.
+	// See also allowEvent() for Rule 3 (exclude gate for all-namespace watch path).
+	if len(namespaces) > 0 && len(kr.config.ExcludeNamespaces) > 0 {
+		namespaces = computeNamespaceFilter(namespaces, kr.config.ExcludeNamespaces)
+		if len(namespaces) == 0 {
+			kr.settings.Logger.Warn("all namespaces excluded by exclude_namespaces filter — receiver will not collect any events")
+			return
+		}
+	}
+
 	if len(namespaces) == 0 {
 		namespaces = []string{""} // Empty string means all namespaces
 	}
@@ -223,6 +268,14 @@ func (kr *k8seventsReceiver) allowEvent(ev *corev1.Event) (attributes []KeyValue
 		if !found {
 			return attributes, false
 		}
+	}
+
+	// ExcludeNamespaces gate: drops events from excluded namespaces.
+	// Rule 3: primary filter for all-namespace watch path (Namespaces was empty).
+	// Rule 4: no-op — excluded namespaces are pre-filtered in startWatchers().
+	// excludedNSSet is built once in startWatchers(); nil map lookup is safe in Go.
+	if _, excluded := kr.excludedNSSet[ev.InvolvedObject.Namespace]; excluded {
+		return attributes, false
 	}
 
 	existsInSlice := func(key string, slice []ReasonProperties) ([]KeyValue, bool) {

@@ -35,7 +35,8 @@ func TestLoadConfig(t *testing.T) {
 		{
 			id: component.NewIDWithName(metadata.Type, "all_settings"),
 			expected: &Config{
-				Namespaces: []string{"default", "my_namespace"},
+				Namespaces:        []string{"default", "my_namespace"},
+				ExcludeNamespaces: []string{"kube-system"},
 				APIConfig: k8sconfig.APIConfig{
 					AuthType: k8sconfig.AuthTypeServiceAccount,
 				},

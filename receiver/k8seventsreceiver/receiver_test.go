@@ -354,3 +354,140 @@ func TestStartWatchersMultipleNamespaces(t *testing.T) {
 	assert.GreaterOrEqual(t, watcherCount, 1)
 	require.NoError(t, r.Shutdown(t.Context()))
 }
+
+func TestComputeNamespaceFilter(t *testing.T) {
+	tests := []struct {
+		name              string
+		namespaces        []string
+		excludeNamespaces []string
+		want              []string
+	}{
+		{
+			name:              "set difference removes excluded namespace",
+			namespaces:        []string{"prod", "staging", "kube-system"},
+			excludeNamespaces: []string{"kube-system"},
+			want:              []string{"prod", "staging"},
+		},
+		{
+			name:              "exclude not in list — no effect",
+			namespaces:        []string{"prod"},
+			excludeNamespaces: []string{"kube-system"},
+			want:              []string{"prod"},
+		},
+		{
+			name:              "all excluded — returns nil (watch nothing)",
+			namespaces:        []string{"kube-system"},
+			excludeNamespaces: []string{"kube-system"},
+			want:              nil,
+		},
+		{
+			name:              "empty namespaces — passthrough (Rule 3 path)",
+			namespaces:        []string{},
+			excludeNamespaces: []string{"kube-system"},
+			want:              []string{},
+		},
+		{
+			name:              "empty excludes — passthrough",
+			namespaces:        []string{"prod"},
+			excludeNamespaces: []string{},
+			want:              []string{"prod"},
+		},
+		{
+			name:              "multiple exclusions",
+			namespaces:        []string{"prod", "staging", "kube-system", "monitoring"},
+			excludeNamespaces: []string{"kube-system", "monitoring"},
+			want:              []string{"prod", "staging"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := computeNamespaceFilter(tt.namespaces, tt.excludeNamespaces)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestAllowEventExcludeNamespaces(t *testing.T) {
+	tests := []struct {
+		name              string
+		excludeNamespaces []string
+		eventNamespace    string
+		clusterScoped     bool // forces InvolvedObject.Namespace to "" (cluster-scoped events)
+		wantAllow         bool
+	}{
+		{
+			name:      "empty ExcludeNamespaces — gate is no-op",
+			wantAllow: true,
+		},
+		{
+			name:              "exclude gate drops matching namespace",
+			excludeNamespaces: []string{"kube-system"},
+			eventNamespace:    "kube-system",
+			wantAllow:         false,
+		},
+		{
+			name:              "exclude gate allows non-matching namespace",
+			excludeNamespaces: []string{"kube-system"},
+			eventNamespace:    "prod",
+			wantAllow:         true,
+		},
+		{
+			name:              "empty ExcludeNamespaces slice — no gate fires",
+			excludeNamespaces: []string{},
+			eventNamespace:    "kube-system",
+			wantAllow:         true,
+		},
+		{
+			name:              "multiple exclusions — matching",
+			excludeNamespaces: []string{"kube-system", "monitoring"},
+			eventNamespace:    "monitoring",
+			wantAllow:         false,
+		},
+		{
+			name:              "multiple exclusions — non-matching",
+			excludeNamespaces: []string{"kube-system", "monitoring"},
+			eventNamespace:    "prod",
+			wantAllow:         true,
+		},
+		{
+			name:              "cluster-scoped event (empty namespace) — not in exclusion list → allowed",
+			excludeNamespaces: []string{"kube-system"},
+			clusterScoped:     true,
+			wantAllow:         true,
+		},
+		{
+			name:              "cluster-scoped event (empty namespace) — empty-string exclusion → dropped",
+			excludeNamespaces: []string{""},
+			clusterScoped:     true,
+			wantAllow:         false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rCfg := createDefaultConfig().(*Config)
+			rCfg.ExcludeNamespaces = tt.excludeNamespaces
+			rCfg.makeClient = func(k8sconfig.APIConfig) (k8s.Interface, error) {
+				return fake.NewClientset(), nil
+			}
+			scheme := runtime.NewScheme()
+			_ = corev1.AddToScheme(scheme)
+			rCfg.makeDynamicClient = func(k8sconfig.APIConfig) (dynamic.Interface, error) {
+				return dynamicfake.NewSimpleDynamicClient(scheme), nil
+			}
+			r, err := newReceiver(receivertest.NewNopSettings(metadata.Type), rCfg, consumertest.NewNop())
+			require.NoError(t, err)
+			recv := r.(*k8seventsReceiver)
+			ev := getEvent("Normal")
+			if tt.clusterScoped {
+				ev.InvolvedObject.Namespace = ""
+				ev.Namespace = ""
+			} else if tt.eventNamespace != "" {
+				ev.InvolvedObject.Namespace = tt.eventNamespace
+				ev.Namespace = tt.eventNamespace
+			}
+			_, allow := recv.allowEvent(ev)
+			assert.Equal(t, tt.wantAllow, allow, "test: %s", tt.name)
+		})
+	}
+}
+

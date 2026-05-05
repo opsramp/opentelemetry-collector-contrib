@@ -26,7 +26,11 @@ type Config struct {
 
 	// List of ‘namespaces’ to collect events from.
 	Namespaces []string `mapstructure:"namespaces"`
-
+	// List of namespaces to exclude from event collection.
+	// When Namespaces is empty (watch all), events from these namespaces are dropped.
+	// When Namespaces is non-empty, these are removed from the watch list (set difference).
+	// Empty or nil means no exclusions.
+	ExcludeNamespaces []string `mapstructure:"exclude_namespaces"`
 	// List of ‘eventtypes’ to filter.
 	EventTypes []EventType `mapstructure:"event_types,omitempty"`
 
