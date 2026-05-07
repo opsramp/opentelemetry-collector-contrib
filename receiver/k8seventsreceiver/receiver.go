@@ -28,9 +28,10 @@ import (
 )
 
 type k8seventsReceiver struct {
-	config          *Config
-	excludedNSSet   map[string]struct{} // built from config.ExcludeNamespaces at startup; nil when no exclusions
-	settings        receiver.Settings
+	config             *Config
+	excludedNSSet      map[string]struct{}            // built from config.ExcludeNamespaces at startup; nil when no exclusions
+	excludedReasonsSet map[string]map[string]struct{} // kind → excluded reason names; nil when no exclusions
+	settings           receiver.Settings
 	logsConsumer    consumer.Logs
 	stopperChanList []chan struct{}
 	startTime       time.Time
@@ -64,13 +65,24 @@ func newReceiver(
 		excludedNSSet = toSet(config.ExcludeNamespaces)
 	}
 
+	var excludedReasonsSet map[string]map[string]struct{}
+	for kind, prop := range config.IncludeInvolvedObject {
+		if len(prop.ExcludeReasons) > 0 {
+			if excludedReasonsSet == nil {
+				excludedReasonsSet = make(map[string]map[string]struct{})
+			}
+			excludedReasonsSet[kind] = toReasonNameSet(prop.ExcludeReasons)
+		}
+	}
+
 	return &k8seventsReceiver{
-		settings:      set,
-		config:        config,
-		excludedNSSet: excludedNSSet,
-		logsConsumer:  consumer,
-		startTime:     time.Now(),
-		obsrecv:       obsrecv,
+		settings:           set,
+		config:             config,
+		excludedNSSet:      excludedNSSet,
+		excludedReasonsSet: excludedReasonsSet,
+		logsConsumer:       consumer,
+		startTime:          time.Now(),
+		obsrecv:            obsrecv,
 	}, nil
 }
 
@@ -144,6 +156,17 @@ func toSet(items []string) map[string]struct{} {
 	s := make(map[string]struct{}, len(items))
 	for _, item := range items {
 		s[item] = struct{}{}
+	}
+	return s
+}
+
+// toReasonNameSet builds an O(1) lookup set from a slice of ReasonProperties.
+// Only the Name field is used; Attributes are ignored.
+// Used for building exclude_reasons filter sets at startup.
+func toReasonNameSet(reasons []ReasonProperties) map[string]struct{} {
+	s := make(map[string]struct{}, len(reasons))
+	for _, r := range reasons {
+		s[r.Name] = struct{}{}
 	}
 	return s
 }
@@ -288,26 +311,29 @@ func (kr *k8seventsReceiver) allowEvent(ev *corev1.Event) (attributes []KeyValue
 	}
 
 	if len(kr.config.IncludeInvolvedObject) != 0 {
-		if prop, exists := kr.config.IncludeInvolvedObject[ev.InvolvedObject.Kind]; !exists {
-			if prop, exists := kr.config.IncludeInvolvedObject["Other"]; !exists {
+		resolvedKind := ev.InvolvedObject.Kind
+		prop, exists := kr.config.IncludeInvolvedObject[resolvedKind]
+		if !exists {
+			resolvedKind = "Other"
+			prop, exists = kr.config.IncludeInvolvedObject["Other"]
+		}
+		if !exists {
+			return attributes, false
+		}
+
+		if len(prop.IncludeReasons) != 0 {
+			if reasonAttributes, exists := existsInSlice(ev.Reason, prop.IncludeReasons); !exists {
 				return attributes, false
 			} else {
-				if len(prop.IncludeReasons) != 0 {
-					if reasonAttributes, exists := existsInSlice(ev.Reason, prop.IncludeReasons); !exists {
-						return attributes, false
-					} else {
-						attributes = reasonAttributes
-					}
-				}
+				attributes = reasonAttributes
 			}
-		} else {
-			if len(prop.IncludeReasons) != 0 {
-				if reasonAttributes, exists := existsInSlice(ev.Reason, prop.IncludeReasons); !exists {
-					return attributes, false
-				} else {
-					attributes = reasonAttributes
-				}
-			}
+		}
+
+		// ExcludeReasons gate: drop event if reason is in exclude set for the resolved kind.
+		// Exclude takes precedence over include (checked after include passes).
+		// excludedReasonsSet is built once in newReceiver(); nil map lookup is safe in Go.
+		if _, excluded := kr.excludedReasonsSet[resolvedKind][ev.Reason]; excluded {
+			return attributes, false
 		}
 	}
 

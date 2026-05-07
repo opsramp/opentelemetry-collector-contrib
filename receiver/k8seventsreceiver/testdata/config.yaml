@@ -2,3 +2,14 @@ k8s_events:
 k8s_events/all_settings:
   namespaces: [ default, my_namespace ]
   exclude_namespaces: [ kube-system ]
+k8s_events/exclude_reasons:
+  namespaces: [ default ]
+  include_involved_objects:
+    Pod:
+      include_reasons:
+        - name: Failed
+      exclude_reasons:
+        - name: SomeNoisyReason
+    Node:
+      exclude_reasons:
+        - name: NodeHasSufficientDisk
