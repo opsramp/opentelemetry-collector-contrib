@@ -42,6 +42,24 @@ func TestLoadConfig(t *testing.T) {
 				},
 			},
 		},
+		{
+			id: component.NewIDWithName(metadata.Type, "exclude_reasons"),
+			expected: &Config{
+				Namespaces: []string{"default"},
+				IncludeInvolvedObject: map[string]InvolvedObjectProperties{
+					"Pod": {
+						IncludeReasons: []ReasonProperties{{Name: "Failed"}},
+						ExcludeReasons: []ReasonProperties{{Name: "SomeNoisyReason"}},
+					},
+					"Node": {
+						ExcludeReasons: []ReasonProperties{{Name: "NodeHasSufficientDisk"}},
+					},
+				},
+				APIConfig: k8sconfig.APIConfig{
+					AuthType: k8sconfig.AuthTypeServiceAccount,
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

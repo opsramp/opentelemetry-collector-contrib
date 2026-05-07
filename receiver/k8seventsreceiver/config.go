@@ -47,6 +47,10 @@ type Config struct {
 type InvolvedObjectProperties struct {
 	// Include only the specified reasons. If its empty, list events of all reasons.
 	IncludeReasons []ReasonProperties `mapstructure:"include_reasons,omitempty"`
+	// Exclude events with the specified reasons. Takes precedence over include_reasons.
+	// If empty or absent, no events are excluded.
+	// Note: Only the Name field of each entry is used for matching; Attributes are ignored.
+	ExcludeReasons []ReasonProperties `mapstructure:"exclude_reasons,omitempty"`
 
 	//Can be enhanced to take in object names with reg ex etc.
 }

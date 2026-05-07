@@ -491,3 +491,111 @@ func TestAllowEventExcludeNamespaces(t *testing.T) {
 	}
 }
 
+// TestAllowEventExcludeReasons validates exclude_reasons filtering in allowEvent().
+func TestAllowEventExcludeReasons(t *testing.T) {
+	makeRecv := func(cfg map[string]InvolvedObjectProperties) *k8seventsReceiver {
+		rCfg := createDefaultConfig().(*Config)
+		rCfg.IncludeInvolvedObject = cfg
+		rCfg.makeClient = func(k8sconfig.APIConfig) (k8s.Interface, error) {
+			return fake.NewClientset(), nil
+		}
+		scheme := runtime.NewScheme()
+		_ = corev1.AddToScheme(scheme)
+		rCfg.makeDynamicClient = func(k8sconfig.APIConfig) (dynamic.Interface, error) {
+			return dynamicfake.NewSimpleDynamicClient(scheme), nil
+		}
+		r, err := newReceiver(receivertest.NewNopSettings(metadata.Type), rCfg, consumertest.NewNop())
+		require.NoError(t, err)
+		recv := r.(*k8seventsReceiver)
+		recv.startTime = time.Time{} // allow all timestamps
+		return recv
+	}
+
+	makeEvent := func(kind, reason string) *corev1.Event {
+		ev := getEvent("Normal")
+		ev.InvolvedObject.Kind = kind
+		ev.Reason = reason
+		return ev
+	}
+
+	tests := []struct {
+		name   string
+		cfg    map[string]InvolvedObjectProperties
+		ev     *corev1.Event
+		wantOK bool
+	}{
+		// T1.3a: reason in exclude_reasons → dropped
+		{
+			name: "T1.3a exclude drops event",
+			cfg: map[string]InvolvedObjectProperties{
+				"Pod": {ExcludeReasons: []ReasonProperties{{Name: "SomeNoisyReason"}}},
+			},
+			ev:     makeEvent("Pod", "SomeNoisyReason"),
+			wantOK: false,
+		},
+		// T1.3b: exclude_reasons absent → allowed
+		{
+			name: "T1.3b absent exclude allows event",
+			cfg: map[string]InvolvedObjectProperties{
+				"Pod": {},
+			},
+			ev:     makeEvent("Pod", "AnyReason"),
+			wantOK: true,
+		},
+		// T1.3c: same reason in include+exclude → exclude wins
+		{
+			name: "T1.3c include+exclude overlap: exclude wins",
+			cfg: map[string]InvolvedObjectProperties{
+				"Pod": {
+					IncludeReasons: []ReasonProperties{{Name: "SharedReason"}},
+					ExcludeReasons: []ReasonProperties{{Name: "SharedReason"}},
+				},
+			},
+			ev:     makeEvent("Pod", "SharedReason"),
+			wantOK: false,
+		},
+		// T1.3d: Other fallback exclusion applies to unmatched kind
+		{
+			name: "T1.3d Other fallback: excluded reason dropped",
+			cfg: map[string]InvolvedObjectProperties{
+				"Other": {ExcludeReasons: []ReasonProperties{{Name: "CRDNoise"}}},
+			},
+			ev:     makeEvent("StatefulSet", "CRDNoise"),
+			wantOK: false,
+		},
+		{
+			name: "T1.3d Other fallback: non-excluded reason passes",
+			cfg: map[string]InvolvedObjectProperties{
+				"Other": {ExcludeReasons: []ReasonProperties{{Name: "CRDNoise"}}},
+			},
+			ev:     makeEvent("StatefulSet", "SomeOtherReason"),
+			wantOK: true,
+		},
+		// T1.3e: exclude without include → collect all except excluded
+		{
+			name: "T1.3e exclude-only: excluded reason dropped",
+			cfg: map[string]InvolvedObjectProperties{
+				"Node": {ExcludeReasons: []ReasonProperties{{Name: "NodeHasSufficientDisk"}}},
+			},
+			ev:     makeEvent("Node", "NodeHasSufficientDisk"),
+			wantOK: false,
+		},
+		{
+			name: "T1.3e exclude-only: non-excluded reason allowed",
+			cfg: map[string]InvolvedObjectProperties{
+				"Node": {ExcludeReasons: []ReasonProperties{{Name: "NodeHasSufficientDisk"}}},
+			},
+			ev:     makeEvent("Node", "NodeNotReady"),
+			wantOK: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recv := makeRecv(tt.cfg)
+			_, got := recv.allowEvent(tt.ev)
+			assert.Equal(t, tt.wantOK, got)
+		})
+	}
+}
+
