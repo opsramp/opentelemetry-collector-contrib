@@ -250,7 +250,7 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 					return (&net.Dialer{}).DialContext(ctx, "tcp", dialAddr)
 				}
 
-				e.settings.Logger.Info("opsrampotlp dialing via proxy",
+				e.settings.Logger.Debug("opsrampotlp dialing via proxy",
 					zap.String("dial_addr", dialAddr),
 					zap.String("proxy_host", proxyURL.Host),
 					zap.String("lookup_target", targetURL.String()),
@@ -314,7 +314,7 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 					return nil, fmt.Errorf("failed to read CONNECT response: %w", err)
 				}
 
-				e.settings.Logger.Info("opsrampotlp proxy CONNECT response",
+				e.settings.Logger.Debug("opsrampotlp proxy CONNECT response",
 					zap.String("dial_addr", dialAddr),
 					zap.String("proxy_addr", proxyAddr),
 					zap.Int("status_code", resp.StatusCode),
@@ -422,7 +422,7 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 					return nil, fmt.Errorf("TLS handshake failed: %w", tlsErr)
 				}
 
-				e.settings.Logger.Info("opsrampotlp proxy tunnel + TLS established",
+				e.settings.Logger.Debug("opsrampotlp proxy tunnel + TLS established",
 					zap.String("dial_addr", dialAddr),
 					zap.String("proxy_addr", proxyAddr),
 					zap.String("tls_version", tlsVersionString(tlsConn.ConnectionState().Version)),
@@ -454,14 +454,6 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 		grpc.MaxCallRecvMsgSize(e.config.Security.OtelExporterSetting.GrpcMaxRecvSize),
 		grpc.WaitForReady(e.config.ClientConfig.WaitForReady),
 	}
-
-	//e.logger.Debug(
-	//	"OTLP Exporter started",
-	//	zap.String("Calloptions", fmt.Sprintf("%v", e.callOptions)),
-	//	zap.Int("Calloptions -> grpc.MaxCallSendMsgSize", e.config.Security.OtelExporterSetting.GrpcMaxSendSize),
-	//	zap.Int("Calloptions -> grpc.MaxCallRecvMsgSize", e.config.Security.OtelExporterSetting.GrpcMaxRecvSize),
-	//)
-
 	return
 }
 
@@ -519,9 +511,6 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 		return nil
 	}
 
-	//start := time.Now()
-	//e.logger.Debug("Exporter: pushLogs Started processing logs", zap.String("start at", start.Format(time.RFC3339)))
-
 	if e.config.Masking != nil {
 		e.applyMasking(ld)
 	}
@@ -541,35 +530,7 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 	}
 
 	req := plogotlp.NewExportRequestFromLogs(ld)
-	//
-	//data, _ := req.MarshalJSON()
-	//e.logger.Debug("request details",
-	//	zap.String("started_at", start.Format(time.RFC3339Nano)),
-	//	zap.Int("ResourceLogsCount", ld.ResourceLogs().Len()),
-	//	zap.Int("TotalLogRecordCount", ld.LogRecordCount()),
-	//	zap.Int("RequestSizeBytes", len(data)),
-	//)
-	//
-	//beforePushEndTime := time.Now()
-
 	_, err := e.logExporter.Export(e.enhanceContext(context.Background()), req, e.callOptions...)
-
-	//end := time.Now()
-	//e.logger.Debug("Exporter: pushLogs: completed processing logs",
-	//	zap.String("Stage 1", "before push"),
-	//	zap.String("ended_at", beforePushEndTime.Format(time.RFC3339Nano)),
-	//	zap.Float64("duration_seconds", beforePushEndTime.Sub(start).Seconds()),
-	//	zap.Int64("duration_ms", beforePushEndTime.Sub(start).Milliseconds()),
-	//	zap.Float64("duration_seconds", beforePushEndTime.Sub(start).Seconds()),
-	//	zap.String("Stage 1", "before push - end"),
-	//
-	//	zap.String("Stage 2", "after push"),
-	//	zap.String("ended_at", end.Format(time.RFC3339Nano)),
-	//	zap.Float64("duration_seconds", end.Sub(start).Seconds()),
-	//	zap.Int64("duration_ms", end.Sub(start).Milliseconds()),
-	//	zap.Float64("duration_seconds", end.Sub(start).Seconds()),
-	//	zap.String("Stage 2", "after push - end"),
-	//)
 
 	// trying to get a new access token in case of expiration
 	if err != nil {
@@ -845,24 +806,6 @@ func endpointServerName(endpoint string) string {
 
 	return strings.Trim(host, "[]")
 }
-
-//func initLogger() *zap.Logger {
-//	writer := &lumberjack.Logger{
-//		Filename:   "/var/log/opsramp/exporter-info.log", // or any path you prefer
-//		MaxSize:    10,                                   // megabytes
-//		MaxBackups: 5,                                    // number of old files to keep
-//		MaxAge:     30,                                   // days to keep
-//		Compress:   true,                                 // gzip
-//	}
-//
-//	core := zapcore.NewCore(
-//		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
-//		zapcore.AddSync(writer),
-//		zap.DebugLevel,
-//	)
-//
-//	return zap.New(core)
-//}
 
 func tlsVersionString(version uint16) string {
 	switch version {
