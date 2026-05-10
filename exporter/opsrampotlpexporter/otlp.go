@@ -187,15 +187,28 @@ func getAuthToken(cfg SecuritySettings) (string, error) {
 // start actually creates the gRPC connection. The client construction is deferred till this point as this
 // is the only place we get hold of Extensions which are required to construct auth round tripper.
 func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (err error) {
-	if e.config.ClientConfig.TLSSetting.ServerName == "" {
-		if serverName := endpointServerName(e.config.Endpoint); serverName != "" {
+	if serverName := endpointServerName(e.config.Endpoint); serverName != "" {
+		configuredServerName := strings.TrimSpace(e.config.ClientConfig.TLSSetting.ServerName)
+		if configuredServerName == "" || strings.Contains(configuredServerName, ":") {
 			e.config.ClientConfig.TLSSetting.ServerName = serverName
-			e.settings.Logger.Info("opsrampotlp tls server name inferred",
-				zap.String("endpoint", e.config.Endpoint),
-				zap.String("server_name", serverName),
-			)
 		}
 	}
+
+	// Save original TLS settings for logging
+	originalTLSInsecure := e.config.ClientConfig.TLSSetting.Insecure
+	originalTLSInsecureSkipVerify := e.config.ClientConfig.TLSSetting.InsecureSkipVerify
+
+	// Log TLS configuration
+	e.settings.Logger.Info("opsrampotlp TLS configuration",
+		zap.Bool("insecure", originalTLSInsecure),
+		zap.Bool("insecure_skip_verify", originalTLSInsecureSkipVerify),
+		zap.String("endpoint", e.config.Endpoint),
+	)
+
+	// Proxy tunnel approach:
+	// - When insecure=true (plaintext mode): proxy environment vars are set, gRPC uses proxy for plaintext
+	// - When insecure=false (TLS enabled): gRPC handles TLS natively, no custom proxy dialer needed
+	// The proxy env vars (HTTP_PROXY, HTTPS_PROXY) are only set when insecure=true (see otelLogConfig.go)
 
 	e.clientConn, err = e.config.ClientConfig.ToClientConn(
 		ctx,
@@ -203,22 +216,23 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 		e.settings,
 		configgrpc.WithGrpcDialOption(grpc.WithUserAgent(e.userAgent)),
 		configgrpc.WithGrpcDialOption(
-			grpc.WithContextDialer(func(dialCtx context.Context, addr string) (net.Conn, error) {
+			grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
 				dialAddr := sanitizeDialAddress(addr)
 				e.settings.Logger.Debug("opsrampotlp dial attempt",
 					zap.String("addr", addr),
 					zap.String("dial_addr", dialAddr),
 					zap.String("endpoint", e.config.Endpoint),
 				)
+
 				if shouldBypassProxy(dialAddr) {
 					e.settings.Logger.Info("opsrampotlp dialing direct (bypass)",
 						zap.String("dial_addr", dialAddr),
 					)
-					return (&net.Dialer{}).DialContext(dialCtx, "tcp", dialAddr)
+					return (&net.Dialer{}).DialContext(ctx, "tcp", dialAddr)
 				}
 
 				targetURL := &url.URL{Scheme: proxyLookupScheme(e.config.Endpoint, e.config.ClientConfig.TLSSetting.Insecure), Host: dialAddr}
-				proxyURI, err := httpproxy.FromEnvironment().ProxyFunc()(targetURL)
+				proxyURL, err := httpproxy.FromEnvironment().ProxyFunc()(targetURL)
 				if err != nil {
 					e.settings.Logger.Debug("opsrampotlp proxy resolution failed",
 						zap.String("target", targetURL.String()),
@@ -227,24 +241,24 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 					return nil, fmt.Errorf("failed to resolve proxy from environment: %w", err)
 				}
 
-				// No proxy set or target excluded by NO_PROXY, connect directly.
-				if proxyURI == nil {
+				// No proxy set — connect directly
+				if proxyURL == nil {
 					e.settings.Logger.Info("opsrampotlp dialing direct (no proxy from env)",
 						zap.String("dial_addr", dialAddr),
 						zap.String("lookup_target", targetURL.String()),
 					)
-					return (&net.Dialer{}).DialContext(dialCtx, "tcp", dialAddr)
+					return (&net.Dialer{}).DialContext(ctx, "tcp", dialAddr)
 				}
 
 				e.settings.Logger.Info("opsrampotlp dialing via proxy",
 					zap.String("dial_addr", dialAddr),
-					zap.String("proxy_host", proxyURI.Host),
+					zap.String("proxy_host", proxyURL.Host),
 					zap.String("lookup_target", targetURL.String()),
 				)
 
 				// Step 1: TCP connect to Squid proxy
-				proxyAddr := proxyURI.Host // 172.16.7.37:3128
-				conn, err := (&net.Dialer{}).DialContext(dialCtx, "tcp", proxyAddr)
+				proxyAddr := proxyURL.Host // 172.16.7.37:3128
+				conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", proxyAddr)
 				if err != nil {
 					e.settings.Logger.Debug("opsrampotlp proxy tcp connect failed",
 						zap.String("proxy_addr", proxyAddr),
@@ -265,9 +279,9 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 				}
 
 				// Add proxy auth if present in URL
-				if proxyURI.User != nil {
-					username := proxyURI.User.Username()
-					password, _ := proxyURI.User.Password()
+				if proxyURL.User != nil {
+					username := proxyURL.User.Username()
+					password, _ := proxyURL.User.Password()
 					connectReq.Header.Set(
 						"Proxy-Authorization",
 						"Basic "+basicAuth(username, password),
@@ -285,7 +299,7 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 					return nil, fmt.Errorf("failed to write CONNECT request: %w", err)
 				}
 
-				// Step 3: Read Squid's response.
+				// Step 3: Read Squid's response
 				// Use a shared reader so any bytes read ahead during response parsing are
 				// preserved for gRPC's HTTP/2/TLS handshakes.
 				br := bufio.NewReader(conn)
@@ -314,13 +328,28 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 					return nil, fmt.Errorf("proxy CONNECT failed: %s", resp.Status)
 				}
 
-				// Do not close resp.Body here. For a successful CONNECT, the response body
-				// represents the live tunnel and closing it would tear down the underlying
-				// socket before gRPC can perform its TLS and HTTP/2 handshakes.
-				return &bufferedConn{Conn: conn, reader: br}, nil
+				// Do not close resp.Body for successful CONNECT. It represents the live
+				// tunnel; closing it here will close the underlying socket.
+
+				// Create buffered conn to preserve any bytes read ahead by bufio.Reader
+				tunnelConn := &bufferedConn{Conn: conn, reader: br}
+
+				// Return the tunnel connection.
+				// When insecure=true (plaintext mode), this is a raw plaintext connection through proxy.
+				// When insecure=false (TLS mode), proxy env vars are NOT set so this code path is not taken.
+				e.settings.Logger.Info("opsrampotlp proxy tunnel established (plaintext mode)",
+					zap.String("dial_addr", dialAddr),
+					zap.String("proxy_addr", proxyAddr),
+				)
+
+				return tunnelConn, nil
 			})),
 	)
+
 	if err != nil {
+		e.settings.Logger.Error("opsrampotlp proxy CONNECT read failed",
+			zap.Error(err),
+		)
 		return err
 	}
 
