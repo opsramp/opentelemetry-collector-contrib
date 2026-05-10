@@ -334,15 +334,102 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 				// Create buffered conn to preserve any bytes read ahead by bufio.Reader
 				tunnelConn := &bufferedConn{Conn: conn, reader: br}
 
-				// Return the tunnel connection.
-				// When insecure=true (plaintext mode), this is a raw plaintext connection through proxy.
-				// When insecure=false (TLS mode), proxy env vars are NOT set so this code path is not taken.
-				e.settings.Logger.Info("opsrampotlp proxy tunnel established (plaintext mode)",
+				// Step 5: Perform manual TLS handshake through the proxy tunnel
+				// Extract server name for TLS
+				serverName := dialAddr
+				if colonIdx := strings.LastIndex(dialAddr, ":"); colonIdx != -1 {
+					serverName = dialAddr[:colonIdx]
+				}
+
+				// insecure_skip_verify controls certificate verification independently
+				// insecure flag only controls connection mode (proxy) and TLS version fallback
+				skipVerify := e.config.ClientConfig.TLSSetting.InsecureSkipVerify
+
+				// Try TLS 1.2 first (mandatory minimum)
+				tlsConfig := &tls.Config{
+					ServerName:         serverName,
+					InsecureSkipVerify: skipVerify,
+					MinVersion:         tls.VersionTLS12,
+				}
+
+				tlsConn := tls.Client(tunnelConn, tlsConfig)
+				tlsErr := tlsConn.HandshakeContext(ctx)
+
+				// Fallback to TLS 1.0+ only when insecure=true and TLS 1.2 handshake fails
+				if tlsErr != nil && e.config.ClientConfig.TLSSetting.Insecure {
+					e.settings.Logger.Warn("opsrampotlp TLS 1.2 handshake failed, attempting fallback to TLS 1.0+",
+						zap.String("dial_addr", dialAddr),
+						zap.Error(tlsErr),
+					)
+
+					// Close the failed connection and re-establish tunnel for retry
+					tunnelConn.Close()
+
+					// Re-connect to proxy
+					conn, err = (&net.Dialer{}).DialContext(ctx, "tcp", proxyAddr)
+					if err != nil {
+						return nil, fmt.Errorf("failed to reconnect to proxy for TLS fallback: %w", err)
+					}
+
+					// Re-send CONNECT request
+					connectReq = &http.Request{
+						Method:     "CONNECT",
+						URL:        &url.URL{Host: dialAddr},
+						Host:       dialAddr,
+						Header:     make(http.Header),
+						Proto:      "HTTP/1.1",
+						ProtoMajor: 1,
+						ProtoMinor: 1,
+					}
+					if proxyURL.User != nil {
+						username := proxyURL.User.Username()
+						password, _ := proxyURL.User.Password()
+						connectReq.Header.Set("Proxy-Authorization", "Basic "+basicAuth(username, password))
+					}
+					if err = connectReq.Write(conn); err != nil {
+						conn.Close()
+						return nil, fmt.Errorf("failed to write CONNECT request for TLS fallback: %w", err)
+					}
+					br = bufio.NewReader(conn)
+					resp, err = http.ReadResponse(br, connectReq)
+					if err != nil {
+						conn.Close()
+						return nil, fmt.Errorf("failed to read CONNECT response for TLS fallback: %w", err)
+					}
+					if resp.StatusCode != http.StatusOK {
+						resp.Body.Close()
+						conn.Close()
+						return nil, fmt.Errorf("proxy CONNECT failed for TLS fallback: %s", resp.Status)
+					}
+					tunnelConn = &bufferedConn{Conn: conn, reader: br}
+
+					// Retry with TLS 1.0+ (fallback)
+					tlsConfig = &tls.Config{
+						ServerName:         serverName,
+						InsecureSkipVerify: true,
+						MinVersion:         tls.VersionTLS10,
+					}
+					tlsConn = tls.Client(tunnelConn, tlsConfig)
+					tlsErr = tlsConn.HandshakeContext(ctx)
+				}
+
+				if tlsErr != nil {
+					e.settings.Logger.Error("opsrampotlp TLS handshake failed",
+						zap.String("dial_addr", dialAddr),
+						zap.Error(tlsErr),
+					)
+					tunnelConn.Close()
+					return nil, fmt.Errorf("TLS handshake failed: %w", tlsErr)
+				}
+
+				e.settings.Logger.Info("opsrampotlp proxy tunnel + TLS established",
 					zap.String("dial_addr", dialAddr),
 					zap.String("proxy_addr", proxyAddr),
+					zap.String("tls_version", tlsVersionString(tlsConn.ConnectionState().Version)),
+					zap.Bool("insecure_skip_verify", skipVerify),
 				)
 
-				return tunnelConn, nil
+				return tlsConn, nil
 			})),
 	)
 
@@ -776,3 +863,18 @@ func endpointServerName(endpoint string) string {
 //
 //	return zap.New(core)
 //}
+
+func tlsVersionString(version uint16) string {
+	switch version {
+	case tls.VersionTLS10:
+		return "TLS 1.0"
+	case tls.VersionTLS11:
+		return "TLS 1.1"
+	case tls.VersionTLS12:
+		return "TLS 1.2"
+	case tls.VersionTLS13:
+		return "TLS 1.3"
+	default:
+		return fmt.Sprintf("unknown (0x%04x)", version)
+	}
+}
