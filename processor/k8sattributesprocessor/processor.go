@@ -139,14 +139,18 @@ func (kp *kubernetesprocessor) processMetrics(ctx context.Context, md pmetric.Me
 		// Addons (e.g. k8s.cluster.name) must be injected before any per-device split so that
 		kp.addAddonsToResource(rm.At(i).Resource())
 
-		// For hardware-device exporters (DCGM/GPU, RDMA/NIC), we split batch into one ResourceMetrics per device and set the per-device uuid
-		// If no split is performed, fall back to normal pod/node/workload UUID resolution.
-		if perGpuRMs, isDCGMBatch := kp.processDcgmMetricByGpu(ctx, rm.At(i)); isDCGMBatch {
-			rm.At(i).Resource().Attributes().PutBool("_dcgm_processed", true)
-			dcgmSplits = append(dcgmSplits, perGpuRMs...)
-		} else if perNicRMs, isRDMABatch := kp.processRdmaMetricByNic(ctx, rm.At(i)); isRDMABatch {
-			rm.At(i).Resource().Attributes().PutBool("_rdma_processed", true)
-			rdmaSplits = append(rdmaSplits, perNicRMs...)
+		// For hardware-device exporters (DCGM/GPU, RDMA/NIC), we split batch into one ResourceMetrics per device and set the per-device uuid.
+		// This is only done when GPU/NIC routing is enabled (PCAI mode); otherwise fall through to pod-level resolution.
+		if kp.redisConfig.EnableGpuNicRouting {
+			if perGpuRMs, isDCGMBatch := kp.processDcgmMetricByGpu(ctx, rm.At(i)); isDCGMBatch {
+				rm.At(i).Resource().Attributes().PutBool("_dcgm_processed", true)
+				dcgmSplits = append(dcgmSplits, perGpuRMs...)
+			} else if perNicRMs, isRDMABatch := kp.processRdmaMetricByNic(ctx, rm.At(i)); isRDMABatch {
+				rm.At(i).Resource().Attributes().PutBool("_rdma_processed", true)
+				rdmaSplits = append(rdmaSplits, perNicRMs...)
+			} else {
+				kp.processopsrampResources(ctx, rm.At(i).Resource())
+			}
 		} else {
 			kp.processopsrampResources(ctx, rm.At(i).Resource())
 		}
