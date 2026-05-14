@@ -300,7 +300,7 @@ func extractMetricNames(node parser.Node, metrics map[string]struct{}) {
 
 // extractMetricsFromExpression extracts metric names from a PromQL expression
 func (fp *filterProcessor) extractMetricsFromExpression(expr string) []string {
-	parsedExpr, err := parser.ParseExpr(expr)
+	parsedExpr, err := parser.NewParser(parser.Options{}).ParseExpr(expr)
 	if err != nil {
 		fp.logger.Warn("Failed to parse PromQL expression", zap.String("expr", expr), zap.Error(err))
 		return nil
