@@ -399,7 +399,7 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 					// Retry with TLS 1.0+ (fallback)
 					tlsConfig = &tls.Config{
 						ServerName:         serverName,
-						InsecureSkipVerify: true,
+						InsecureSkipVerify: skipVerify,
 						MinVersion:         tls.VersionTLS10,
 					}
 					tlsConn = tls.Client(tunnelConn, tlsConfig)
