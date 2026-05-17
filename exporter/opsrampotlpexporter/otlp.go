@@ -328,6 +328,19 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 				// Create buffered conn to preserve any bytes read ahead by bufio.Reader
 				tunnelConn := &bufferedConn{Conn: conn, reader: br}
 
+				// When insecure=false, return raw tunnel and let gRPC handle TLS
+				// This avoids double TLS (custom dialer + gRPC layer)
+				if !e.config.ClientConfig.TLSSetting.Insecure {
+					e.settings.Logger.Debug("opsrampotlp proxy tunnel established, gRPC will handle TLS",
+						zap.String("dial_addr", dialAddr),
+						zap.String("proxy_addr", proxyAddr),
+						zap.Bool("insecure", false),
+					)
+					return tunnelConn, nil
+				}
+
+				// When insecure=true, custom dialer handles TLS with fallback mechanism
+				// gRPC won't do TLS because insecure=true
 				// Perform manual TLS handshake through the proxy tunnel
 				// Extract server name for TLS
 				serverName := dialAddr
@@ -336,7 +349,6 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 				}
 
 				// insecure_skip_verify controls certificate verification independently
-				// insecure flag only controls connection mode (proxy) and TLS version fallback
 				skipVerify := e.config.ClientConfig.TLSSetting.InsecureSkipVerify
 
 				tlsConfig := &tls.Config{
@@ -348,8 +360,8 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 				tlsConn := tls.Client(tunnelConn, tlsConfig)
 				tlsErr := tlsConn.HandshakeContext(ctx)
 
-				// Fallback to TLS 1.0+ only when insecure=true and TLS 1.2 handshake fails
-				if tlsErr != nil && e.config.ClientConfig.TLSSetting.Insecure {
+				// Fallback to TLS 1.0+ only when TLS 1.2 handshake fails
+				if tlsErr != nil {
 					e.settings.Logger.Info("opsrampotlp TLS 1.2 handshake failed, attempting fallback to TLS 1.0+",
 						zap.String("dial_addr", dialAddr),
 						zap.Error(tlsErr),
