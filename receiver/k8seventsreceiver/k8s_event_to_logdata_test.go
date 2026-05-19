@@ -71,8 +71,6 @@ func TestK8sEventToLogData(t *testing.T) {
 	k8sEvent.Count = 0
 	ld = k8sEventToLogData(zap.NewNop(), k8sEvent, "latest", nil)
 	assert.Equal(t, 6, ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0).Attributes().Len())
-	ld = k8sEventToLogData(zap.NewNop(), k8sEvent, "latest")
-	assert.Equal(t, 8, ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0).Attributes().Len())
 }
 
 func TestK8sEventToLogDataWithApiAndResourceVersion(t *testing.T) {
@@ -99,7 +97,7 @@ func TestK8sEventToLogDataWithApiAndResourceVersion(t *testing.T) {
 
 func TestExposingReportingControllerAndInstance(t *testing.T) {
 	k8sEvent := getEvent("Normal")
-	ld := k8sEventToLogData(zap.NewNop(), k8sEvent, "latest")
+	ld := k8sEventToLogData(zap.NewNop(), k8sEvent, "latest", nil)
 	rl := ld.ResourceLogs().At(0)
 	logEntry := rl.ScopeLogs().At(0).LogRecords().At(0)
 

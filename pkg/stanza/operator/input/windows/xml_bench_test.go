@@ -33,7 +33,7 @@ func BenchmarkUnmarshal(b *testing.B) {
 		b.Run(tc.name+"/full", func(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				_, _ = unmarshalEventXML(data)
+				_, _ = UnmarshalEventXML(data)
 			}
 		})
 
