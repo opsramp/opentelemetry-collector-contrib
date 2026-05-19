@@ -81,8 +81,18 @@ func NewEvent(handle uintptr) Event {
 	}
 }
 
-// RenderSimple will render the event as EventXML without formatted info.
-func (e *Event) RenderSimple(buffer *Buffer) (*EventXML, error) {
+// RenderSimple will render the event as a parsedEvent without formatted info.
+func (e *Event) RenderSimple(buffer *Buffer) (parsedEvent, error) {
+	return e.renderSimpleEventXML(buffer, unmarshalEventXML)
+}
+
+// RenderSimpleRaw will render the event XML but unmarshal only the fields
+// needed when raw=true. Use this to avoid populating fields that will not be used.
+func (e *Event) RenderSimpleRaw(buffer *Buffer) (parsedEvent, error) {
+	return e.renderSimpleEventXML(buffer, unmarshalRawEventXML)
+}
+
+func (e *Event) renderSimpleEventXML(buffer *Buffer, unmarshal func([]byte) (parsedEvent, error)) (parsedEvent, error) {
 	if e.handle == 0 {
 		return nil, errors.New("event handle does not exist")
 	}
@@ -91,7 +101,7 @@ func (e *Event) RenderSimple(buffer *Buffer) (*EventXML, error) {
 	if err != nil {
 		if errors.Is(err, ErrorInsufficientBuffer) {
 			buffer.UpdateSizeBytes(*bufferUsed)
-			return e.RenderSimple(buffer)
+			return e.renderSimpleEventXML(buffer, unmarshal)
 		}
 		return nil, fmt.Errorf("syscall to 'EvtRender' failed: %w", err)
 	}
@@ -102,6 +112,19 @@ func (e *Event) RenderSimple(buffer *Buffer) (*EventXML, error) {
 	}
 
 	return UnmarshalEventXML(bytes)
+	return unmarshal(bytes)
+}
+
+// RenderDeep will render the event as a parsedEvent with all available formatted info.
+func (e *Event) RenderDeep(buffer *Buffer, publisher Publisher) (parsedEvent, error) {
+	return e.renderDeepEventXML(buffer, publisher, unmarshalEventXML)
+}
+
+// RenderDeepRaw will render the event with formatted info but unmarshal only
+// the fields needed when raw=true: timestamp, level, and the rendered level
+// from RenderingInfo for accurate severity mapping.
+func (e *Event) RenderDeepRaw(buffer *Buffer, publisher Publisher) (parsedEvent, error) {
+	return e.renderDeepEventXML(buffer, publisher, unmarshalRawEventXML)
 }
 
 // RenderDeep will render the event as EventXML with all available formatted info.

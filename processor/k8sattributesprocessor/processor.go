@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"go.opentelemetry.io/collector/component"
@@ -55,6 +54,7 @@ type kubernetesprocessor struct {
 	waitForMetadata        bool
 	waitForMetadataTimeout time.Duration
 	redisClient            *redis.Client
+	watchSyncPeriod        time.Duration
 }
 
 func (kp *kubernetesprocessor) initKubeClient(set component.TelemetrySettings, kubeClient kube.ClientProvider) error {
@@ -62,7 +62,7 @@ func (kp *kubernetesprocessor) initKubeClient(set component.TelemetrySettings, k
 		kubeClient = kube.New
 	}
 	if !kp.passthroughMode {
-		kc, err := kubeClient(set, kp.apiConfig, kp.rules, kp.filters, kp.podAssociations, kp.podIgnore, nil, kube.InformersFactoryList{}, kp.waitForMetadata, kp.waitForMetadataTimeout)
+		kc, err := kubeClient(set, kp.apiConfig, kp.rules, kp.filters, kp.podAssociations, kp.podIgnore, nil, kube.InformersFactoryList{}, kp.waitForMetadata, kp.waitForMetadataTimeout, kp.watchSyncPeriod)
 		if err != nil {
 			return err
 		}
@@ -166,7 +166,7 @@ func (kp *kubernetesprocessor) Shutdown(context.Context) error {
 func (kp *kubernetesprocessor) processTraces(ctx context.Context, td ptrace.Traces) (ptrace.Traces, error) {
 	rss := td.ResourceSpans()
 	for i := 0; i < rss.Len(); i++ {
-		kp.processResource(ctx, rss.At(i).Resource(), "traces")
+		kp.processResource(ctx, rss.At(i).Resource())
 		kp.processTraceResources(ctx, rss.At(i).Resource())
 
 	}
@@ -178,7 +178,7 @@ func (kp *kubernetesprocessor) processTraces(ctx context.Context, td ptrace.Trac
 func (kp *kubernetesprocessor) processMetrics(ctx context.Context, md pmetric.Metrics) (pmetric.Metrics, error) {
 	rm := md.ResourceMetrics()
 	for i := 0; i < rm.Len(); i++ {
-		kp.processResource(ctx, rm.At(i).Resource(), "metrics")
+		kp.processResource(ctx, rm.At(i).Resource())
 		if kp.redisClient != nil {
 			kp.processopsrampResources(ctx, rm.At(i).Resource())
 		}
@@ -193,7 +193,7 @@ func (kp *kubernetesprocessor) processMetrics(ctx context.Context, md pmetric.Me
 func (kp *kubernetesprocessor) processLogs(ctx context.Context, ld plog.Logs) (plog.Logs, error) {
 	rl := ld.ResourceLogs()
 	for i := 0; i < rl.Len(); i++ {
-		kp.processResource(ctx, rl.At(i).Resource(), "logs")
+		kp.processResource(ctx, rl.At(i).Resource())
 		if kp.redisClient != nil {
 			kp.processopsrampResources(ctx, rl.At(i).Resource())
 		}
@@ -208,14 +208,14 @@ func (kp *kubernetesprocessor) processLogs(ctx context.Context, ld plog.Logs) (p
 func (kp *kubernetesprocessor) processProfiles(ctx context.Context, pd pprofile.Profiles) (pprofile.Profiles, error) {
 	rp := pd.ResourceProfiles()
 	for i := 0; i < rp.Len(); i++ {
-		kp.processResource(ctx, rp.At(i).Resource(), "profiles")
+		kp.processResource(ctx, rp.At(i).Resource())
 	}
 
 	return pd, nil
 }
 
 // processResource adds Pod metadata tags to resource based on pod association configuration
-func (kp *kubernetesprocessor) processResource(ctx context.Context, resource pcommon.Resource, signalType string) {
+func (kp *kubernetesprocessor) processResource(ctx context.Context, resource pcommon.Resource) {
 	resource.Attributes().Range(func(k string, v pcommon.Value) bool {
 		kp.logger.Debug("res-attributes", zap.Any(k, v.Str()))
 		return true
@@ -250,21 +250,9 @@ func (kp *kubernetesprocessor) processResource(ctx context.Context, resource pco
 
 	var pod *kube.Pod
 	var podFound bool
-	podIdentifierStr := buildPodIdentifierString(podIdentifierValue)
 	if podIdentifierValue.IsNotEmpty() {
 		if pod, podFound = kp.kc.GetPod(podIdentifierValue); podFound {
 			kp.logger.Debug("getting the pod", zap.Any("pod", pod))
-
-			// Record successful pod association
-			if kp.telemetry != nil {
-				successAttr := metric.WithAttributes(
-					attribute.String("status", "success"),
-					attribute.String("pod_identifier", podIdentifierStr),
-					attribute.String("otelcol.signal", signalType),
-				)
-				kp.telemetry.K8sPodAssociation.Add(ctx, 1, successAttr)
-			}
-
 			for key, val := range pod.Attributes {
 				setResourceAttribute(resource.Attributes(), key, val)
 			}
@@ -272,26 +260,10 @@ func (kp *kubernetesprocessor) processResource(ctx context.Context, resource pco
 		} else {
 			// Record failed pod association
 			kp.logger.Debug("pod not found", zap.Any("podIdentifier", podIdentifierValue))
-			if kp.telemetry != nil {
-				errorAttr := metric.WithAttributes(
-					attribute.String("status", "error"),
-					attribute.String("pod_identifier", podIdentifierStr),
-					attribute.String("otelcol.signal", signalType),
-				)
-				kp.telemetry.K8sPodAssociation.Add(ctx, 1, errorAttr)
-			}
 		}
 	} else {
 		// Record failed pod association when no identifier found
 		kp.logger.Debug("no pod identifier found")
-		if kp.telemetry != nil {
-			errorAttr := metric.WithAttributes(
-				attribute.String("status", "error"),
-				attribute.String("pod_identifier", podIdentifierStr),
-				attribute.String("otelcol.signal", signalType),
-			)
-			kp.telemetry.K8sPodAssociation.Add(ctx, 1, errorAttr)
-		}
 	}
 
 	namespace := getNamespace(pod, resource.Attributes())
@@ -538,20 +510,6 @@ func (kp *kubernetesprocessor) getUIDForPodsNode(nodeName string) string {
 		return ""
 	}
 	return node.NodeUID
-}
-
-// buildPodIdentifierString combines all identifier values into a comma-separated string
-func buildPodIdentifierString(podIdentifierValue kube.PodIdentifier) string {
-	var identifiers []string
-	for i := range podIdentifierValue {
-		if podIdentifierValue[i].Value != "" {
-			identifiers = append(identifiers, podIdentifierValue[i].Value)
-		}
-	}
-	if len(identifiers) > 0 {
-		return strings.Join(identifiers, ",")
-	}
-	return "unknown"
 }
 
 // intFromAttribute extracts int value from an attribute stored as string or int

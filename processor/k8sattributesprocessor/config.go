@@ -4,6 +4,7 @@
 package k8sattributesprocessor // import "github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor"
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -53,11 +54,21 @@ type Config struct {
 	MetadataAddOn []AddOnMetadata `mapstructure:"metadata_addon"`
 
 	RedisConfig redis.OpsrampRedisConfig `mapstructure:"redis_config"`
+
+	// WatchSyncPeriod determines the resync period for K8s informers.
+	// Reprocessing the informer cache periodically can cause significant memory churn and CPU spikes.
+	// Setting this to 0 disables resync.
+	WatchSyncPeriod time.Duration `mapstructure:"watch_sync_period"`
+
 }
 
 func (cfg *Config) Validate() error {
 	if err := cfg.APIConfig.Validate(); err != nil {
 		return err
+	}
+
+	if cfg.WatchSyncPeriod < 0 {
+		return errors.New("watch_sync_period must be greater than or equal to 0")
 	}
 
 	for _, assoc := range cfg.Association {
@@ -97,7 +108,7 @@ func (cfg *Config) Validate() error {
 			string(conventions.K8SCronJobNameKey), string(conventions.K8SCronJobUIDKey),
 			string(conventions.K8SNodeNameKey), string(conventions.K8SNodeUIDKey),
 			string(conventions.K8SContainerNameKey), string(conventions.ContainerIDKey),
-			string(conventions.ContainerImageNameKey), containerImageTag,
+			string(conventions.ContainerImageNameKey), containerImageTag, string(conventions.ContainerImageTagsKey),
 			string(conventions.ServiceNamespaceKey), string(conventions.ServiceNameKey),
 			string(conventions.ServiceVersionKey), string(conventions.ServiceInstanceIDKey),
 			string(conventions.ContainerImageRepoDigestsKey), string(conventions.K8SClusterUIDKey):

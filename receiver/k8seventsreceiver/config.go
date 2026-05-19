@@ -37,6 +37,11 @@ type Config struct {
 	// Include only the specified involved objects. ObjectKind to List of Reasons.
 	IncludeInvolvedObject map[string]InvolvedObjectProperties `mapstructure:"include_involved_objects,omitempty"`
 
+	// Storage is the ID of the storage extension to use for resource version persistence.
+	// When set, the receiver will persist the latest resource version and resume from it on restart,
+	// preventing duplicate events. Only valid for watch mode (which is the only mode this receiver uses).
+	Storage *component.ID `mapstructure:"storage"`
+
 	K8sLeaderElector *component.ID `mapstructure:"k8s_leader_elector"`
 
 	// For mocking
