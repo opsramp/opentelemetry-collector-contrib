@@ -152,28 +152,85 @@ Update `cmd/otelcontribcol/builder-config.yaml` to reference `<new-ver>` for:
 
 ## Phase 4: Impact Analysis
 
-### Step 4.1: Gather release notes
+### Step 4.1: Read agent go.mod and build component list
+Read `/Users/durgababuneelam/git-projects/agent/opsramp/go.mod` FIRST. Extract all `opentelemetry-collector-contrib` and `go.opentelemetry.io/collector` import paths used by the agent. This list is the **scope** for all subsequent analysis — only investigate changes that affect these packages.
+
+Store the list as `<agent-packages>`. Example entries:
+- `receiver/hostmetricsreceiver`
+- `receiver/kubeletstatsreceiver`
+- `pkg/stanza`
+- `processor/filterprocessor`
+- etc.
+
+### Step 4.2: Gather release notes
 Fetch the upstream release notes from `https://github.com/open-telemetry/opentelemetry-collector-contrib/releases` for each version between `<cur-ver>` and `<new-ver>` (e.g., v0.150.0, v0.151.0, v0.152.0). Use the web tool to read each release page.
 
 Additionally, read the local CHANGELOG.md for any OpsRamp-specific entries.
 
-Focus on:
-- Breaking changes
-- Deprecations
-- Changes to components used by OpsRamp agent
+Focus ONLY on:
+- Breaking changes to packages in `<agent-packages>`
+- Deprecations in packages in `<agent-packages>`
 
-### Step 4.2: Cross-reference with agent go.mod
-Read `/Users/durgababuneelam/git-projects/agent/opsramp/go.mod` and identify:
-- Which `opentelemetry-collector-contrib` packages are used by the agent
-- Which of those packages had breaking changes
-- Any new dependencies or removed dependencies
-- Version compatibility concerns
+### Step 4.3: Analyze git history for removals, renames, and alias changes (scoped to agent packages)
 
-### Step 4.3: Present impact report
+This step uses git log to find actual code-level changes. **Only investigate commits that affect packages in `<agent-packages>`.**
+
+#### 4.3.1: Find component renames affecting agent-used packages
+```bash
+git log <cur-ver>..<new-ver> --oneline --grep="rename" -i -- <agent-package-dirs>
+```
+For example, if agent uses `receiver/kubeletstatsreceiver`:
+```bash
+git log <cur-ver>..<new-ver> --oneline --grep="rename" -i -- receiver/kubeletstatsreceiver/ receiver/hostmetricsreceiver/ pkg/stanza/ ...
+```
+For each rename found, inspect the commit to verify whether `WithDeprecatedTypeAlias` is used (alias maintained) or not (breaking rename).
+
+#### 4.3.2: Find removals of deprecated code in agent-used packages
+```bash
+git log <cur-ver>..<new-ver> --oneline --grep="remove.*deprecat" --grep="deprecat.*remov" -i -- <agent-package-dirs>
+```
+For each removal commit, use `git show <sha> --stat` to identify what was deleted. Check if the deleted paths/APIs are imported or used by the agent.
+
+#### 4.3.3: Find removed sub-packages within agent dependencies
+For each package in `<agent-packages>`, check if any sub-paths that the agent imports were deleted:
+```bash
+# For each contrib package path used by agent:
+git ls-tree --name-only <new-ver> <package-path>
+```
+If any path no longer exists at `<new-ver>`, flag it as a **critical breaking change** requiring an import path change in agent source code.
+
+#### 4.3.4: Find feature gate removals in agent-used packages
+```bash
+git log <cur-ver>..<new-ver> --oneline --grep="remove.*feature.gate\|feature.gate.*remov\|remove.*stable" -i -- <agent-package-dirs>
+```
+Feature gates that were "stable" and are now removed means behavior is permanently on — check if agent relied on toggling these.
+
+#### 4.3.5: Find disabled-by-default changes in agent-used packages
+```bash
+git log <cur-ver>..<new-ver> --oneline --grep="disable.*default\|default.*disable\|deprecat.*attribute" -i -- <agent-package-dirs>
+```
+Resource attributes or features disabled by default can silently break downstream consumers expecting certain fields.
+
+### Step 4.4: Present impact report
 Format the report as:
 
 ```
 ## Impact Analysis: <cur-ver> → <new-ver>
+
+### Removed Packages / Import Paths (CRITICAL)
+| Old Import Path | Replacement | Agent Uses? | Action Required |
+|----------------|-------------|-------------|-----------------|
+| ... | ... | Yes/No | ... |
+
+### Component Renames
+| Old Name | New Name | Alias Maintained? | Agent Uses? |
+|----------|----------|-------------------|-------------|
+| ... | ... | Yes (WithDeprecatedTypeAlias) / NO | ... |
+
+### Removed Feature Gates
+| Component | Gate ID | Was Behavior | Impact |
+|-----------|---------|-------------|--------|
+| ... | ... | ... | ... |
 
 ### Breaking Changes Affecting OpsRamp Agent
 | Component | Change | Risk | Action Required |
@@ -185,8 +242,14 @@ Format the report as:
 |---------|---------------|-------------|----------|
 | ... | ... | ... | ... |
 
+### Disabled-by-Default Changes
+| Component | What Changed | Previous Default | New Default | Agent Impact |
+|-----------|-------------|-----------------|-------------|--------------|
+| ... | ... | enabled | disabled | ... |
+
 ### Required Agent go.mod Updates
 - List of version bumps needed in agent/opsramp/go.mod
+- List of import path changes needed in agent source code
 
 ### New Features Available
 - Notable new capabilities that OpsRamp agent could leverage
@@ -232,6 +295,8 @@ Use the todo list to track these items:
 19. [ ] Update OpsRamp package: opsrampdebugexporter
 20. [ ] Update OpsRamp package: opsrampotlpexporter
 21. [ ] Update builder-config.yaml
-22. [ ] Impact analysis: gather release notes
-23. [ ] Impact analysis: cross-reference agent go.mod
-24. [ ] Impact analysis: present report
+22. [ ] Impact analysis: read agent go.mod and build component list
+23. [ ] Impact analysis: gather release notes (scoped to agent packages)
+24. [ ] Impact analysis: git-based removal/rename/alias analysis (scoped to agent packages)
+25. [ ] Impact analysis: verify agent import paths still exist at new version
+26. [ ] Impact analysis: present report
