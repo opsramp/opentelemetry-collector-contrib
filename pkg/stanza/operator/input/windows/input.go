@@ -57,7 +57,7 @@ type Input struct {
 	remoteSessionHandle   windows.Handle
 	startRemoteSession    func() error
 	processEvent          func(context.Context, Event) error
-	ReqOrgAttr               *bool
+	ReqOrgAttr            *bool
 }
 
 // newInput creates a new Input operator.
@@ -308,13 +308,14 @@ func (i *Input) readBatch(ctx context.Context) bool {
 	pstartedAt := pstartedAtObj.Format("2006-01-02 15:04:05.000")
 
 	for eI, event := range events {
-		simpleEvent, err := event.RenderSimple(i.buffer)
+		parsedSimpleEvent, err := event.RenderSimple(i.buffer)
 		if err != nil {
 			i.Logger().Error("Failed to render simple event", zap.Error(err))
 			event.Close()
 			continue
 		}
 
+		simpleEvent := parsedSimpleEvent.toEventXML()
 		recordID := simpleEvent.RecordID
 		dedupKey := fmt.Sprintf("dedup_%d", recordID)
 		// Deduplication: check if this record was already processed
@@ -475,7 +476,7 @@ func (i *Input) sendEvent(ctx context.Context, event parsedEvent) error {
 		e.AddAttribute(string(conventions.LogRecordOriginalKey), event.getOriginal())
 	}
 
-	eventData, _ := i.ExtractEventData(event.EventData)
+	eventData, _ := i.ExtractEventData(event.toEventXML().EventData)
 	if len(eventData) > 0 {
 		for eK, eD := range eventData {
 			eK = strings.ReplaceAll(strings.ToLower(eK), " ", "_")
@@ -487,7 +488,7 @@ func (i *Input) sendEvent(ctx context.Context, event parsedEvent) error {
 		}
 	}
 	if i.isAdditionalAttrReq() {
-		e.AddAttribute("log_record_original", event.Original)
+		e.AddAttribute("log_record_original", event.getOriginal())
 	}
 
 	return i.Write(ctx, e)
