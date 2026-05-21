@@ -163,8 +163,7 @@ func getAuthToken(cfg SecuritySettings) (string, error) {
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := client.Do(request)
 	if err != nil {
-		if strings.Contains(err.Error(), "x509: certificate signed by unknown authority") || strings.Contains(err.Error(), "TLS handshake timeout") {
-			// If the error is due to an untrusted certificate, we can try to get the token with TLS verification disabled.
+		if strings.Contains(err.Error(), "x509: certificate signed by unknown authority") {
 			return getAuthTokenWithTlsDisabled(cfg)
 		}
 		return "", err
@@ -184,10 +183,8 @@ func getAuthToken(cfg SecuritySettings) (string, error) {
 	return credentials.AccessToken, nil
 }
 
-// start actually creates the gRPC connection. The client construction is deferred till this point as this
-// is the only place we get hold of Extensions which are required to construct auth round tripper.
+// start creates the gRPC connection with proxy and TLS support.
 func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (err error) {
-	// e.config.Endpoint => is referring to logs-endpoint
 	if serverName := endpointServerName(e.config.Endpoint); serverName != "" {
 		configuredServerName := strings.TrimSpace(e.config.ClientConfig.TLSSetting.ServerName)
 		if configuredServerName == "" || strings.Contains(configuredServerName, ":") {
@@ -195,16 +192,10 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 		}
 	}
 
-	// Save original TLS settings for logging
-	originalTLSInsecure := e.config.ClientConfig.TLSSetting.Insecure
-	originalTLSInsecureSkipVerify := e.config.ClientConfig.TLSSetting.InsecureSkipVerify
-
-	// Log TLS configuration
-	e.settings.Logger.Info("opsrampotlp TLS configuration",
-		zap.Bool("insecure", originalTLSInsecure),
-		zap.Bool("insecure_skip_verify", originalTLSInsecureSkipVerify),
-		zap.String("endpoint", e.config.Endpoint),
-	)
+	// Save original TLS settings - we handle TLS manually in dialer for proxy support
+	originalInsecure := e.config.ClientConfig.TLSSetting.Insecure
+	originalSkipVerify := e.config.ClientConfig.TLSSetting.InsecureSkipVerify
+	e.config.ClientConfig.TLSSetting.Insecure = true // Disable gRPC TLS (handled manually)
 
 	e.clientConn, err = e.config.ClientConfig.ToClientConn(
 		ctx,
@@ -214,234 +205,94 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 		configgrpc.WithGrpcDialOption(
 			grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
 				dialAddr := sanitizeDialAddress(addr)
-				e.settings.Logger.Debug("opsrampotlp dial attempt",
-					zap.String("addr", addr),
-					zap.String("dial_addr", dialAddr),
-					zap.String("endpoint", e.config.Endpoint),
-				)
 
 				if shouldBypassProxy(dialAddr) {
-					e.settings.Logger.Info("opsrampotlp dialing direct (bypass)",
-						zap.String("dial_addr", dialAddr),
-					)
+					e.settings.Logger.Debug("direct connection (localhost)", zap.String("addr", dialAddr))
 					return (&net.Dialer{}).DialContext(ctx, "tcp", dialAddr)
 				}
 
-				targetURL := &url.URL{Scheme: proxyLookupScheme(e.config.Endpoint, e.config.ClientConfig.TLSSetting.Insecure), Host: dialAddr}
+				targetURL := &url.URL{Scheme: proxyLookupScheme(e.config.Endpoint, originalInsecure), Host: dialAddr}
 				proxyURL, err := httpproxy.FromEnvironment().ProxyFunc()(targetURL)
 				if err != nil {
-					e.settings.Logger.Error("opsrampotlp proxy resolution failed",
-						zap.String("target", targetURL.String()),
-						zap.Error(err),
-					)
-					return nil, fmt.Errorf("failed to resolve proxy from environment: %w", err)
+					return nil, fmt.Errorf("proxy resolution failed: %w", err)
 				}
 
-				// No proxy set — connect directly
 				if proxyURL == nil {
-					e.settings.Logger.Warn("opsrampotlp dialing direct (no proxy from env)",
-						zap.String("dial_addr", dialAddr),
-						zap.String("lookup_target", targetURL.String()),
-					)
+					e.settings.Logger.Debug("direct connection (no proxy)", zap.String("addr", dialAddr))
 					return (&net.Dialer{}).DialContext(ctx, "tcp", dialAddr)
 				}
 
-				e.settings.Logger.Debug("opsrampotlp dialing via proxy",
-					zap.String("dial_addr", dialAddr),
-					zap.String("proxy_host", proxyURL.Host),
-					zap.String("lookup_target", targetURL.String()),
-				)
+				e.settings.Logger.Debug("connecting via proxy", zap.String("proxy", proxyURL.Host), zap.String("target", dialAddr))
 
-				// TCP connect to Squid proxy
-				proxyAddr := proxyURL.Host // 172.16.7.37:3128
+				// Connect to proxy
+				proxyAddr := proxyURL.Host
 				conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", proxyAddr)
 				if err != nil {
-					e.settings.Logger.Debug("opsrampotlp proxy tcp connect failed",
-						zap.String("proxy_addr", proxyAddr),
-						zap.Error(err),
-					)
-					return nil, fmt.Errorf("failed to connect to proxy %s: %w", proxyAddr, err)
+					return nil, fmt.Errorf("proxy connect failed: %w", err)
 				}
 
-				// Send HTTP/1.1 CONNECT to Squid
+				// HTTP CONNECT tunnel
 				connectReq := &http.Request{
-					Method:     "CONNECT",
-					URL:        &url.URL{Host: dialAddr},
-					Host:       dialAddr,
-					Header:     make(http.Header),
-					Proto:      "HTTP/1.1",
-					ProtoMajor: 1,
-					ProtoMinor: 1,
+					Method: "CONNECT", URL: &url.URL{Host: dialAddr}, Host: dialAddr,
+					Header: make(http.Header), Proto: "HTTP/1.1", ProtoMajor: 1, ProtoMinor: 1,
 				}
-
-				// Add proxy auth if present in URL
 				if proxyURL.User != nil {
 					username := proxyURL.User.Username()
 					password, _ := proxyURL.User.Password()
-					connectReq.Header.Set(
-						"Proxy-Authorization",
-						"Basic "+basicAuth(username, password),
-					)
+					connectReq.Header.Set("Proxy-Authorization", "Basic "+basicAuth(username, password))
 				}
-
-				// Write CONNECT request to proxy
 				if err := connectReq.Write(conn); err != nil {
-					e.settings.Logger.Error("opsrampotlp proxy CONNECT write failed",
-						zap.String("dial_addr", dialAddr),
-						zap.String("proxy_addr", proxyAddr),
-						zap.Error(err),
-					)
 					conn.Close()
-					return nil, fmt.Errorf("failed to write CONNECT request: %w", err)
+					return nil, fmt.Errorf("CONNECT write failed: %w", err)
 				}
 
-				// Read Squid's response
-				// Use a shared reader so any bytes read ahead during response parsing are
-				// preserved for gRPC's HTTP/2/TLS handshakes.
 				br := bufio.NewReader(conn)
 				resp, err := http.ReadResponse(br, connectReq)
 				if err != nil {
-					e.settings.Logger.Error("opsrampotlp proxy CONNECT read failed",
-						zap.String("dial_addr", dialAddr),
-						zap.String("proxy_addr", proxyAddr),
-						zap.Error(err),
-					)
 					conn.Close()
-					return nil, fmt.Errorf("failed to read CONNECT response: %w", err)
+					return nil, fmt.Errorf("CONNECT read failed: %w", err)
 				}
-
-				e.settings.Logger.Debug("opsrampotlp proxy CONNECT response",
-					zap.String("dial_addr", dialAddr),
-					zap.String("proxy_addr", proxyAddr),
-					zap.Int("status_code", resp.StatusCode),
-					zap.String("status", resp.Status),
-				)
-
-				// Check tunnel established
 				if resp.StatusCode != http.StatusOK {
 					resp.Body.Close()
 					conn.Close()
-					return nil, fmt.Errorf("proxy CONNECT failed: %s", resp.Status)
+					return nil, fmt.Errorf("CONNECT failed: %s", resp.Status)
 				}
 
-				// tunnel; closing it here will close the underlying socket.
-				// Create buffered conn to preserve any bytes read ahead by bufio.Reader
 				tunnelConn := &bufferedConn{Conn: conn, reader: br}
 
-				// When insecure=false, return raw tunnel and let gRPC handle TLS
-				// This avoids double TLS (custom dialer + gRPC layer)
-				if !e.config.ClientConfig.TLSSetting.Insecure {
-					e.settings.Logger.Debug("opsrampotlp proxy tunnel established, gRPC will handle TLS",
-						zap.String("dial_addr", dialAddr),
-						zap.String("proxy_addr", proxyAddr),
-						zap.Bool("insecure", false),
-					)
-					return tunnelConn, nil
-				}
-
-				// When insecure=true, custom dialer handles TLS with fallback mechanism
-				// gRPC won't do TLS because insecure=true
-				// Perform manual TLS handshake through the proxy tunnel
-				// Extract server name for TLS
+				// Manual TLS handshake over proxy tunnel
 				serverName := dialAddr
 				if colonIdx := strings.LastIndex(dialAddr, ":"); colonIdx != -1 {
 					serverName = dialAddr[:colonIdx]
 				}
 
-				// insecure_skip_verify controls certificate verification independently
-				skipVerify := e.config.ClientConfig.TLSSetting.InsecureSkipVerify
+				minTLSVersion := tls.VersionTLS12
+				if originalInsecure {
+					minTLSVersion = tls.VersionTLS10
+				}
 
-				tlsConfig := &tls.Config{
+				tlsConn := tls.Client(tunnelConn, &tls.Config{
 					ServerName:         serverName,
-					InsecureSkipVerify: skipVerify,
-					MinVersion:         tls.VersionTLS12, // set minTlsVersion to TLS 1.2 by default
-				}
-
-				tlsConn := tls.Client(tunnelConn, tlsConfig)
-				tlsErr := tlsConn.HandshakeContext(ctx)
-
-				// Fallback to TLS 1.0+ only when TLS 1.2 handshake fails
-				if tlsErr != nil {
-					e.settings.Logger.Info("opsrampotlp TLS 1.2 handshake failed, attempting fallback to TLS 1.0+",
-						zap.String("dial_addr", dialAddr),
-						zap.Error(tlsErr),
-					)
-
-					// Close the failed connection and re-establish tunnel for retry
+					InsecureSkipVerify: originalSkipVerify,
+					MinVersion:         uint16(minTLSVersion),
+				})
+				if err := tlsConn.HandshakeContext(ctx); err != nil {
 					tunnelConn.Close()
-
-					// Re-connect to proxy
-					conn, err = (&net.Dialer{}).DialContext(ctx, "tcp", proxyAddr)
-					if err != nil {
-						return nil, fmt.Errorf("failed to reconnect to proxy for TLS fallback: %w", err)
-					}
-
-					// Re-send CONNECT request
-					connectReq = &http.Request{
-						Method:     "CONNECT",
-						URL:        &url.URL{Host: dialAddr},
-						Host:       dialAddr,
-						Header:     make(http.Header),
-						Proto:      "HTTP/1.1",
-						ProtoMajor: 1,
-						ProtoMinor: 1,
-					}
-					if proxyURL.User != nil {
-						username := proxyURL.User.Username()
-						password, _ := proxyURL.User.Password()
-						connectReq.Header.Set("Proxy-Authorization", "Basic "+basicAuth(username, password))
-					}
-					if err = connectReq.Write(conn); err != nil {
-						conn.Close()
-						return nil, fmt.Errorf("failed to write CONNECT request for TLS fallback: %w", err)
-					}
-					br = bufio.NewReader(conn)
-					resp, err = http.ReadResponse(br, connectReq)
-					if err != nil {
-						conn.Close()
-						return nil, fmt.Errorf("failed to read CONNECT response for TLS fallback: %w", err)
-					}
-					if resp.StatusCode != http.StatusOK {
-						resp.Body.Close()
-						conn.Close()
-						return nil, fmt.Errorf("proxy CONNECT failed for TLS fallback: %s", resp.Status)
-					}
-					tunnelConn = &bufferedConn{Conn: conn, reader: br}
-
-					// Retry with TLS 1.0+ (fallback)
-					tlsConfig = &tls.Config{
-						ServerName:         serverName,
-						InsecureSkipVerify: skipVerify,
-						MinVersion:         tls.VersionTLS10,
-					}
-					tlsConn = tls.Client(tunnelConn, tlsConfig)
-					tlsErr = tlsConn.HandshakeContext(ctx)
+					return nil, fmt.Errorf("TLS handshake failed: %w", err)
 				}
 
-				if tlsErr != nil {
-					e.settings.Logger.Error("opsrampotlp TLS handshake failed",
-						zap.String("dial_addr", dialAddr),
-						zap.Error(tlsErr),
-					)
-					tunnelConn.Close()
-					return nil, fmt.Errorf("TLS handshake failed: %w", tlsErr)
+				tlsVersion := tlsConn.ConnectionState().Version
+				if tlsVersion < tls.VersionTLS12 {
+					e.settings.Logger.Warn("deprecated TLS version", zap.Uint16("version", tlsVersion))
+				} else {
+					e.settings.Logger.Debug("TLS established", zap.Uint16("version", tlsVersion), zap.Bool("skipVerify", originalSkipVerify))
 				}
-
-				e.settings.Logger.Debug("opsrampotlp proxy tunnel + TLS established",
-					zap.String("dial_addr", dialAddr),
-					zap.String("proxy_addr", proxyAddr),
-					zap.String("tls_version", tlsVersionString(tlsConn.ConnectionState().Version)),
-					zap.Bool("insecure_skip_verify", skipVerify),
-				)
 
 				return tlsConn, nil
 			})),
 	)
 
 	if err != nil {
-		e.settings.Logger.Error("opsrampotlp proxy CONNECT read failed",
-			zap.Error(err),
-		)
 		return err
 	}
 
@@ -810,19 +661,4 @@ func endpointServerName(endpoint string) string {
 	}
 
 	return strings.Trim(host, "[]")
-}
-
-func tlsVersionString(version uint16) string {
-	switch version {
-	case tls.VersionTLS10:
-		return "TLS 1.0"
-	case tls.VersionTLS11:
-		return "TLS 1.1"
-	case tls.VersionTLS12:
-		return "TLS 1.2"
-	case tls.VersionTLS13:
-		return "TLS 1.3"
-	default:
-		return fmt.Sprintf("unknown (0x%04x)", version)
-	}
 }
