@@ -206,9 +206,64 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 			grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
 				dialAddr := sanitizeDialAddress(addr)
 
+				// Helper function to establish TLS connection for direct connections
+				// with fallback to InsecureSkipVerify on x509 certificate errors
+				establishTLSConnection := func(dialAddr string, redial func() (net.Conn, error)) (net.Conn, error) {
+					conn, err := redial()
+					if err != nil {
+						return nil, err
+					}
+
+					if originalInsecure {
+						return conn, nil
+					}
+
+					serverName := dialAddr
+					if colonIdx := strings.LastIndex(dialAddr, ":"); colonIdx != -1 {
+						serverName = dialAddr[:colonIdx]
+					}
+
+					tlsConn := tls.Client(conn, &tls.Config{
+						ServerName:         serverName,
+						InsecureSkipVerify: originalSkipVerify,
+					})
+					if err := tlsConn.HandshakeContext(ctx); err != nil {
+						conn.Close()
+						// Fallback: if x509 certificate error and not already skipping verify, retry with InsecureSkipVerify
+						if !originalSkipVerify && strings.Contains(err.Error(), "x509:") {
+							e.settings.Logger.Warn("TLS handshake failed with x509 error, retrying with InsecureSkipVerify",
+								zap.String("addr", dialAddr), zap.Error(err))
+
+							// Re-establish TCP connection
+							conn, err = redial()
+							if err != nil {
+								return nil, err
+							}
+
+							tlsConn = tls.Client(conn, &tls.Config{
+								ServerName:         serverName,
+								InsecureSkipVerify: true,
+							})
+							if err := tlsConn.HandshakeContext(ctx); err != nil {
+								conn.Close()
+								return nil, fmt.Errorf("TLS handshake failed (with InsecureSkipVerify fallback): %w", err)
+							}
+
+							e.settings.Logger.Debug("TLS established (direct, InsecureSkipVerify fallback)", zap.Uint16("version", tlsConn.ConnectionState().Version))
+							return tlsConn, nil
+						}
+						return nil, fmt.Errorf("TLS handshake failed: %w", err)
+					}
+
+					e.settings.Logger.Debug("TLS established (direct)", zap.Uint16("version", tlsConn.ConnectionState().Version))
+					return tlsConn, nil
+				}
+
 				if shouldBypassProxy(dialAddr) {
 					e.settings.Logger.Debug("direct connection (localhost)", zap.String("addr", dialAddr))
-					return (&net.Dialer{}).DialContext(ctx, "tcp", dialAddr)
+					return establishTLSConnection(dialAddr, func() (net.Conn, error) {
+						return (&net.Dialer{}).DialContext(ctx, "tcp", dialAddr)
+					})
 				}
 
 				targetURL := &url.URL{Scheme: proxyLookupScheme(e.config.Endpoint, originalInsecure), Host: dialAddr}
@@ -219,46 +274,61 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 
 				if proxyURL == nil {
 					e.settings.Logger.Debug("direct connection (no proxy)", zap.String("addr", dialAddr))
-					return (&net.Dialer{}).DialContext(ctx, "tcp", dialAddr)
+					return establishTLSConnection(dialAddr, func() (net.Conn, error) {
+						return (&net.Dialer{}).DialContext(ctx, "tcp", dialAddr)
+					})
 				}
 
 				e.settings.Logger.Debug("connecting via proxy", zap.String("proxy", proxyURL.Host), zap.String("target", dialAddr))
 
-				// Connect to proxy
-				proxyAddr := proxyURL.Host
-				conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", proxyAddr)
+				// Helper to establish proxy tunnel connection
+				establishProxyTunnel := func() (net.Conn, error) {
+					// Connect to proxy
+					proxyAddr := proxyURL.Host
+					conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", proxyAddr)
+					if err != nil {
+						return nil, fmt.Errorf("proxy connect failed: %w", err)
+					}
+
+					// HTTP CONNECT tunnel
+					connectReq := &http.Request{
+						Method: "CONNECT", URL: &url.URL{Host: dialAddr}, Host: dialAddr,
+						Header: make(http.Header), Proto: "HTTP/1.1", ProtoMajor: 1, ProtoMinor: 1,
+					}
+					if proxyURL.User != nil {
+						username := proxyURL.User.Username()
+						password, _ := proxyURL.User.Password()
+						connectReq.Header.Set("Proxy-Authorization", "Basic "+basicAuth(username, password))
+					}
+					if err := connectReq.Write(conn); err != nil {
+						conn.Close()
+						return nil, fmt.Errorf("CONNECT write failed: %w", err)
+					}
+
+					br := bufio.NewReader(conn)
+					resp, err := http.ReadResponse(br, connectReq)
+					if err != nil {
+						conn.Close()
+						return nil, fmt.Errorf("CONNECT read failed: %w", err)
+					}
+					if resp.StatusCode != http.StatusOK {
+						resp.Body.Close()
+						conn.Close()
+						return nil, fmt.Errorf("CONNECT failed: %s", resp.Status)
+					}
+
+					return &bufferedConn{Conn: conn, reader: br}, nil
+				}
+
+				tunnelConn, err := establishProxyTunnel()
 				if err != nil {
-					return nil, fmt.Errorf("proxy connect failed: %w", err)
+					return nil, err
 				}
 
-				// HTTP CONNECT tunnel
-				connectReq := &http.Request{
-					Method: "CONNECT", URL: &url.URL{Host: dialAddr}, Host: dialAddr,
-					Header: make(http.Header), Proto: "HTTP/1.1", ProtoMajor: 1, ProtoMinor: 1,
+				// If insecure mode or skipVerify enabled, skip TLS/cert checking
+				if originalInsecure {
+					return tunnelConn, nil
 				}
-				if proxyURL.User != nil {
-					username := proxyURL.User.Username()
-					password, _ := proxyURL.User.Password()
-					connectReq.Header.Set("Proxy-Authorization", "Basic "+basicAuth(username, password))
-				}
-				if err := connectReq.Write(conn); err != nil {
-					conn.Close()
-					return nil, fmt.Errorf("CONNECT write failed: %w", err)
-				}
-
-				br := bufio.NewReader(conn)
-				resp, err := http.ReadResponse(br, connectReq)
-				if err != nil {
-					conn.Close()
-					return nil, fmt.Errorf("CONNECT read failed: %w", err)
-				}
-				if resp.StatusCode != http.StatusOK {
-					resp.Body.Close()
-					conn.Close()
-					return nil, fmt.Errorf("CONNECT failed: %s", resp.Status)
-				}
-
-				tunnelConn := &bufferedConn{Conn: conn, reader: br}
 
 				// Manual TLS handshake over proxy tunnel
 				serverName := dialAddr
@@ -266,28 +336,16 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 					serverName = dialAddr[:colonIdx]
 				}
 
-				minTLSVersion := tls.VersionTLS12
-				if originalInsecure {
-					minTLSVersion = tls.VersionTLS10
-				}
-
 				tlsConn := tls.Client(tunnelConn, &tls.Config{
 					ServerName:         serverName,
 					InsecureSkipVerify: originalSkipVerify,
-					MinVersion:         uint16(minTLSVersion),
 				})
 				if err := tlsConn.HandshakeContext(ctx); err != nil {
 					tunnelConn.Close()
 					return nil, fmt.Errorf("TLS handshake failed: %w", err)
 				}
 
-				tlsVersion := tlsConn.ConnectionState().Version
-				if tlsVersion < tls.VersionTLS12 {
-					e.settings.Logger.Warn("deprecated TLS version", zap.Uint16("version", tlsVersion))
-				} else {
-					e.settings.Logger.Debug("TLS established", zap.Uint16("version", tlsVersion), zap.Bool("skipVerify", originalSkipVerify))
-				}
-
+				e.settings.Logger.Debug("TLS established (via proxy)", zap.Uint16("version", tlsConn.ConnectionState().Version), zap.Bool("skipVerify", originalSkipVerify))
 				return tlsConn, nil
 			})),
 	)
