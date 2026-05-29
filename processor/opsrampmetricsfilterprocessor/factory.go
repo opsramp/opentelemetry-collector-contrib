@@ -29,9 +29,11 @@ func NewFactory() processor.Factory {
 
 func createDefaultConfig() component.Config {
 	return &Config{
-		AlertConfigMapName: "opsramp-alert-user-config",
-		AlertConfigMapKey:  "alert-definitions.yaml",
-		Namespace:          "opsramp-agent",
+		AlertConfigMapName: "",
+		AlertConfigMapKey:  "",
+		Namespace:          "",
+		WatchFileChanges:   true,
+		FileWatchInterval:  "30s",
 	}
 }
 

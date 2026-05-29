@@ -6,10 +6,13 @@ package opsrampmetricsfilterprocessor // import "github.com/open-telemetry/opent
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/prometheus/prometheus/promql/parser"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
@@ -59,9 +62,31 @@ type filterProcessor struct {
 	metricsMutex sync.RWMutex
 	metricsMap   map[string]bool
 
+	// File watching
+	fileWatcher      *FileWatcher
+	lastModTime      time.Time
+	watchIntervalDur time.Duration
+
+	// Performance tracking
+	reloadCount      int64
+	lastReloadTime   time.Time
+	processedMetrics int64
+	filteredMetrics  int64
+
 	// Context for cancellation
 	ctx    context.Context
 	cancel context.CancelFunc
+}
+
+// FileWatcher handles file system watching for alert definitions
+type FileWatcher struct {
+	filePath     string
+	logger       *zap.Logger
+	callback     func() error
+	watcher      *fsnotify.Watcher
+	ctx          context.Context
+	useFsNotify  bool
+	pollInterval time.Duration
 }
 
 // Ensure filterProcessor implements processor.Metrics interface
@@ -69,27 +94,35 @@ var _ processor.Metrics = (*filterProcessor)(nil)
 
 // newFilterProcessor creates a new instance of the filterProcessor
 func newFilterProcessor(settings processor.Settings, config *Config, nextConsumer consumer.Metrics) (*filterProcessor, error) {
-	// Create Kubernetes client
-	k8sConfig, err := rest.InClusterConfig()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Kubernetes config: %w", err)
-	}
-
-	client, err := kubernetes.NewForConfig(k8sConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Kubernetes client: %w", err)
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 
 	fp := &filterProcessor{
 		config:       config,
 		nextConsumer: nextConsumer,
 		logger:       settings.Logger,
-		client:       client,
 		metricsMap:   make(map[string]bool),
 		ctx:          ctx,
 		cancel:       cancel,
+	}
+
+	// Parse watch interval for file watching
+	if config.AlertDefinitionsFilePath != "" {
+		watchInterval, err := time.ParseDuration(config.FileWatchInterval)
+		if err != nil {
+			return nil, fmt.Errorf("invalid file_watch_interval: %w", err)
+		}
+		fp.watchIntervalDur = watchInterval
+	} else {
+		// Create Kubernetes client for ConfigMap mode
+		k8sConfig, err := rest.InClusterConfig()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Kubernetes config: %w", err)
+		}
+		client, err := kubernetes.NewForConfig(k8sConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Kubernetes client: %w", err)
+		}
+		fp.client = client
 	}
 
 	// Initial load of alert definitions
@@ -98,18 +131,31 @@ func newFilterProcessor(settings processor.Settings, config *Config, nextConsume
 		// Don't return error here, just log it and continue
 	}
 
-	// Start watching for ConfigMap changes
-	go fp.watchConfigMap()
+	// Start watching for changes
+	if config.AlertDefinitionsFilePath != "" {
+		if config.WatchFileChanges {
+			go fp.watchFile()
+		}
+	} else {
+		go fp.watchConfigMap()
+	}
 
 	return fp, nil
 }
 
 // Start starts the processor
 func (fp *filterProcessor) Start(ctx context.Context, host component.Host) error {
-	fp.logger.Info("Starting alert metrics extractor processor",
-		zap.String("configmap_name", fp.config.AlertConfigMapName),
-		zap.String("configmap_key", fp.config.AlertConfigMapKey),
-		zap.String("namespace", fp.config.Namespace))
+	if fp.config.AlertDefinitionsFilePath != "" {
+		fp.logger.Info("Starting alert metrics extractor processor with file path",
+			zap.String("file_path", fp.config.AlertDefinitionsFilePath),
+			zap.Bool("watch_changes", fp.config.WatchFileChanges),
+			zap.String("watch_interval", fp.config.FileWatchInterval))
+	} else {
+		fp.logger.Info("Starting alert metrics extractor processor with ConfigMap",
+			zap.String("configmap_name", fp.config.AlertConfigMapName),
+			zap.String("configmap_key", fp.config.AlertConfigMapKey),
+			zap.String("namespace", fp.config.Namespace))
+	}
 
 	// Log the current state of the metrics map
 	fp.metricsMutex.RLock()
@@ -125,6 +171,14 @@ func (fp *filterProcessor) Start(ctx context.Context, host component.Host) error
 // Shutdown stops the processor
 func (fp *filterProcessor) Shutdown(ctx context.Context) error {
 	fp.logger.Info("Shutting down alert metrics extractor processor")
+
+	// Close file watcher if it exists
+	if fp.fileWatcher != nil {
+		if err := fp.fileWatcher.Close(); err != nil {
+			fp.logger.Error("Failed to close file watcher", zap.Error(err))
+		}
+	}
+
 	fp.cancel()
 	return nil
 }
@@ -225,8 +279,43 @@ func (fp *filterProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metric
 	return fp.nextConsumer.ConsumeMetrics(ctx, filteredMetrics)
 }
 
-// loadAlertDefinitions loads alert definitions from the ConfigMap
+// loadAlertDefinitions loads alert definitions from either file or ConfigMap
 func (fp *filterProcessor) loadAlertDefinitions() error {
+	if fp.config.AlertDefinitionsFilePath != "" {
+		return fp.loadAlertDefinitionsFromFile()
+	}
+	return fp.loadAlertDefinitionsFromConfigMap()
+}
+
+// loadAlertDefinitionsFromFile loads alert definitions from a file
+func (fp *filterProcessor) loadAlertDefinitionsFromFile() error {
+	fp.logger.Error("Loading alert definitions from file",
+		zap.String("file_path", fp.config.AlertDefinitionsFilePath))
+
+	// Get file modification time for change detection
+	fileInfo, err := os.Stat(fp.config.AlertDefinitionsFilePath)
+	if err != nil {
+		fp.logger.Error("Failed to get file info",
+			zap.String("file_path", fp.config.AlertDefinitionsFilePath),
+			zap.Error(err))
+		return fmt.Errorf("failed to get file info for %s: %w", fp.config.AlertDefinitionsFilePath, err)
+	}
+	fp.lastModTime = fileInfo.ModTime()
+
+	// Read file content
+	alertDefData, err := os.ReadFile(fp.config.AlertDefinitionsFilePath)
+	if err != nil {
+		fp.logger.Error("Failed to read alert definitions file",
+			zap.String("file_path", fp.config.AlertDefinitionsFilePath),
+			zap.Error(err))
+		return fmt.Errorf("failed to read file %s: %w", fp.config.AlertDefinitionsFilePath, err)
+	}
+
+	return fp.processAlertDefinitionsData(alertDefData)
+}
+
+// loadAlertDefinitionsFromConfigMap loads alert definitions from the ConfigMap
+func (fp *filterProcessor) loadAlertDefinitionsFromConfigMap() error {
 	fp.logger.Info("Loading alert definitions from ConfigMap",
 		zap.String("configmap", fp.config.AlertConfigMapName),
 		zap.String("namespace", fp.config.Namespace),
@@ -253,31 +342,103 @@ func (fp *filterProcessor) loadAlertDefinitions() error {
 		return fmt.Errorf("key %s not found in ConfigMap %s/%s", fp.config.AlertConfigMapKey, fp.config.Namespace, fp.config.AlertConfigMapName)
 	}
 
-	var alertDefs AlertDefinitions
-	if err := yaml.Unmarshal([]byte(alertDefData), &alertDefs); err != nil {
+	return fp.processAlertDefinitionsData([]byte(alertDefData))
+}
+
+// processAlertDefinitionsData processes the alert definitions YAML data
+func (fp *filterProcessor) processAlertDefinitionsData(data []byte) error {
+	startTime := time.Now()
+
+	// Try nested K8s format: alertDefinitions: [{resourceType, rules: [{name, expr}]}]
+	var nestedDefs AlertDefinitions
+	if err := yaml.Unmarshal(data, &nestedDefs); err != nil {
 		fp.logger.Error("Failed to unmarshal alert definitions", zap.Error(err))
 		return fmt.Errorf("failed to unmarshal alert definitions: %w", err)
 	}
 
-	// Extract metrics from alert expressions
-	newMetricsMap := make(map[string]bool)
-	for _, alertDef := range alertDefs.AlertDefinitions {
-		for _, rule := range alertDef.Rules {
-			metrics := fp.extractMetricsFromExpression(rule.Expr)
-			for _, metric := range metrics {
-				newMetricsMap[metric] = true
-			}
+	var rules []AlertRule
+	for _, def := range nestedDefs.AlertDefinitions {
+		if len(def.Rules) > 0 {
+			rules = append(rules, def.Rules...)
 		}
 	}
 
-	// Update the global metrics map
+	// If no rules found via nested format, fall back to flat VM agent format:
+	// alertDefinitions: [{name, expr, ...}]
+	if len(rules) == 0 {
+		var flatDefs struct {
+			AlertDefinitions []AlertRule `yaml:"alertDefinitions"`
+		}
+		if err := yaml.Unmarshal(data, &flatDefs); err != nil {
+			fp.logger.Error("Failed to unmarshal alert definitions", zap.Error(err))
+			return fmt.Errorf("failed to unmarshal alert definitions: %w", err)
+		}
+		rules = flatDefs.AlertDefinitions
+	}
+
+	if len(rules) == 0 {
+		fp.logger.Warn("No alert definitions found in configuration")
+		return nil
+	}
+
+	fp.logger.Warn("Loaded alert definitions",
+		zap.Int("alert_definitions_count", len(nestedDefs.AlertDefinitions)))
+
+	// Extract metrics from alert expressions
+	newMetricsMap := make(map[string]bool)
+	totalRules := len(rules)
+	invalidExpressions := 0
+
+	for _, rule := range rules {
+		if rule.Expr == "" {
+			fp.logger.Warn("Empty expression found in alert rule",
+				zap.String("rule_name", rule.Name))
+			invalidExpressions++
+			continue
+		}
+
+		metrics := fp.extractMetricsFromExpression(rule.Expr)
+		if len(metrics) == 0 {
+			fp.logger.Warn("No metrics extracted from expression",
+				zap.String("expression", rule.Expr),
+				zap.String("rule_name", rule.Name))
+		}
+
+		for _, metric := range metrics {
+			newMetricsMap[metric] = true
+			fp.logger.Warn("Extracted metric from rule",
+				zap.String("metric", metric),
+				zap.String("rule_name", rule.Name),
+				zap.String("expression", rule.Expr))
+		}
+	}
+
+	// Update the global metrics map and tracking
 	fp.metricsMutex.Lock()
+	previousCount := len(fp.metricsMap)
 	fp.metricsMap = newMetricsMap
+	fp.reloadCount++
+	fp.lastReloadTime = time.Now()
 	fp.metricsMutex.Unlock()
 
-	fp.logger.Info("Successfully loaded alert definitions",
-		zap.Int("alert_definitions", len(alertDefs.AlertDefinitions)),
-		zap.Int("unique_metrics", len(newMetricsMap)))
+	processingDuration := time.Since(startTime)
+
+	fp.logger.Warn("Successfully loaded alert definitions",
+		zap.Int("total_rules", totalRules),
+		zap.Int("invalid_expressions", invalidExpressions),
+		zap.Int("unique_metrics", len(newMetricsMap)),
+		zap.Int("previous_metrics_count", previousCount),
+		zap.Int64("reload_count", fp.reloadCount),
+		zap.Duration("processing_duration", processingDuration))
+
+	if len(newMetricsMap) > 0 {
+		var metricsList []string
+		for metric := range newMetricsMap {
+			metricsList = append(metricsList, metric)
+		}
+		fp.logger.Warn("Extracted metrics from alert definitions",
+			zap.Strings("metrics", metricsList))
+	}
 
 	return nil
 }
@@ -300,8 +461,7 @@ func extractMetricNames(node parser.Node, metrics map[string]struct{}) {
 
 // extractMetricsFromExpression extracts metric names from a PromQL expression
 func (fp *filterProcessor) extractMetricsFromExpression(expr string) []string {
-	p := parser.NewParser(parser.Options{})
-	parsedExpr, err := p.ParseExpr(expr)
+	parsedExpr, err := parser.NewParser(parser.Options{}).ParseExpr(expr)
 	if err != nil {
 		fp.logger.Warn("Failed to parse PromQL expression", zap.String("expr", expr), zap.Error(err))
 		return nil
@@ -316,6 +476,190 @@ func (fp *filterProcessor) extractMetricsFromExpression(expr string) []string {
 	}
 
 	return result
+}
+
+// watchFile watches for changes to the alert definitions file
+func (fp *filterProcessor) watchFile() {
+	// Create file watcher
+	watcher, err := fp.createFileWatcher()
+	if err != nil {
+		fp.logger.Error("Failed to create file watcher", zap.Error(err))
+		return
+	}
+	defer watcher.Close()
+
+	fp.logger.Info("Starting enhanced file watcher",
+		zap.String("file_path", fp.config.AlertDefinitionsFilePath),
+		zap.Bool("using_fsnotify", watcher.useFsNotify),
+		zap.Duration("poll_interval", watcher.pollInterval))
+
+	watcher.Start()
+}
+
+// createFileWatcher creates a new file watcher with fsnotify support and polling fallback
+func (fp *filterProcessor) createFileWatcher() (*FileWatcher, error) {
+	fw := &FileWatcher{
+		filePath:     fp.config.AlertDefinitionsFilePath,
+		logger:       fp.logger,
+		callback:     fp.loadAlertDefinitionsFromFile,
+		ctx:          fp.ctx,
+		pollInterval: fp.watchIntervalDur,
+		useFsNotify:  true,
+	}
+
+	// Try to create fsnotify watcher
+	var err error
+	fw.watcher, err = fsnotify.NewWatcher()
+	if err != nil {
+		fw.logger.Warn("Failed to create fsnotify watcher, falling back to polling",
+			zap.Error(err))
+		fw.useFsNotify = false
+	} else {
+		// Add the file to the watcher
+		// Watch the directory since file might be replaced (common with editors)
+		dir := filepath.Dir(fw.filePath)
+		if err := fw.watcher.Add(dir); err != nil {
+			fw.logger.Warn("Failed to add directory to watcher, falling back to polling",
+				zap.String("directory", dir),
+				zap.Error(err))
+			fw.watcher.Close()
+			fw.useFsNotify = false
+		}
+	}
+
+	return fw, nil
+}
+
+// Start begins watching for file changes
+func (fw *FileWatcher) Start() {
+	if fw.useFsNotify {
+		fw.startFsNotifyWatch()
+	} else {
+		fw.startPollingWatch()
+	}
+}
+
+// Close stops the file watcher and cleans up resources
+func (fw *FileWatcher) Close() error {
+	if fw.watcher != nil {
+		return fw.watcher.Close()
+	}
+	return nil
+}
+
+// startFsNotifyWatch uses fsnotify for real-time file change detection
+func (fw *FileWatcher) startFsNotifyWatch() {
+	fw.logger.Info("Starting fsnotify file watcher", zap.String("file_path", fw.filePath))
+
+	for {
+		select {
+		case <-fw.ctx.Done():
+			return
+		case event, ok := <-fw.watcher.Events:
+			if !ok {
+				fw.logger.Error("File watcher events channel closed")
+				return
+			}
+
+			// Check if this event is for our target file
+			if filepath.Base(event.Name) == filepath.Base(fw.filePath) {
+				fw.logger.Debug("File event received",
+					zap.String("file", event.Name),
+					zap.String("operation", event.Op.String()))
+
+				// Handle file write, create, or rename events
+				if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Rename) {
+					fw.logger.Info("File modified, reloading",
+						zap.String("file_path", fw.filePath),
+						zap.String("event", event.Op.String()))
+
+					if err := fw.callback(); err != nil {
+						fw.logger.Error("Failed to reload file after change", zap.Error(err))
+					} else {
+						fw.logger.Info("Successfully reloaded file after change")
+					}
+				}
+			}
+		case err, ok := <-fw.watcher.Errors:
+			if !ok {
+				fw.logger.Error("File watcher errors channel closed")
+				return
+			}
+			fw.logger.Error("File watcher error", zap.Error(err))
+		}
+	}
+}
+
+// startPollingWatch falls back to polling for file changes
+func (fw *FileWatcher) startPollingWatch() {
+	fw.logger.Info("Starting polling file watcher",
+		zap.String("file_path", fw.filePath),
+		zap.Duration("interval", fw.pollInterval))
+
+	var lastModTime time.Time
+
+	// Get initial modification time
+	if fileInfo, err := os.Stat(fw.filePath); err == nil {
+		lastModTime = fileInfo.ModTime()
+	}
+
+	ticker := time.NewTicker(fw.pollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-fw.ctx.Done():
+			return
+		case <-ticker.C:
+			fileInfo, err := os.Stat(fw.filePath)
+			if err != nil {
+				fw.logger.Error("Failed to get file info during polling",
+					zap.String("file_path", fw.filePath),
+					zap.Error(err))
+				continue
+			}
+
+			// Check if file has been modified
+			if fileInfo.ModTime().After(lastModTime) {
+				fw.logger.Info("File changed (polling), reloading",
+					zap.String("file_path", fw.filePath),
+					zap.Time("old_mod_time", lastModTime),
+					zap.Time("new_mod_time", fileInfo.ModTime()))
+
+				lastModTime = fileInfo.ModTime()
+				if err := fw.callback(); err != nil {
+					fw.logger.Error("Failed to reload file after polling change", zap.Error(err))
+				} else {
+					fw.logger.Info("Successfully reloaded file after polling change")
+				}
+			}
+		}
+	}
+}
+
+// checkFileChanges checks if the file has been modified and reloads if necessary
+func (fp *filterProcessor) checkFileChanges() {
+	fileInfo, err := os.Stat(fp.config.AlertDefinitionsFilePath)
+	if err != nil {
+		fp.logger.Error("Failed to get file info during watch",
+			zap.String("file_path", fp.config.AlertDefinitionsFilePath),
+			zap.Error(err))
+		return
+	}
+
+	// Check if file has been modified
+	if fileInfo.ModTime().After(fp.lastModTime) {
+		fp.logger.Info("File changed, reloading alert definitions",
+			zap.String("file_path", fp.config.AlertDefinitionsFilePath),
+			zap.Time("old_mod_time", fp.lastModTime),
+			zap.Time("new_mod_time", fileInfo.ModTime()))
+
+		if err := fp.loadAlertDefinitionsFromFile(); err != nil {
+			fp.logger.Error("Failed to reload alert definitions from file", zap.Error(err))
+		} else {
+			fp.logger.Info("Successfully reloaded alert definitions from file")
+		}
+	}
 }
 
 // watchConfigMap watches for changes to the ConfigMap
@@ -370,7 +714,7 @@ func (fp *filterProcessor) doWatch() {
 			switch event.Type {
 			case watch.Modified, watch.Added:
 				fp.logger.Info("ConfigMap changed, reloading alert definitions")
-				if err := fp.loadAlertDefinitions(); err != nil {
+				if err := fp.loadAlertDefinitionsFromConfigMap(); err != nil {
 					fp.logger.Error("Failed to reload alert definitions", zap.Error(err))
 				}
 			case watch.Deleted:
