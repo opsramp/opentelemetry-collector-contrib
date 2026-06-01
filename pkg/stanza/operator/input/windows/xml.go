@@ -22,11 +22,11 @@ type EventXML struct {
 	Channel             string               `xml:"System>Channel"`
 	RecordID            uint64               `xml:"System>EventRecordID"`
 	TimeCreated         TimeCreated          `xml:"System>TimeCreated"`
-	Message          string       `xml:"RenderingInfo>Message"`
-	RenderedLevel    string       `xml:"RenderingInfo>Level"`
-	RenderedTask     string       `xml:"RenderingInfo>Task"`
-	RenderedOpcode   string       `xml:"RenderingInfo>Opcode"`
-	RenderedKeywords []string     `xml:"RenderingInfo>Keywords>Keyword"`
+	Message             string               `xml:"RenderingInfo>Message"`
+	RenderedLevel       string               `xml:"RenderingInfo>Level"`
+	RenderedTask        string               `xml:"RenderingInfo>Task"`
+	RenderedOpcode      string               `xml:"RenderingInfo>Opcode"`
+	RenderedKeywords    []string             `xml:"RenderingInfo>Keywords>Keyword"`
 	Level               string               `xml:"System>Level"`
 	Task                string               `xml:"System>Task"`
 	Opcode              string               `xml:"System>Opcode"`
@@ -53,22 +53,25 @@ func parseTimestamp(ts string) time.Time {
 	return time.Now()
 }
 
-// parseRenderedSeverity will parse the severity of the event.
+// parseSeverity will parse the severity of the event.
+// Prefers numeric level (more reliable across localized Windows installations)
+// over rendered text, falling back to text when numeric is unavailable.
 func parseSeverity(renderedLevel, level string) entry.Severity {
+	// Prefer numeric level first (more reliable than localized text)
+	switch level {
+	case "1":
+		return entry.Fatal
+	case "2":
+		return entry.Error
+	case "3":
+		return entry.Warn
+	case "4":
+		return entry.Info
+	case "5":
+		return entry.Debug // Verbose
+	}
+	// Fallback to rendered text when numeric level is empty/unknown
 	switch renderedLevel {
-	case "":
-		switch level {
-		case "1":
-			return entry.Fatal
-		case "2":
-			return entry.Error
-		case "3":
-			return entry.Warn
-		case "4":
-			return entry.Info
-		default:
-			return entry.Default
-		}
 	case "Critical":
 		return entry.Fatal
 	case "Error":
@@ -77,9 +80,8 @@ func parseSeverity(renderedLevel, level string) entry.Severity {
 		return entry.Warn
 	case "Information":
 		return entry.Info
-	default:
-		return entry.Default
 	}
+	return entry.Default
 }
 
 // formattedBody will parse a body from the event.

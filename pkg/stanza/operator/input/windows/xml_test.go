@@ -29,16 +29,31 @@ func TestParseInvalidTimestamp(t *testing.T) {
 }
 
 func TestParseSeverity(t *testing.T) {
+	// Numeric level takes precedence over rendered text
+	require.Equal(t, entry.Fatal, parseSeverity("Information", "1")) // numeric wins
+	require.Equal(t, entry.Error, parseSeverity("Information", "2")) // numeric wins
+	require.Equal(t, entry.Warn, parseSeverity("Information", "3"))  // numeric wins
+	require.Equal(t, entry.Info, parseSeverity("Error", "4"))        // numeric wins
+	require.Equal(t, entry.Debug, parseSeverity("Error", "5"))       // numeric wins (Verbose)
+
+	// Numeric level only (no rendered text)
+	require.Equal(t, entry.Fatal, parseSeverity("", "1"))
+	require.Equal(t, entry.Error, parseSeverity("", "2"))
+	require.Equal(t, entry.Warn, parseSeverity("", "3"))
+	require.Equal(t, entry.Info, parseSeverity("", "4"))
+	require.Equal(t, entry.Debug, parseSeverity("", "5"))
+
+	// Fallback to rendered text when numeric level is empty/unknown
 	require.Equal(t, entry.Fatal, parseSeverity("Critical", ""))
 	require.Equal(t, entry.Error, parseSeverity("Error", ""))
 	require.Equal(t, entry.Warn, parseSeverity("Warning", ""))
 	require.Equal(t, entry.Info, parseSeverity("Information", ""))
 	require.Equal(t, entry.Default, parseSeverity("Unknown", ""))
-	require.Equal(t, entry.Fatal, parseSeverity("", "1"))
-	require.Equal(t, entry.Error, parseSeverity("", "2"))
-	require.Equal(t, entry.Warn, parseSeverity("", "3"))
-	require.Equal(t, entry.Info, parseSeverity("", "4"))
+
+	// Default when both are unknown/empty
 	require.Equal(t, entry.Default, parseSeverity("", "0"))
+	require.Equal(t, entry.Default, parseSeverity("", ""))
+	require.Equal(t, entry.Default, parseSeverity("Unknown", "99"))
 }
 
 func TestParseBody(t *testing.T) {
