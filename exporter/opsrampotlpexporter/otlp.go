@@ -208,17 +208,17 @@ func getAuthToken(cfg SecuritySettings, tlsOpts TLSOptions) (string, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		tokenRenewInProgress = false
-		return "", fmt.Errorf("AUTH_DIAG: OAuth token request failed with status=%d body=%s", resp.StatusCode, string(jsonResp))
+		return "", fmt.Errorf("getAuthToken: OAuth token request failed with status=%d body=%s", resp.StatusCode, string(jsonResp))
 	}
 
 	if err := json.Unmarshal(jsonResp, &credentials); err != nil {
 		tokenRenewInProgress = false
-		return "", fmt.Errorf("AUTH_DIAG: failed to unmarshal OAuth response: %w body=%s", err, string(jsonResp))
+		return "", fmt.Errorf("getAuthToken: failed to unmarshal OAuth response: %w body=%s", err, string(jsonResp))
 	}
 
 	if credentials.AccessToken == "" {
 		tokenRenewInProgress = false
-		return "", fmt.Errorf("AUTH_DIAG: OAuth returned empty access_token, response body=%s", string(jsonResp))
+		return "", fmt.Errorf("getAuthToken: OAuth returned empty access_token, response body=%s", string(jsonResp))
 	}
 	tokenRenewInProgress = false
 	return credentials.AccessToken, nil
@@ -324,52 +324,107 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 					})
 				}
 
+				// Extract original hostname from endpoint for CONNECT request.
+				// gRPC resolves hostnames to IPs before calling dialer, but proxies
+				// often reject CONNECT requests to raw IPs (e.g., Squid).
+				connectTarget := endpointHostPort(e.config.Endpoint)
+				if connectTarget == "" {
+					connectTarget = dialAddr // fallback to resolved address
+				}
+
 				e.settings.Logger.Debug("connecting via proxy",
-					zap.String("proxy", proxyURL.Host), zap.String("target", dialAddr),
+					zap.String("proxy", proxyURL.Host), zap.String("connect_target", connectTarget),
+					zap.String("dial_addr", dialAddr),
 					zap.Bool("insecure", originalInsecure), zap.Bool("skipVerify", originalSkipVerify))
 
 				// establishProxyTunnel manually issues HTTP CONNECT with Proxy-Authorization.
 				// Using the standard library directly (rather than golang.org/x/net/proxy)
 				// ensures the Proxy-Authorization header is always sent correctly.
+				// Includes retry logic for transient proxy errors (5xx).
 				establishProxyTunnel := func() (net.Conn, error) {
-					conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", proxyURL.Host)
-					if err != nil {
-						return nil, fmt.Errorf("proxy dial failed: %w", err)
+					const maxRetries = 3
+					var lastErr error
+
+					for attempt := 0; attempt < maxRetries; attempt++ {
+						if attempt > 0 {
+							// Exponential backoff: 1s, 2s, 4s
+							backoff := time.Duration(1<<uint(attempt-1)) * time.Second
+							e.settings.Logger.Debug("retrying proxy CONNECT after transient error",
+								zap.Int("attempt", attempt+1),
+								zap.Duration("backoff", backoff),
+								zap.Error(lastErr))
+							select {
+							case <-ctx.Done():
+								return nil, ctx.Err()
+							case <-time.After(backoff):
+							}
+						}
+
+						conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", proxyURL.Host)
+						if err != nil {
+							lastErr = fmt.Errorf("proxy dial failed: %w", err)
+							continue
+						}
+						connectReq := &http.Request{
+							Method:     "CONNECT",
+							URL:        &url.URL{Opaque: connectTarget},
+							Host:       connectTarget,
+							Header:     make(http.Header),
+							Proto:      "HTTP/1.1",
+							ProtoMajor: 1,
+							ProtoMinor: 1,
+						}
+						if proxyURL.User != nil {
+							username := proxyURL.User.Username()
+							password, _ := proxyURL.User.Password()
+							connectReq.Header.Set("Proxy-Authorization", "Basic "+basicAuth(username, password))
+						}
+						if err := connectReq.Write(conn); err != nil {
+							conn.Close()
+							lastErr = fmt.Errorf("proxy CONNECT write failed: %w", err)
+							continue
+						}
+						br := bufio.NewReader(conn)
+						resp, err := http.ReadResponse(br, connectReq)
+						if err != nil {
+							conn.Close()
+							lastErr = fmt.Errorf("proxy CONNECT read failed: %w", err)
+							continue
+						}
+						resp.Body.Close()
+						if resp.StatusCode != http.StatusOK {
+							conn.Close()
+							// Retry on transient 5xx errors (502, 503, 504)
+							if resp.StatusCode >= 500 && resp.StatusCode < 600 {
+								lastErr = fmt.Errorf("proxy CONNECT rejected (transient): %s", resp.Status)
+								e.settings.Logger.Warn("proxy returned transient error, will retry",
+									zap.Int("status_code", resp.StatusCode),
+									zap.String("status", resp.Status),
+									zap.Int("attempt", attempt+1),
+									zap.Int("max_retries", maxRetries))
+								continue
+							}
+							// Non-retryable proxy error (4xx, etc.)
+							return nil, fmt.Errorf("proxy CONNECT rejected: %s", resp.Status)
+						}
+						return &bufferedConn{Conn: conn, reader: br}, nil
 					}
-					connectReq := &http.Request{
-						Method:     "CONNECT",
-						URL:        &url.URL{Host: dialAddr},
-						Host:       dialAddr,
-						Header:     make(http.Header),
-						Proto:      "HTTP/1.1",
-						ProtoMajor: 1,
-						ProtoMinor: 1,
-					}
-					if proxyURL.User != nil {
-						username := proxyURL.User.Username()
-						password, _ := proxyURL.User.Password()
-						connectReq.Header.Set("Proxy-Authorization", "Basic "+basicAuth(username, password))
-					}
-					if err := connectReq.Write(conn); err != nil {
-						conn.Close()
-						return nil, fmt.Errorf("proxy CONNECT write failed: %w", err)
-					}
-					br := bufio.NewReader(conn)
-					resp, err := http.ReadResponse(br, connectReq)
-					if err != nil {
-						conn.Close()
-						return nil, fmt.Errorf("proxy CONNECT read failed: %w", err)
-					}
-					resp.Body.Close()
-					if resp.StatusCode != http.StatusOK {
-						conn.Close()
-						return nil, fmt.Errorf("proxy CONNECT rejected: %s", resp.Status)
-					}
-					return &bufferedConn{Conn: conn, reader: br}, nil
+					return nil, fmt.Errorf("proxy CONNECT failed after %d retries: %w", maxRetries, lastErr)
 				}
 
 				tunnelConn, err := establishProxyTunnel()
 				if err != nil {
+					// If proxy consistently fails with transient errors, try direct connection as fallback
+					if strings.Contains(err.Error(), "transient") || strings.Contains(err.Error(), "503") ||
+						strings.Contains(err.Error(), "502") || strings.Contains(err.Error(), "504") {
+						e.settings.Logger.Warn("proxy unavailable, falling back to direct connection",
+							zap.String("target", dialAddr),
+							zap.String("proxy", proxyURL.Host),
+							zap.Error(err))
+						return establishTLSConnection(dialAddr, func() (net.Conn, error) {
+							return (&net.Dialer{}).DialContext(ctx, "tcp", dialAddr)
+						})
+					}
 					return nil, err
 				}
 
@@ -856,6 +911,40 @@ func shouldBypassProxy(addr string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
+}
+
+// endpointHostPort extracts the host:port from an endpoint string for use in
+// CONNECT requests. This preserves the original hostname (not resolved IP).
+func endpointHostPort(endpoint string) string {
+	if endpoint == "" {
+		return ""
+	}
+	// Strip scheme if present (e.g., "https://host:port" -> "host:port")
+	if strings.Contains(endpoint, "://") {
+		u, err := url.Parse(endpoint)
+		if err == nil {
+			host := u.Hostname()
+			port := u.Port()
+			if port == "" {
+				if u.Scheme == "https" {
+					port = "443"
+				} else {
+					port = "80"
+				}
+			}
+			return net.JoinHostPort(host, port)
+		}
+	}
+	// Remove path if present
+	host := endpoint
+	if idx := strings.Index(host, "/"); idx >= 0 {
+		host = host[:idx]
+	}
+	// If no port, add default 443
+	if _, _, err := net.SplitHostPort(host); err != nil {
+		return net.JoinHostPort(host, "443")
+	}
+	return host
 }
 
 func endpointServerName(endpoint string) string {
