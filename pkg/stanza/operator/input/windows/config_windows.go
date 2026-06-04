@@ -69,6 +69,7 @@ func (c *Config) Build(set component.TelemetrySettings) (operator.Operator, erro
 		raw:                      c.Raw,
 		eventDataFormat:          c.EventDataFormat,
 		includeLogRecordOriginal: c.IncludeLogRecordOriginal,
+		ReqOrgAttr:               c.ReqOrgAttr,
 		excludeProviders:         excludeProvidersSet(c.ExcludeProviders),
 		remote:                   c.Remote,
 		query:                    c.Query,

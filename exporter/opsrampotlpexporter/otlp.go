@@ -15,9 +15,11 @@
 package opsrampotlpexporter // import "go.opentelemetry.io/collector/exporter/otlpexporter"
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,7 +33,6 @@ import (
 	"sync"
 	"time"
 
-	_ "github.com/opsramp/go-proxy-dialer/connect" // implemetation for http connect proxy
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configgrpc"
 	"go.opentelemetry.io/collector/consumer/consumererror"
@@ -46,7 +47,6 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/net/http/httpproxy"
-	"golang.org/x/net/proxy"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -81,6 +81,12 @@ type opsrampOTLPExporter struct {
 	accessToken string
 
 	logger *zap.Logger
+
+	// TLS fallback state
+	originalInsecure     bool           // original Insecure setting from config
+	originalSkipVerify   bool           // original InsecureSkipVerify setting
+	tlsFallbackAttempted bool           // whether we've already tried TLS fallback
+	host                 component.Host // saved for reconnection
 }
 
 // Crete new exporter and start it. The exporter will begin connecting, but
@@ -88,7 +94,15 @@ type opsrampOTLPExporter struct {
 func newExporter(cfg component.Config, set exporter.Settings) (*opsrampOTLPExporter, error) {
 	oCfg := cfg.(*Config)
 
-	accessToken, err := getAuthToken(oCfg.Security)
+	// Extract TLS options from the gRPC client config
+	// Insecure=true means no TLS (plain connection)
+	// InsecureSkipVerify=true means TLS but skip cert verification
+	tlsOpts := TLSOptions{
+		Insecure:           oCfg.ClientConfig.TLS.Insecure,
+		InsecureSkipVerify: oCfg.ClientConfig.TLS.InsecureSkipVerify,
+	}
+
+	accessToken, err := getAuthToken(oCfg.Security, tlsOpts)
 	if err != nil {
 		tokenRenewInProgress = false
 		return nil, fmt.Errorf("access token isn't available: %w", err)
@@ -118,7 +132,15 @@ type Person struct {
 	Age  int    `json:"age"`
 }
 
-func getAuthToken(cfg SecuritySettings) (string, error) {
+// TLSOptions holds TLS configuration for HTTP/gRPC connections.
+type TLSOptions struct {
+	// Insecure disables TLS entirely (plaintext connection).
+	Insecure bool
+	// InsecureSkipVerify skips server certificate verification.
+	InsecureSkipVerify bool
+}
+
+func getAuthToken(cfg SecuritySettings, tlsOpts TLSOptions) (string, error) {
 	tokenMutex.Lock()
 	defer tokenMutex.Unlock()
 
@@ -132,6 +154,15 @@ func getAuthToken(cfg SecuritySettings) (string, error) {
 		return credentials.AccessToken, nil
 	}
 	tokenRenewInProgress = true
+
+	// Configure TLS based on options
+	var tlsConfig *tls.Config
+	if !tlsOpts.Insecure {
+		tlsConfig = &tls.Config{
+			InsecureSkipVerify: tlsOpts.InsecureSkipVerify,
+			MinVersion:         tls.VersionTLS12,
+		}
+	}
 
 	client := &http.Client{
 		Transport: &http.Transport{
@@ -147,6 +178,7 @@ func getAuthToken(cfg SecuritySettings) (string, error) {
 			IdleConnTimeout:       90 * time.Second,
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
+			TLSClientConfig:       tlsConfig,
 		},
 	}
 	data := url.Values{}
@@ -162,10 +194,17 @@ func getAuthToken(cfg SecuritySettings) (string, error) {
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := client.Do(request)
 	if err != nil {
-		if strings.Contains(err.Error(), "x509: certificate signed by unknown authority") || strings.Contains(err.Error(), "TLS handshake timeout") {
-			// If the error is due to an untrusted certificate, we can try to get the token with TLS verification disabled.
+		// Only fallback to TLS disabled mode if InsecureSkipVerify wasn't already true
+		// and the error is TLS-related
+		if !tlsOpts.InsecureSkipVerify &&
+			(strings.Contains(err.Error(), "x509: certificate signed by unknown authority") ||
+				strings.Contains(err.Error(), "TLS handshake timeout") ||
+				strings.Contains(err.Error(), "certificate") ||
+				strings.Contains(err.Error(), "tls:")) {
+			// Retry with TLS verification disabled as a fallback
 			return getAuthTokenWithTlsDisabled(cfg)
 		}
+		tokenRenewInProgress = false
 		return "", err
 	}
 	defer resp.Body.Close()
@@ -177,17 +216,17 @@ func getAuthToken(cfg SecuritySettings) (string, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		tokenRenewInProgress = false
-		return "", fmt.Errorf("AUTH_DIAG: OAuth token request failed with status=%d body=%s", resp.StatusCode, string(jsonResp))
+		return "", fmt.Errorf("getAuthToken: OAuth token request failed with status=%d body=%s", resp.StatusCode, string(jsonResp))
 	}
 
 	if err := json.Unmarshal(jsonResp, &credentials); err != nil {
 		tokenRenewInProgress = false
-		return "", fmt.Errorf("AUTH_DIAG: failed to unmarshal OAuth response: %w body=%s", err, string(jsonResp))
+		return "", fmt.Errorf("getAuthToken: failed to unmarshal OAuth response: %w body=%s", err, string(jsonResp))
 	}
 
 	if credentials.AccessToken == "" {
 		tokenRenewInProgress = false
-		return "", fmt.Errorf("AUTH_DIAG: OAuth returned empty access_token, response body=%s", string(jsonResp))
+		return "", fmt.Errorf("getAuthToken: OAuth returned empty access_token, response body=%s", string(jsonResp))
 	}
 	tokenRenewInProgress = false
 	return credentials.AccessToken, nil
@@ -196,6 +235,26 @@ func getAuthToken(cfg SecuritySettings) (string, error) {
 // start actually creates the gRPC connection. The client construction is deferred till this point as this
 // is the only place we get hold of Extensions which are required to construct auth round tripper.
 func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (err error) {
+	if serverName := endpointServerName(e.config.Endpoint); serverName != "" {
+		configuredServerName := strings.TrimSpace(e.config.ClientConfig.TLS.ServerName)
+		if configuredServerName == "" || strings.Contains(configuredServerName, ":") {
+			e.config.ClientConfig.TLS.ServerName = serverName
+		}
+	}
+
+	// Save original TLS settings — we handle TLS manually in the dialer so that
+	// gRPC's own TLS+proxy interception is bypassed completely. By forcing
+	// Insecure=true here gRPC treats the connection as plain TCP and never
+	// tries to establish its own HTTP-CONNECT tunnel, which would conflict with
+	// our manual CONNECT implementation below.
+	originalInsecure := e.config.ClientConfig.TLS.Insecure
+	originalSkipVerify := e.config.ClientConfig.TLS.InsecureSkipVerify
+
+	// Store for TLS fallback mechanism
+	e.originalInsecure = originalInsecure
+	e.originalSkipVerify = originalSkipVerify
+	e.host = host
+	e.config.ClientConfig.TLS.Insecure = true
 
 	e.clientConn, err = e.config.ClientConfig.ToClientConn(
 		ctx,
@@ -203,21 +262,209 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 		e.settings,
 		configgrpc.WithGrpcDialOption(grpc.WithUserAgent(e.userAgent)),
 		configgrpc.WithGrpcDialOption(
-			grpc.WithContextDialer(func(_ context.Context, addr string) (net.Conn, error) {
-				if httpproxy.FromEnvironment().HTTPProxy == "" {
-					return (&net.Dialer{}).Dial("tcp", addr)
+			grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
+				dialAddr := sanitizeDialAddress(addr)
+
+				// establishTLSConnection wraps a raw TCP dialer with a TLS handshake,
+				// falling back to InsecureSkipVerify on x509 errors when allowed.
+				establishTLSConnection := func(dialAddr string, redial func() (net.Conn, error)) (net.Conn, error) {
+					conn, err := redial()
+					if err != nil {
+						return nil, err
+					}
+					if originalInsecure {
+						return conn, nil
+					}
+					serverName := dialAddr
+					if colonIdx := strings.LastIndex(dialAddr, ":"); colonIdx != -1 {
+						serverName = dialAddr[:colonIdx]
+					}
+					tlsConn := tls.Client(conn, &tls.Config{
+						ServerName:         serverName,
+						InsecureSkipVerify: originalSkipVerify, // #nosec G402
+					})
+					if err := tlsConn.HandshakeContext(ctx); err != nil {
+						conn.Close()
+						if originalSkipVerify {
+							e.settings.Logger.Warn("TLS handshake failed (InsecureSkipVerify=true), bypassing TLS",
+								zap.String("addr", dialAddr), zap.Error(err))
+							conn, err = redial()
+							if err != nil {
+								return nil, err
+							}
+							return conn, nil
+						}
+						if strings.Contains(err.Error(), "x509:") {
+							e.settings.Logger.Warn("TLS x509 error, retrying with InsecureSkipVerify",
+								zap.String("addr", dialAddr), zap.Error(err))
+							conn, err = redial()
+							if err != nil {
+								return nil, err
+							}
+							tlsConn = tls.Client(conn, &tls.Config{
+								ServerName:         serverName,
+								InsecureSkipVerify: true, // #nosec G402
+							})
+							if err := tlsConn.HandshakeContext(ctx); err != nil {
+								conn.Close()
+								return nil, fmt.Errorf("TLS handshake failed (InsecureSkipVerify fallback): %w", err)
+							}
+							return tlsConn, nil
+						}
+						return nil, fmt.Errorf("TLS handshake failed: %w", err)
+					}
+					e.settings.Logger.Debug("TLS established (direct)",
+						zap.Uint16("version", tlsConn.ConnectionState().Version))
+					return tlsConn, nil
 				}
 
-				uri, er := url.Parse(httpproxy.FromEnvironment().HTTPProxy)
-				if er != nil {
-					return nil, er
+				// Bypass proxy for loopback addresses.
+				if shouldBypassProxy(dialAddr) {
+					return establishTLSConnection(dialAddr, func() (net.Conn, error) {
+						return (&net.Dialer{}).DialContext(ctx, "tcp", dialAddr)
+					})
 				}
 
-				dialer, er := proxy.FromURL(uri, proxy.Direct)
-				if er != nil {
-					return nil, er
+				// Resolve proxy URL from environment (HTTPS_PROXY for TLS, HTTP_PROXY for plain).
+				scheme := proxyLookupScheme(e.config.Endpoint, originalInsecure)
+				targetURL := &url.URL{Scheme: scheme, Host: dialAddr}
+
+				proxyURL, err := httpproxy.FromEnvironment().ProxyFunc()(targetURL)
+				if err != nil {
+					return nil, fmt.Errorf("proxy resolution failed: %w", err)
 				}
-				return dialer.Dial("tcp", addr)
+				if proxyURL == nil {
+					return establishTLSConnection(dialAddr, func() (net.Conn, error) {
+						return (&net.Dialer{}).DialContext(ctx, "tcp", dialAddr)
+					})
+				}
+
+				e.settings.Logger.Debug("Using proxy for connection",
+					zap.String("proxy", proxyURL.Host),
+					zap.String("target", dialAddr))
+
+				// Extract original hostname from endpoint for CONNECT request.
+				// gRPC resolves hostnames to IPs before calling dialer, but proxies
+				// often reject CONNECT requests to raw IPs (e.g., Squid).
+				connectTarget := endpointHostPort(e.config.Endpoint)
+				if connectTarget == "" {
+					connectTarget = dialAddr // fallback to resolved address
+				}
+
+				// establishProxyTunnel manually issues HTTP CONNECT with Proxy-Authorization.
+				// Using the standard library directly (rather than golang.org/x/net/proxy)
+				// ensures the Proxy-Authorization header is always sent correctly.
+				// Includes retry logic for transient proxy errors (5xx).
+				establishProxyTunnel := func() (net.Conn, error) {
+					const maxRetries = 3
+					var lastErr error
+
+					for attempt := 0; attempt < maxRetries; attempt++ {
+						if attempt > 0 {
+							// Exponential backoff: 1s, 2s, 4s
+							backoff := time.Duration(1<<uint(attempt-1)) * time.Second
+							select {
+							case <-ctx.Done():
+								return nil, ctx.Err()
+							case <-time.After(backoff):
+							}
+						}
+
+						conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", proxyURL.Host)
+						if err != nil {
+							lastErr = fmt.Errorf("proxy dial failed: %w", err)
+							continue
+						}
+						connectReq := &http.Request{
+							Method:     "CONNECT",
+							URL:        &url.URL{Opaque: connectTarget},
+							Host:       connectTarget,
+							Header:     make(http.Header),
+							Proto:      "HTTP/1.1",
+							ProtoMajor: 1,
+							ProtoMinor: 1,
+						}
+						if proxyURL.User != nil {
+							username := proxyURL.User.Username()
+							password, _ := proxyURL.User.Password()
+							connectReq.Header.Set("Proxy-Authorization", "Basic "+basicAuth(username, password))
+						}
+						if err := connectReq.Write(conn); err != nil {
+							conn.Close()
+							lastErr = fmt.Errorf("proxy CONNECT write failed: %w", err)
+							continue
+						}
+						br := bufio.NewReader(conn)
+						resp, err := http.ReadResponse(br, connectReq)
+						if err != nil {
+							conn.Close()
+							lastErr = fmt.Errorf("proxy CONNECT read failed: %w", err)
+							continue
+						}
+						resp.Body.Close()
+						if resp.StatusCode != http.StatusOK {
+							conn.Close()
+							// Retry on transient 5xx errors (502, 503, 504)
+							if resp.StatusCode >= 500 && resp.StatusCode < 600 {
+								lastErr = fmt.Errorf("proxy CONNECT rejected (transient): %s", resp.Status)
+								e.settings.Logger.Warn("proxy returned transient error, will retry",
+									zap.Int("status_code", resp.StatusCode),
+									zap.Int("attempt", attempt+1))
+								continue
+							}
+							// Non-retryable proxy error (4xx, etc.)
+							return nil, fmt.Errorf("proxy CONNECT rejected: %s", resp.Status)
+						}
+						return &bufferedConn{Conn: conn, reader: br}, nil
+					}
+					return nil, fmt.Errorf("proxy CONNECT failed after %d retries: %w", maxRetries, lastErr)
+				}
+
+				tunnelConn, err := establishProxyTunnel()
+				if err != nil {
+					// If proxy consistently fails with transient errors, try direct connection as fallback
+					if strings.Contains(err.Error(), "transient") || strings.Contains(err.Error(), "503") ||
+						strings.Contains(err.Error(), "502") || strings.Contains(err.Error(), "504") {
+						e.settings.Logger.Warn("proxy unavailable, falling back to direct connection",
+							zap.String("target", dialAddr))
+						return establishTLSConnection(dialAddr, func() (net.Conn, error) {
+							return (&net.Dialer{}).DialContext(ctx, "tcp", dialAddr)
+						})
+					}
+					return nil, err
+				}
+
+				if originalInsecure {
+					return tunnelConn, nil
+				}
+
+				// Manual TLS handshake over the proxy tunnel.
+				serverName := dialAddr
+				if colonIdx := strings.LastIndex(dialAddr, ":"); colonIdx != -1 {
+					serverName = dialAddr[:colonIdx]
+				}
+				tlsConn := tls.Client(tunnelConn, &tls.Config{
+					ServerName:         serverName,
+					InsecureSkipVerify: originalSkipVerify, // #nosec G402
+				})
+				if err := tlsConn.HandshakeContext(ctx); err != nil {
+					tunnelConn.Close()
+					if originalSkipVerify {
+						e.settings.Logger.Warn("TLS via proxy failed (InsecureSkipVerify=true), bypassing TLS",
+							zap.String("target", dialAddr), zap.Error(err))
+						tunnelConn, err = establishProxyTunnel()
+						if err != nil {
+							return nil, err
+						}
+						return tunnelConn, nil
+					}
+					return nil, fmt.Errorf("TLS handshake via proxy failed: %w", err)
+				}
+				e.settings.Logger.Debug("TLS established (via proxy)",
+					zap.Uint16("version", tlsConn.ConnectionState().Version),
+					zap.Bool("insecure", originalInsecure),
+					zap.Bool("skipVerify", originalSkipVerify))
+				return tlsConn, nil
 			})),
 	)
 	if err != nil {
@@ -234,41 +481,11 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 	e.metadata = metadata.New(headers)
 	e.metadata.Set("Authorization", fmt.Sprintf("Bearer %s", e.accessToken))
 
-	// AUTH_DIAG: Log metadata keys being sent with gRPC calls
-	var mdKeys []string
-	for k, v := range e.metadata {
-		if k == "authorization" {
-			if len(v) > 0 && len(v[0]) > 15 {
-				mdKeys = append(mdKeys, fmt.Sprintf("%s=len(%d)", k, len(v[0])))
-			} else {
-				mdKeys = append(mdKeys, fmt.Sprintf("%s=EMPTY_OR_SHORT", k))
-			}
-		} else {
-			mdKeys = append(mdKeys, fmt.Sprintf("%s=%v", k, v))
-		}
-	}
-	if e.logger != nil {
-		e.logger.Debug("AUTH_DIAG: exporter start() metadata", zap.Strings("metadata_entries", mdKeys))
-	}
-	e.settings.Logger.Debug("AUTH_DIAG: exporter start() metadata", zap.Strings("metadata_entries", mdKeys))
-	e.settings.Logger.Debug("AUTH_DIAG: exporter endpoints",
-		zap.String("grpc_endpoint", e.config.ClientConfig.Endpoint),
-		zap.String("oauth_url", e.config.Security.OAuthServiceURL),
-		zap.Int("access_token_len", len(e.accessToken)),
-	)
-
 	e.callOptions = []grpc.CallOption{
 		grpc.MaxCallSendMsgSize(e.config.Security.OtelExporterSetting.GrpcMaxSendSize),
 		grpc.MaxCallRecvMsgSize(e.config.Security.OtelExporterSetting.GrpcMaxRecvSize),
 		grpc.WaitForReady(e.config.ClientConfig.WaitForReady),
 	}
-
-	//e.logger.Debug(
-	//	"OTLP Exporter started",
-	//	zap.String("Calloptions", fmt.Sprintf("%v", e.callOptions)),
-	//	zap.Int("Calloptions -> grpc.MaxCallSendMsgSize", e.config.Security.OtelExporterSetting.GrpcMaxSendSize),
-	//	zap.Int("Calloptions -> grpc.MaxCallRecvMsgSize", e.config.Security.OtelExporterSetting.GrpcMaxRecvSize),
-	//)
 
 	return
 }
@@ -280,11 +497,72 @@ func (e *opsrampOTLPExporter) shutdown(context.Context) error {
 	return e.clientConn.Close()
 }
 
+// isTLSMismatchError checks if the error indicates a TLS/plaintext mismatch,
+// which happens when we send plaintext to a TLS server (EOF, transport closing)
+func (e *opsrampOTLPExporter) isTLSMismatchError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "EOF") ||
+		strings.Contains(errStr, "transport is closing") ||
+		strings.Contains(errStr, "connection reset") ||
+		strings.Contains(errStr, "server preface")
+}
+
+// reconnectWithTLS closes the current connection and reconnects with TLS enabled.
+// This is used as a fallback when originalInsecure=true but the server requires TLS.
+func (e *opsrampOTLPExporter) reconnectWithTLS(ctx context.Context) error {
+	e.mut.Lock()
+	defer e.mut.Unlock()
+
+	// Already attempted fallback or TLS was already enabled
+	if e.tlsFallbackAttempted || !e.originalInsecure {
+		return nil
+	}
+
+	e.settings.Logger.Warn("Connection failed with Insecure=true, attempting TLS fallback")
+
+	// Mark fallback attempted
+	e.tlsFallbackAttempted = true
+
+	// Close existing connection
+	if e.clientConn != nil {
+		e.clientConn.Close()
+		e.clientConn = nil
+	}
+
+	// Force TLS for reconnection: Insecure=false, InsecureSkipVerify=true
+	e.config.ClientConfig.TLS.Insecure = false
+	e.config.ClientConfig.TLS.InsecureSkipVerify = true
+	e.originalInsecure = false
+	e.originalSkipVerify = true
+
+	// Reconnect using start()
+	if err := e.start(ctx, e.host); err != nil {
+		e.settings.Logger.Error("TLS fallback reconnection failed", zap.Error(err))
+		return err
+	}
+
+	e.settings.Logger.Info("TLS fallback reconnection successful")
+	return nil
+}
+
 func (e *opsrampOTLPExporter) pushTraces(ctx context.Context, td ptrace.Traces) error {
 	req := ptraceotlp.NewExportRequestFromTraces(td)
 	_, err := e.traceExporter.Export(e.enhanceContext(ctx), req, e.callOptions...)
 	// trying to get new access token in case of expiration
 	if err != nil {
+		// TLS fallback: if originalInsecure=true and we get TLS mismatch errors, retry with TLS
+		if e.isTLSMismatchError(err) && e.originalInsecure && !e.tlsFallbackAttempted {
+			if reconnErr := e.reconnectWithTLS(ctx); reconnErr == nil {
+				_, err = e.traceExporter.Export(e.enhanceContext(ctx), req, e.callOptions...)
+				if err == nil {
+					return nil
+				}
+			}
+		}
+
 		st := status.Convert(err)
 		if st.Code() == codes.Unauthenticated {
 			if err = e.updateExpiredToken(); err != nil {
@@ -305,6 +583,16 @@ func (e *opsrampOTLPExporter) pushMetrics(ctx context.Context, md pmetric.Metric
 	_, err := e.metricExporter.Export(e.enhanceContext(ctx), req, e.callOptions...)
 	// trying to get new access token in case of expiration
 	if err != nil {
+		// TLS fallback: if originalInsecure=true and we get TLS mismatch errors, retry with TLS
+		if e.isTLSMismatchError(err) && e.originalInsecure && !e.tlsFallbackAttempted {
+			if reconnErr := e.reconnectWithTLS(ctx); reconnErr == nil {
+				_, err = e.metricExporter.Export(e.enhanceContext(ctx), req, e.callOptions...)
+				if err == nil {
+					return nil
+				}
+			}
+		}
+
 		st := status.Convert(err)
 		if st.Code() == codes.Unauthenticated {
 			if err = e.updateExpiredToken(); err != nil {
@@ -327,9 +615,6 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 		return nil
 	}
 
-	//start := time.Now()
-	//e.logger.Debug("Exporter: pushLogs Started processing logs", zap.String("start at", start.Format(time.RFC3339)))
-
 	if e.config.Masking != nil {
 		e.applyMasking(ld)
 	}
@@ -340,84 +625,31 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 		return nil
 	}
 
-	if e.config.Masking != nil {
-		e.applyMasking(ld)
-	}
-
-	if e.config.ExpirationSkip != 0 {
-		e.skipExpired(ld)
-	}
-
 	req := plogotlp.NewExportRequestFromLogs(ld)
-	//
-	//data, _ := req.MarshalJSON()
-	//e.logger.Debug("request details",
-	//	zap.String("started_at", start.Format(time.RFC3339Nano)),
-	//	zap.Int("ResourceLogsCount", ld.ResourceLogs().Len()),
-	//	zap.Int("TotalLogRecordCount", ld.LogRecordCount()),
-	//	zap.Int("RequestSizeBytes", len(data)),
-	//)
-	//
-	//beforePushEndTime := time.Now()
 
 	_, err := e.logExporter.Export(e.enhanceContext(context.Background()), req, e.callOptions...)
-
-	//end := time.Now()
-	//e.logger.Debug("Exporter: pushLogs: completed processing logs",
-	//	zap.String("Stage 1", "before push"),
-	//	zap.String("ended_at", beforePushEndTime.Format(time.RFC3339Nano)),
-	//	zap.Float64("duration_seconds", beforePushEndTime.Sub(start).Seconds()),
-	//	zap.Int64("duration_ms", beforePushEndTime.Sub(start).Milliseconds()),
-	//	zap.Float64("duration_seconds", beforePushEndTime.Sub(start).Seconds()),
-	//	zap.String("Stage 1", "before push - end"),
-	//
-	//	zap.String("Stage 2", "after push"),
-	//	zap.String("ended_at", end.Format(time.RFC3339Nano)),
-	//	zap.Float64("duration_seconds", end.Sub(start).Seconds()),
-	//	zap.Int64("duration_ms", end.Sub(start).Milliseconds()),
-	//	zap.Float64("duration_seconds", end.Sub(start).Seconds()),
-	//	zap.String("Stage 2", "after push - end"),
-	//)
 
 	// trying to get a new access token in case of expiration
 	if err != nil {
 		st := status.Convert(err)
-		e.settings.Logger.Warn("AUTH_DIAG: pushLogs Export failed",
-			zap.String("grpc_code", st.Code().String()),
-			zap.String("error", err.Error()),
-			zap.Int("metadata_len", e.metadata.Len()),
-			zap.Bool("has_tenantId", len(e.metadata.Get("tenantid")) > 0),
-			zap.String("tenantId_value", strings.Join(e.metadata.Get("tenantid"), ",")),
-			zap.Bool("has_authorization", len(e.metadata.Get("authorization")) > 0),
-			zap.Int("access_token_len", len(e.accessToken)),
-		)
-		if e.logger != nil {
-			e.logger.Warn("AUTH_DIAG: pushLogs Export failed",
-				zap.String("grpc_code", st.Code().String()),
-				zap.String("error", err.Error()),
-				zap.Int("metadata_len", e.metadata.Len()),
-				zap.Bool("has_tenantId", len(e.metadata.Get("tenantid")) > 0),
-				zap.String("tenantId_value", strings.Join(e.metadata.Get("tenantid"), ",")),
-				zap.Bool("has_authorization", len(e.metadata.Get("authorization")) > 0),
-				zap.Int("access_token_len", len(e.accessToken)),
-			)
+
+		// TLS fallback: if originalInsecure=true and we get TLS mismatch errors, retry with TLS
+		if e.isTLSMismatchError(err) && e.originalInsecure && !e.tlsFallbackAttempted {
+			if reconnErr := e.reconnectWithTLS(context.Background()); reconnErr == nil {
+				_, err = e.logExporter.Export(e.enhanceContext(context.Background()), req, e.callOptions...)
+				if err == nil {
+					return nil
+				}
+			}
 		}
+
 		if st.Code() == codes.Unauthenticated {
 			if err = e.updateExpiredToken(); err != nil {
-				e.settings.Logger.Error("AUTH_DIAG: token refresh failed", zap.Error(err))
 				return fmt.Errorf("couldn't retrieve new token instead of expired: %w", err)
 			}
-			e.settings.Logger.Debug("AUTH_DIAG: token refreshed, retrying Export",
-				zap.Int("new_token_len", len(e.accessToken)),
-			)
 
 			_, err = e.logExporter.Export(e.enhanceContext(context.Background()), req, e.callOptions...)
 			if err != nil {
-				e.settings.Logger.Error("AUTH_DIAG: retry Export also failed after token refresh",
-					zap.Error(err),
-					zap.String("tenantId_value", strings.Join(e.metadata.Get("tenantid"), ",")),
-					zap.Int("access_token_len", len(e.accessToken)),
-				)
 				return err
 			}
 		}
@@ -427,17 +659,17 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 }
 
 func (e *opsrampOTLPExporter) updateExpiredToken() error {
-	accessToken, err := getAuthToken(e.config.Security)
+	// Extract TLS options from the gRPC client config
+	tlsOpts := TLSOptions{
+		Insecure:           e.config.ClientConfig.TLS.Insecure,
+		InsecureSkipVerify: e.config.ClientConfig.TLS.InsecureSkipVerify,
+	}
+	accessToken, err := getAuthToken(e.config.Security, tlsOpts)
 	if err != nil {
 		return err
 	}
 	e.mut.Lock()
 	defer e.mut.Unlock()
-	e.settings.Logger.Debug("AUTH_DIAG: updateExpiredToken refreshed",
-		zap.Int("old_token_len", len(e.accessToken)),
-		zap.Int("new_token_len", len(accessToken)),
-		zap.Bool("token_changed", e.accessToken != accessToken),
-	)
 	e.accessToken = accessToken
 	// Always update the metadata when token is refreshed
 	e.metadata.Set("Authorization", fmt.Sprintf("Bearer %s", e.accessToken))
@@ -617,6 +849,108 @@ func getAuthTokenWithTlsDisabled(cfg SecuritySettings) (string, error) {
 	}
 
 	return credentials.AccessToken, nil
+}
+
+func basicAuth(username, password string) string {
+	return base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
+}
+
+type bufferedConn struct {
+	net.Conn
+	reader *bufio.Reader
+}
+
+func (c *bufferedConn) Read(p []byte) (int, error) {
+	return c.reader.Read(p)
+}
+
+func proxyLookupScheme(endpoint string, insecure bool) string {
+	if strings.HasPrefix(endpoint, "http://") {
+		return "http"
+	}
+	if strings.HasPrefix(endpoint, "https://") {
+		return "https"
+	}
+	if insecure {
+		return "http"
+	}
+	return "https"
+}
+
+func sanitizeDialAddress(addr string) string {
+	for _, prefix := range []string{"dns:///", "passthrough:///"} {
+		if strings.HasPrefix(addr, prefix) {
+			return strings.TrimPrefix(addr, prefix)
+		}
+	}
+	return addr
+}
+
+func shouldBypassProxy(addr string) bool {
+	host := addr
+	if h, _, err := net.SplitHostPort(addr); err == nil {
+		host = h
+	}
+	host = strings.Trim(host, "[]")
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// endpointHostPort extracts the host:port from an endpoint string for use in
+// CONNECT requests. This preserves the original hostname (not resolved IP).
+func endpointHostPort(endpoint string) string {
+	if endpoint == "" {
+		return ""
+	}
+	// Strip scheme if present (e.g., "https://host:port" -> "host:port")
+	if strings.Contains(endpoint, "://") {
+		u, err := url.Parse(endpoint)
+		if err == nil {
+			host := u.Hostname()
+			port := u.Port()
+			if port == "" {
+				if u.Scheme == "https" {
+					port = "443"
+				} else {
+					port = "80"
+				}
+			}
+			return net.JoinHostPort(host, port)
+		}
+	}
+	// Remove path if present
+	host := endpoint
+	if idx := strings.Index(host, "/"); idx >= 0 {
+		host = host[:idx]
+	}
+	// If no port, add default 443
+	if _, _, err := net.SplitHostPort(host); err != nil {
+		return net.JoinHostPort(host, "443")
+	}
+	return host
+}
+
+func endpointServerName(endpoint string) string {
+	if endpoint == "" {
+		return ""
+	}
+	if strings.Contains(endpoint, "://") {
+		u, err := url.Parse(endpoint)
+		if err == nil {
+			return u.Hostname()
+		}
+	}
+	host := endpoint
+	if idx := strings.Index(host, "/"); idx >= 0 {
+		host = host[:idx]
+	}
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		return strings.Trim(h, "[]")
+	}
+	return strings.Trim(host, "[]")
 }
 
 func initLogger() *zap.Logger {

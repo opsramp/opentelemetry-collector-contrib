@@ -58,6 +58,7 @@ type Config struct {
 	Raw                      bool            `mapstructure:"raw,omitempty"`
 	EventDataFormat          EventDataFormat `mapstructure:"event_data_format,omitempty"`
 	IncludeLogRecordOriginal bool            `mapstructure:"include_log_record_original,omitempty"`
+	ReqOrgAttr               *bool           `mapstructure:"req_org_attr,omitempty"`
 	SuppressRenderingInfo    bool            `mapstructure:"suppress_rendering_info,omitempty"`
 	ExcludeProviders         []string        `mapstructure:"exclude_providers,omitempty"`
 	Remote                   RemoteConfig    `mapstructure:"remote,omitempty"`
