@@ -81,6 +81,12 @@ type opsrampOTLPExporter struct {
 	accessToken string
 
 	logger *zap.Logger
+
+	// TLS fallback state
+	originalInsecure     bool           // original Insecure setting from config
+	originalSkipVerify   bool           // original InsecureSkipVerify setting
+	tlsFallbackAttempted bool           // whether we've already tried TLS fallback
+	host                 component.Host // saved for reconnection
 }
 
 // Crete new exporter and start it. The exporter will begin connecting, but
@@ -89,6 +95,8 @@ func newExporter(cfg component.Config, set exporter.Settings) (*opsrampOTLPExpor
 	oCfg := cfg.(*Config)
 
 	// Extract TLS options from the gRPC client config
+	// Insecure=true means no TLS (plain connection)
+	// InsecureSkipVerify=true means TLS but skip cert verification
 	tlsOpts := TLSOptions{
 		Insecure:           oCfg.ClientConfig.TLS.Insecure,
 		InsecureSkipVerify: oCfg.ClientConfig.TLS.InsecureSkipVerify,
@@ -241,6 +249,11 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 	// our manual CONNECT implementation below.
 	originalInsecure := e.config.ClientConfig.TLS.Insecure
 	originalSkipVerify := e.config.ClientConfig.TLS.InsecureSkipVerify
+
+	// Store for TLS fallback mechanism
+	e.originalInsecure = originalInsecure
+	e.originalSkipVerify = originalSkipVerify
+	e.host = host
 	e.config.ClientConfig.TLS.Insecure = true
 
 	e.clientConn, err = e.config.ClientConfig.ToClientConn(
@@ -313,7 +326,9 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 				}
 
 				// Resolve proxy URL from environment (HTTPS_PROXY for TLS, HTTP_PROXY for plain).
-				targetURL := &url.URL{Scheme: proxyLookupScheme(e.config.Endpoint, originalInsecure), Host: dialAddr}
+				scheme := proxyLookupScheme(e.config.Endpoint, originalInsecure)
+				targetURL := &url.URL{Scheme: scheme, Host: dialAddr}
+
 				proxyURL, err := httpproxy.FromEnvironment().ProxyFunc()(targetURL)
 				if err != nil {
 					return nil, fmt.Errorf("proxy resolution failed: %w", err)
@@ -324,6 +339,10 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 					})
 				}
 
+				e.settings.Logger.Debug("Using proxy for connection",
+					zap.String("proxy", proxyURL.Host),
+					zap.String("target", dialAddr))
+
 				// Extract original hostname from endpoint for CONNECT request.
 				// gRPC resolves hostnames to IPs before calling dialer, but proxies
 				// often reject CONNECT requests to raw IPs (e.g., Squid).
@@ -331,11 +350,6 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 				if connectTarget == "" {
 					connectTarget = dialAddr // fallback to resolved address
 				}
-
-				e.settings.Logger.Debug("connecting via proxy",
-					zap.String("proxy", proxyURL.Host), zap.String("connect_target", connectTarget),
-					zap.String("dial_addr", dialAddr),
-					zap.Bool("insecure", originalInsecure), zap.Bool("skipVerify", originalSkipVerify))
 
 				// establishProxyTunnel manually issues HTTP CONNECT with Proxy-Authorization.
 				// Using the standard library directly (rather than golang.org/x/net/proxy)
@@ -349,10 +363,6 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 						if attempt > 0 {
 							// Exponential backoff: 1s, 2s, 4s
 							backoff := time.Duration(1<<uint(attempt-1)) * time.Second
-							e.settings.Logger.Debug("retrying proxy CONNECT after transient error",
-								zap.Int("attempt", attempt+1),
-								zap.Duration("backoff", backoff),
-								zap.Error(lastErr))
 							select {
 							case <-ctx.Done():
 								return nil, ctx.Err()
@@ -399,9 +409,7 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 								lastErr = fmt.Errorf("proxy CONNECT rejected (transient): %s", resp.Status)
 								e.settings.Logger.Warn("proxy returned transient error, will retry",
 									zap.Int("status_code", resp.StatusCode),
-									zap.String("status", resp.Status),
-									zap.Int("attempt", attempt+1),
-									zap.Int("max_retries", maxRetries))
+									zap.Int("attempt", attempt+1))
 								continue
 							}
 							// Non-retryable proxy error (4xx, etc.)
@@ -418,9 +426,7 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 					if strings.Contains(err.Error(), "transient") || strings.Contains(err.Error(), "503") ||
 						strings.Contains(err.Error(), "502") || strings.Contains(err.Error(), "504") {
 						e.settings.Logger.Warn("proxy unavailable, falling back to direct connection",
-							zap.String("target", dialAddr),
-							zap.String("proxy", proxyURL.Host),
-							zap.Error(err))
+							zap.String("target", dialAddr))
 						return establishTLSConnection(dialAddr, func() (net.Conn, error) {
 							return (&net.Dialer{}).DialContext(ctx, "tcp", dialAddr)
 						})
@@ -475,41 +481,11 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 	e.metadata = metadata.New(headers)
 	e.metadata.Set("Authorization", fmt.Sprintf("Bearer %s", e.accessToken))
 
-	// AUTH_DIAG: Log metadata keys being sent with gRPC calls
-	var mdKeys []string
-	for k, v := range e.metadata {
-		if k == "authorization" {
-			if len(v) > 0 && len(v[0]) > 15 {
-				mdKeys = append(mdKeys, fmt.Sprintf("%s=len(%d)", k, len(v[0])))
-			} else {
-				mdKeys = append(mdKeys, fmt.Sprintf("%s=EMPTY_OR_SHORT", k))
-			}
-		} else {
-			mdKeys = append(mdKeys, fmt.Sprintf("%s=%v", k, v))
-		}
-	}
-	if e.logger != nil {
-		e.logger.Debug("AUTH_DIAG: exporter start() metadata", zap.Strings("metadata_entries", mdKeys))
-	}
-	e.settings.Logger.Debug("AUTH_DIAG: exporter start() metadata", zap.Strings("metadata_entries", mdKeys))
-	e.settings.Logger.Debug("AUTH_DIAG: exporter endpoints",
-		zap.String("grpc_endpoint", e.config.ClientConfig.Endpoint),
-		zap.String("oauth_url", e.config.Security.OAuthServiceURL),
-		zap.Int("access_token_len", len(e.accessToken)),
-	)
-
 	e.callOptions = []grpc.CallOption{
 		grpc.MaxCallSendMsgSize(e.config.Security.OtelExporterSetting.GrpcMaxSendSize),
 		grpc.MaxCallRecvMsgSize(e.config.Security.OtelExporterSetting.GrpcMaxRecvSize),
 		grpc.WaitForReady(e.config.ClientConfig.WaitForReady),
 	}
-
-	//e.logger.Debug(
-	//	"OTLP Exporter started",
-	//	zap.String("Calloptions", fmt.Sprintf("%v", e.callOptions)),
-	//	zap.Int("Calloptions -> grpc.MaxCallSendMsgSize", e.config.Security.OtelExporterSetting.GrpcMaxSendSize),
-	//	zap.Int("Calloptions -> grpc.MaxCallRecvMsgSize", e.config.Security.OtelExporterSetting.GrpcMaxRecvSize),
-	//)
 
 	return
 }
@@ -521,11 +497,72 @@ func (e *opsrampOTLPExporter) shutdown(context.Context) error {
 	return e.clientConn.Close()
 }
 
+// isTLSMismatchError checks if the error indicates a TLS/plaintext mismatch,
+// which happens when we send plaintext to a TLS server (EOF, transport closing)
+func (e *opsrampOTLPExporter) isTLSMismatchError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "EOF") ||
+		strings.Contains(errStr, "transport is closing") ||
+		strings.Contains(errStr, "connection reset") ||
+		strings.Contains(errStr, "server preface")
+}
+
+// reconnectWithTLS closes the current connection and reconnects with TLS enabled.
+// This is used as a fallback when originalInsecure=true but the server requires TLS.
+func (e *opsrampOTLPExporter) reconnectWithTLS(ctx context.Context) error {
+	e.mut.Lock()
+	defer e.mut.Unlock()
+
+	// Already attempted fallback or TLS was already enabled
+	if e.tlsFallbackAttempted || !e.originalInsecure {
+		return nil
+	}
+
+	e.settings.Logger.Warn("Connection failed with Insecure=true, attempting TLS fallback")
+
+	// Mark fallback attempted
+	e.tlsFallbackAttempted = true
+
+	// Close existing connection
+	if e.clientConn != nil {
+		e.clientConn.Close()
+		e.clientConn = nil
+	}
+
+	// Force TLS for reconnection: Insecure=false, InsecureSkipVerify=true
+	e.config.ClientConfig.TLS.Insecure = false
+	e.config.ClientConfig.TLS.InsecureSkipVerify = true
+	e.originalInsecure = false
+	e.originalSkipVerify = true
+
+	// Reconnect using start()
+	if err := e.start(ctx, e.host); err != nil {
+		e.settings.Logger.Error("TLS fallback reconnection failed", zap.Error(err))
+		return err
+	}
+
+	e.settings.Logger.Info("TLS fallback reconnection successful")
+	return nil
+}
+
 func (e *opsrampOTLPExporter) pushTraces(ctx context.Context, td ptrace.Traces) error {
 	req := ptraceotlp.NewExportRequestFromTraces(td)
 	_, err := e.traceExporter.Export(e.enhanceContext(ctx), req, e.callOptions...)
 	// trying to get new access token in case of expiration
 	if err != nil {
+		// TLS fallback: if originalInsecure=true and we get TLS mismatch errors, retry with TLS
+		if e.isTLSMismatchError(err) && e.originalInsecure && !e.tlsFallbackAttempted {
+			if reconnErr := e.reconnectWithTLS(ctx); reconnErr == nil {
+				_, err = e.traceExporter.Export(e.enhanceContext(ctx), req, e.callOptions...)
+				if err == nil {
+					return nil
+				}
+			}
+		}
+
 		st := status.Convert(err)
 		if st.Code() == codes.Unauthenticated {
 			if err = e.updateExpiredToken(); err != nil {
@@ -546,6 +583,16 @@ func (e *opsrampOTLPExporter) pushMetrics(ctx context.Context, md pmetric.Metric
 	_, err := e.metricExporter.Export(e.enhanceContext(ctx), req, e.callOptions...)
 	// trying to get new access token in case of expiration
 	if err != nil {
+		// TLS fallback: if originalInsecure=true and we get TLS mismatch errors, retry with TLS
+		if e.isTLSMismatchError(err) && e.originalInsecure && !e.tlsFallbackAttempted {
+			if reconnErr := e.reconnectWithTLS(ctx); reconnErr == nil {
+				_, err = e.metricExporter.Export(e.enhanceContext(ctx), req, e.callOptions...)
+				if err == nil {
+					return nil
+				}
+			}
+		}
+
 		st := status.Convert(err)
 		if st.Code() == codes.Unauthenticated {
 			if err = e.updateExpiredToken(); err != nil {
@@ -568,9 +615,6 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 		return nil
 	}
 
-	//start := time.Now()
-	//e.logger.Debug("Exporter: pushLogs Started processing logs", zap.String("start at", start.Format(time.RFC3339)))
-
 	if e.config.Masking != nil {
 		e.applyMasking(ld)
 	}
@@ -581,84 +625,31 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 		return nil
 	}
 
-	if e.config.Masking != nil {
-		e.applyMasking(ld)
-	}
-
-	if e.config.ExpirationSkip != 0 {
-		e.skipExpired(ld)
-	}
-
 	req := plogotlp.NewExportRequestFromLogs(ld)
-	//
-	//data, _ := req.MarshalJSON()
-	//e.logger.Debug("request details",
-	//	zap.String("started_at", start.Format(time.RFC3339Nano)),
-	//	zap.Int("ResourceLogsCount", ld.ResourceLogs().Len()),
-	//	zap.Int("TotalLogRecordCount", ld.LogRecordCount()),
-	//	zap.Int("RequestSizeBytes", len(data)),
-	//)
-	//
-	//beforePushEndTime := time.Now()
 
 	_, err := e.logExporter.Export(e.enhanceContext(context.Background()), req, e.callOptions...)
-
-	//end := time.Now()
-	//e.logger.Debug("Exporter: pushLogs: completed processing logs",
-	//	zap.String("Stage 1", "before push"),
-	//	zap.String("ended_at", beforePushEndTime.Format(time.RFC3339Nano)),
-	//	zap.Float64("duration_seconds", beforePushEndTime.Sub(start).Seconds()),
-	//	zap.Int64("duration_ms", beforePushEndTime.Sub(start).Milliseconds()),
-	//	zap.Float64("duration_seconds", beforePushEndTime.Sub(start).Seconds()),
-	//	zap.String("Stage 1", "before push - end"),
-	//
-	//	zap.String("Stage 2", "after push"),
-	//	zap.String("ended_at", end.Format(time.RFC3339Nano)),
-	//	zap.Float64("duration_seconds", end.Sub(start).Seconds()),
-	//	zap.Int64("duration_ms", end.Sub(start).Milliseconds()),
-	//	zap.Float64("duration_seconds", end.Sub(start).Seconds()),
-	//	zap.String("Stage 2", "after push - end"),
-	//)
 
 	// trying to get a new access token in case of expiration
 	if err != nil {
 		st := status.Convert(err)
-		e.settings.Logger.Warn("AUTH_DIAG: pushLogs Export failed",
-			zap.String("grpc_code", st.Code().String()),
-			zap.String("error", err.Error()),
-			zap.Int("metadata_len", e.metadata.Len()),
-			zap.Bool("has_tenantId", len(e.metadata.Get("tenantid")) > 0),
-			zap.String("tenantId_value", strings.Join(e.metadata.Get("tenantid"), ",")),
-			zap.Bool("has_authorization", len(e.metadata.Get("authorization")) > 0),
-			zap.Int("access_token_len", len(e.accessToken)),
-		)
-		if e.logger != nil {
-			e.logger.Warn("AUTH_DIAG: pushLogs Export failed",
-				zap.String("grpc_code", st.Code().String()),
-				zap.String("error", err.Error()),
-				zap.Int("metadata_len", e.metadata.Len()),
-				zap.Bool("has_tenantId", len(e.metadata.Get("tenantid")) > 0),
-				zap.String("tenantId_value", strings.Join(e.metadata.Get("tenantid"), ",")),
-				zap.Bool("has_authorization", len(e.metadata.Get("authorization")) > 0),
-				zap.Int("access_token_len", len(e.accessToken)),
-			)
+
+		// TLS fallback: if originalInsecure=true and we get TLS mismatch errors, retry with TLS
+		if e.isTLSMismatchError(err) && e.originalInsecure && !e.tlsFallbackAttempted {
+			if reconnErr := e.reconnectWithTLS(context.Background()); reconnErr == nil {
+				_, err = e.logExporter.Export(e.enhanceContext(context.Background()), req, e.callOptions...)
+				if err == nil {
+					return nil
+				}
+			}
 		}
+
 		if st.Code() == codes.Unauthenticated {
 			if err = e.updateExpiredToken(); err != nil {
-				e.settings.Logger.Error("AUTH_DIAG: token refresh failed", zap.Error(err))
 				return fmt.Errorf("couldn't retrieve new token instead of expired: %w", err)
 			}
-			e.settings.Logger.Debug("AUTH_DIAG: token refreshed, retrying Export",
-				zap.Int("new_token_len", len(e.accessToken)),
-			)
 
 			_, err = e.logExporter.Export(e.enhanceContext(context.Background()), req, e.callOptions...)
 			if err != nil {
-				e.settings.Logger.Error("AUTH_DIAG: retry Export also failed after token refresh",
-					zap.Error(err),
-					zap.String("tenantId_value", strings.Join(e.metadata.Get("tenantid"), ",")),
-					zap.Int("access_token_len", len(e.accessToken)),
-				)
 				return err
 			}
 		}
@@ -679,11 +670,6 @@ func (e *opsrampOTLPExporter) updateExpiredToken() error {
 	}
 	e.mut.Lock()
 	defer e.mut.Unlock()
-	e.settings.Logger.Debug("AUTH_DIAG: updateExpiredToken refreshed",
-		zap.Int("old_token_len", len(e.accessToken)),
-		zap.Int("new_token_len", len(accessToken)),
-		zap.Bool("token_changed", e.accessToken != accessToken),
-	)
 	e.accessToken = accessToken
 	// Always update the metadata when token is refreshed
 	e.metadata.Set("Authorization", fmt.Sprintf("Bearer %s", e.accessToken))
