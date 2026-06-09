@@ -44,13 +44,13 @@ var _ component.Config = (*Config)(nil)
 
 // Validate checks if the processor configuration is valid
 func (cfg *Config) Validate() error {
-	// Check if both file path and ConfigMap are configured
-	if cfg.AlertDefinitionsFilePath != "" && (cfg.AlertConfigMapName != "" && cfg.AlertConfigMapKey != "") {
-		return fmt.Errorf("cannot specify both alert_definitions_file_path and ConfigMap configuration (alert_definitions_configmap_name/alert_definitions_key)")
-	}
-
-	// If file path is provided, validate it
+	// If file path is provided, it takes precedence. Clear any ConfigMap fields
+	// that may have been populated by createDefaultConfig() to avoid false conflicts.
 	if cfg.AlertDefinitionsFilePath != "" {
+		cfg.AlertConfigMapName = ""
+		cfg.AlertConfigMapKey = ""
+		cfg.Namespace = ""
+
 		// Validate file path format
 		if !filepath.IsAbs(cfg.AlertDefinitionsFilePath) {
 			return fmt.Errorf("alert_definitions_file_path must be an absolute path: %s", cfg.AlertDefinitionsFilePath)
@@ -70,32 +70,23 @@ func (cfg *Config) Validate() error {
 		// Validate and set default watch interval
 		if cfg.FileWatchInterval == "" {
 			cfg.FileWatchInterval = "30s"
-		} else {
-			// Validate watch interval format
-			if _, err := time.ParseDuration(cfg.FileWatchInterval); err != nil {
-				return fmt.Errorf("invalid file_watch_interval format: %s (must be valid duration like '30s', '1m')", cfg.FileWatchInterval)
-			}
-		}
-
-		// Default to watching file changes if file path is provided
-		if !cfg.WatchFileChanges {
-			cfg.WatchFileChanges = true
+		} else if _, err := time.ParseDuration(cfg.FileWatchInterval); err != nil {
+			return fmt.Errorf("invalid file_watch_interval format: %s (must be valid duration like '30s', '1m')", cfg.FileWatchInterval)
 		}
 	} else {
-
-		// ConfigMap mode - set defaults
+		// ConfigMap mode — apply defaults for name/key if unset,
+		// then resolve namespace from env.
 		if cfg.AlertConfigMapName == "" {
 			cfg.AlertConfigMapName = "opsramp-alert-user-config"
 		}
-
 		if cfg.AlertConfigMapKey == "" {
 			cfg.AlertConfigMapKey = "alert-definitions.yaml"
 		}
-
-		// Set namespace from environment variable if not already set
-		cfg.Namespace = os.Getenv("NAMESPACE")
 		if cfg.Namespace == "" {
-			cfg.Namespace = "opsramp-agent"
+			cfg.Namespace = os.Getenv("NAMESPACE")
+			if cfg.Namespace == "" {
+				cfg.Namespace = "opsramp-agent"
+			}
 		}
 	}
 

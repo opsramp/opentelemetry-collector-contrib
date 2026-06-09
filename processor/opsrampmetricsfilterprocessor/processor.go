@@ -64,14 +64,11 @@ type filterProcessor struct {
 
 	// File watching
 	fileWatcher      *FileWatcher
-	lastModTime      time.Time
 	watchIntervalDur time.Duration
 
 	// Performance tracking
-	reloadCount      int64
-	lastReloadTime   time.Time
-	processedMetrics int64
-	filteredMetrics  int64
+	reloadCount    int64
+	lastReloadTime time.Time
 
 	// Context for cancellation
 	ctx    context.Context
@@ -134,7 +131,13 @@ func newFilterProcessor(settings processor.Settings, config *Config, nextConsume
 	// Start watching for changes
 	if config.AlertDefinitionsFilePath != "" {
 		if config.WatchFileChanges {
-			go fp.watchFile()
+			watcher, err := fp.createFileWatcher()
+			if err != nil {
+				fp.logger.Error("Failed to create file watcher", zap.Error(err))
+			} else {
+				fp.fileWatcher = watcher
+				go fp.watchFile()
+			}
 		}
 	} else {
 		go fp.watchConfigMap()
@@ -289,18 +292,16 @@ func (fp *filterProcessor) loadAlertDefinitions() error {
 
 // loadAlertDefinitionsFromFile loads alert definitions from a file
 func (fp *filterProcessor) loadAlertDefinitionsFromFile() error {
-	fp.logger.Error("Loading alert definitions from file",
+	fp.logger.Info("Loading alert definitions from file",
 		zap.String("file_path", fp.config.AlertDefinitionsFilePath))
 
-	// Get file modification time for change detection
-	fileInfo, err := os.Stat(fp.config.AlertDefinitionsFilePath)
-	if err != nil {
+	// Verify file is accessible before reading
+	if _, err := os.Stat(fp.config.AlertDefinitionsFilePath); err != nil {
 		fp.logger.Error("Failed to get file info",
 			zap.String("file_path", fp.config.AlertDefinitionsFilePath),
 			zap.Error(err))
 		return fmt.Errorf("failed to get file info for %s: %w", fp.config.AlertDefinitionsFilePath, err)
 	}
-	fp.lastModTime = fileInfo.ModTime()
 
 	// Read file content
 	alertDefData, err := os.ReadFile(fp.config.AlertDefinitionsFilePath)
@@ -381,7 +382,7 @@ func (fp *filterProcessor) processAlertDefinitionsData(data []byte) error {
 		return nil
 	}
 
-	fp.logger.Warn("Loaded alert definitions",
+	fp.logger.Info("Loaded alert definitions",
 		zap.Int("alert_definitions_count", len(nestedDefs.AlertDefinitions)))
 
 	// Extract metrics from alert expressions
@@ -406,7 +407,7 @@ func (fp *filterProcessor) processAlertDefinitionsData(data []byte) error {
 
 		for _, metric := range metrics {
 			newMetricsMap[metric] = true
-			fp.logger.Warn("Extracted metric from rule",
+			fp.logger.Debug("Extracted metric from rule",
 				zap.String("metric", metric),
 				zap.String("rule_name", rule.Name),
 				zap.String("expression", rule.Expr))
@@ -423,7 +424,7 @@ func (fp *filterProcessor) processAlertDefinitionsData(data []byte) error {
 
 	processingDuration := time.Since(startTime)
 
-	fp.logger.Warn("Successfully loaded alert definitions",
+	fp.logger.Info("Successfully loaded alert definitions",
 		zap.Int("total_rules", totalRules),
 		zap.Int("invalid_expressions", invalidExpressions),
 		zap.Int("unique_metrics", len(newMetricsMap)),
@@ -436,7 +437,7 @@ func (fp *filterProcessor) processAlertDefinitionsData(data []byte) error {
 		for metric := range newMetricsMap {
 			metricsList = append(metricsList, metric)
 		}
-		fp.logger.Warn("Extracted metrics from alert definitions",
+		fp.logger.Info("Extracted metrics from alert definitions",
 			zap.Strings("metrics", metricsList))
 	}
 
@@ -478,22 +479,15 @@ func (fp *filterProcessor) extractMetricsFromExpression(expr string) []string {
 	return result
 }
 
-// watchFile watches for changes to the alert definitions file
+// watchFile starts the file watcher. The watcher must be created and assigned
+// to fp.fileWatcher before calling this function. Shutdown() owns the Close().
 func (fp *filterProcessor) watchFile() {
-	// Create file watcher
-	watcher, err := fp.createFileWatcher()
-	if err != nil {
-		fp.logger.Error("Failed to create file watcher", zap.Error(err))
-		return
-	}
-	defer watcher.Close()
-
 	fp.logger.Info("Starting enhanced file watcher",
 		zap.String("file_path", fp.config.AlertDefinitionsFilePath),
-		zap.Bool("using_fsnotify", watcher.useFsNotify),
-		zap.Duration("poll_interval", watcher.pollInterval))
+		zap.Bool("using_fsnotify", fp.fileWatcher.useFsNotify),
+		zap.Duration("poll_interval", fp.fileWatcher.pollInterval))
 
-	watcher.Start()
+	fp.fileWatcher.Start()
 }
 
 // createFileWatcher creates a new file watcher with fsnotify support and polling fallback
@@ -547,13 +541,32 @@ func (fw *FileWatcher) Close() error {
 	return nil
 }
 
-// startFsNotifyWatch uses fsnotify for real-time file change detection
+// startFsNotifyWatch uses fsnotify for real-time file change detection.
+// Uses absolute path comparison to avoid false triggers from same-named files,
+// and debounces rapid events (e.g. vim/VS Code multi-event saves).
 func (fw *FileWatcher) startFsNotifyWatch() {
 	fw.logger.Info("Starting fsnotify file watcher", zap.String("file_path", fw.filePath))
+
+	// Pre-resolve the target path for accurate comparison
+	absFilePath, err := filepath.Abs(fw.filePath)
+	if err != nil {
+		absFilePath = fw.filePath
+	}
+
+	const debounceDelay = 200 * time.Millisecond
+	var (
+		debounceTimer *time.Timer
+		debounceMu    sync.Mutex
+	)
 
 	for {
 		select {
 		case <-fw.ctx.Done():
+			debounceMu.Lock()
+			if debounceTimer != nil {
+				debounceTimer.Stop()
+			}
+			debounceMu.Unlock()
 			return
 		case event, ok := <-fw.watcher.Events:
 			if !ok {
@@ -561,24 +574,39 @@ func (fw *FileWatcher) startFsNotifyWatch() {
 				return
 			}
 
-			// Check if this event is for our target file
-			if filepath.Base(event.Name) == filepath.Base(fw.filePath) {
-				fw.logger.Debug("File event received",
-					zap.String("file", event.Name),
-					zap.String("operation", event.Op.String()))
+			// Use absolute path comparison to avoid false triggers
+			absEventPath, _ := filepath.Abs(event.Name)
+			if absEventPath != absFilePath {
+				continue
+			}
 
-				// Handle file write, create, or rename events
-				if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Rename) {
+			fw.logger.Debug("File event received",
+				zap.String("file", event.Name),
+				zap.String("operation", event.Op.String()))
+
+			// Debounce write/create/rename events to avoid redundant rapid reloads
+			if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Rename) {
+				debounceMu.Lock()
+				if debounceTimer != nil {
+					debounceTimer.Stop()
+				}
+				eventOp := event.Op.String()
+				debounceTimer = time.AfterFunc(debounceDelay, func() {
+					select {
+					case <-fw.ctx.Done():
+						return
+					default:
+					}
 					fw.logger.Info("File modified, reloading",
 						zap.String("file_path", fw.filePath),
-						zap.String("event", event.Op.String()))
-
+						zap.String("event", eventOp))
 					if err := fw.callback(); err != nil {
 						fw.logger.Error("Failed to reload file after change", zap.Error(err))
 					} else {
 						fw.logger.Info("Successfully reloaded file after change")
 					}
-				}
+				})
+				debounceMu.Unlock()
 			}
 		case err, ok := <-fw.watcher.Errors:
 			if !ok {
@@ -633,31 +661,6 @@ func (fw *FileWatcher) startPollingWatch() {
 					fw.logger.Info("Successfully reloaded file after polling change")
 				}
 			}
-		}
-	}
-}
-
-// checkFileChanges checks if the file has been modified and reloads if necessary
-func (fp *filterProcessor) checkFileChanges() {
-	fileInfo, err := os.Stat(fp.config.AlertDefinitionsFilePath)
-	if err != nil {
-		fp.logger.Error("Failed to get file info during watch",
-			zap.String("file_path", fp.config.AlertDefinitionsFilePath),
-			zap.Error(err))
-		return
-	}
-
-	// Check if file has been modified
-	if fileInfo.ModTime().After(fp.lastModTime) {
-		fp.logger.Info("File changed, reloading alert definitions",
-			zap.String("file_path", fp.config.AlertDefinitionsFilePath),
-			zap.Time("old_mod_time", fp.lastModTime),
-			zap.Time("new_mod_time", fileInfo.ModTime()))
-
-		if err := fp.loadAlertDefinitionsFromFile(); err != nil {
-			fp.logger.Error("Failed to reload alert definitions from file", zap.Error(err))
-		} else {
-			fp.logger.Info("Successfully reloaded alert definitions from file")
 		}
 	}
 }
