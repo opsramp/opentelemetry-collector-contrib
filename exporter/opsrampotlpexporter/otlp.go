@@ -275,9 +275,15 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 					if originalInsecure {
 						return conn, nil
 					}
-					serverName := dialAddr
-					if colonIdx := strings.LastIndex(dialAddr, ":"); colonIdx != -1 {
-						serverName = dialAddr[:colonIdx]
+					// Prefer the configured ServerName (hostname) over the resolved IP in dialAddr.
+					// gRPC resolves DNS before calling the dialer, so dialAddr is an IP address.
+					// Using an IP as SNI ServerName breaks certificate validation.
+					serverName := e.config.ClientConfig.TLS.ServerName
+					if serverName == "" {
+						serverName = dialAddr
+						if colonIdx := strings.LastIndex(dialAddr, ":"); colonIdx != -1 {
+							serverName = dialAddr[:colonIdx]
+						}
 					}
 					tlsConn := tls.Client(conn, &tls.Config{
 						ServerName:         serverName,
@@ -439,9 +445,13 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 				}
 
 				// Manual TLS handshake over the proxy tunnel.
-				serverName := dialAddr
-				if colonIdx := strings.LastIndex(dialAddr, ":"); colonIdx != -1 {
-					serverName = dialAddr[:colonIdx]
+				// Prefer the configured ServerName (hostname) over the resolved IP in dialAddr.
+				serverName := e.config.ClientConfig.TLS.ServerName
+				if serverName == "" {
+					serverName = dialAddr
+					if colonIdx := strings.LastIndex(dialAddr, ":"); colonIdx != -1 {
+						serverName = dialAddr[:colonIdx]
+					}
 				}
 				tlsConn := tls.Client(tunnelConn, &tls.Config{
 					ServerName:         serverName,
@@ -514,16 +524,16 @@ func (e *opsrampOTLPExporter) isTLSMismatchError(err error) bool {
 // This is used as a fallback when originalInsecure=true but the server requires TLS.
 func (e *opsrampOTLPExporter) reconnectWithTLS(ctx context.Context) error {
 	e.mut.Lock()
-	defer e.mut.Unlock()
 
 	// Already attempted fallback or TLS was already enabled
 	if e.tlsFallbackAttempted || !e.originalInsecure {
+		e.mut.Unlock()
 		return nil
 	}
 
 	e.settings.Logger.Warn("Connection failed with Insecure=true, attempting TLS fallback")
 
-	// Mark fallback attempted
+	// Mark fallback attempted before releasing the lock.
 	e.tlsFallbackAttempted = true
 
 	// Close existing connection
@@ -538,7 +548,11 @@ func (e *opsrampOTLPExporter) reconnectWithTLS(ctx context.Context) error {
 	e.originalInsecure = false
 	e.originalSkipVerify = true
 
-	// Reconnect using start()
+	// Release lock before calling start() — start() writes e.traceExporter,
+	// e.metricExporter, e.logExporter, e.metadata, e.callOptions without
+	// holding the lock, which would race with push* goroutines if we held it here.
+	e.mut.Unlock()
+
 	if err := e.start(ctx, e.host); err != nil {
 		e.settings.Logger.Error("TLS fallback reconnection failed", zap.Error(err))
 		return err
@@ -659,10 +673,11 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 }
 
 func (e *opsrampOTLPExporter) updateExpiredToken() error {
-	// Extract TLS options from the gRPC client config
+	// Use the original TLS options (not the mutated config, which has Insecure=true
+	// forced by start() to bypass gRPC's own TLS stack).
 	tlsOpts := TLSOptions{
-		Insecure:           e.config.ClientConfig.TLS.Insecure,
-		InsecureSkipVerify: e.config.ClientConfig.TLS.InsecureSkipVerify,
+		Insecure:           e.originalInsecure,
+		InsecureSkipVerify: e.originalSkipVerify,
 	}
 	accessToken, err := getAuthToken(e.config.Security, tlsOpts)
 	if err != nil {
