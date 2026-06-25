@@ -10,6 +10,8 @@ const (
 	REPLICASET  = "ReplicaSet"
 	STATEFULSET = "StatefulSet"
 	POD         = "Pod"
+	GPU         = "GPU"
+	NIC         = "NIC"
 	SEPARATOR   = "_"
 )
 
@@ -24,6 +26,8 @@ type Moid struct {
 	daemonsetName   string
 	statefulsetName string
 	podName         string
+	gpuUUID         string
+	nicName         string
 }
 
 func NewMoid(clusterName string) *Moid {
@@ -137,5 +141,27 @@ func (m *Moid) ServiceMoid() (moid string) {
 
 func (m *Moid) ClusterMoid() (moid string) {
 	moid = m.clusterName + SEPARATOR + CLUSTER + SEPARATOR + m.clusterUuid
+	return
+}
+
+func (m *Moid) WithGPUUUID(gpuUUID string) *Moid {
+	m.gpuUUID = gpuUUID
+	return m
+}
+
+// GPUMoid returns a MoID for a GPU resource: clusterName_GPU_<gpuUUID>
+func (m *Moid) GPUMoid() (moid string) {
+	moid = m.clusterName + SEPARATOR + GPU + SEPARATOR + m.gpuUUID
+	return
+}
+
+func (m *Moid) WithNICName(nicName string) *Moid {
+	m.nicName = nicName
+	return m
+}
+
+// NICMoid returns a MoID for a NIC resource: clusterName_NIC_<nodeName>-<device>
+func (m *Moid) NICMoid() (moid string) {
+	moid = m.clusterName + SEPARATOR + NIC + SEPARATOR + m.nicName
 	return
 }

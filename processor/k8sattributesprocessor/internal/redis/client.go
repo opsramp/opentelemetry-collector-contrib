@@ -33,6 +33,7 @@ type OpsrampRedisConfig struct {
 	SecondaryCacheSize         int           `mapstructure:"secondaryCacheSize"`
 	PrimaryCacheEvictionTime   time.Duration `mapstructure:"primaryCacheEvictionTime"`
 	SecondaryCacheEvictionTime time.Duration `mapstructure:"secondaryCacheEvictionTime"`
+	EnableGpuNicRouting        bool          `mapstructure:"enableGpuNicRouting"`
 }
 
 func NewClient(logger *zap.Logger, cache *cache.Cache, rHost, rPort, rPass string, primaryCacheEvictionTime, secondaryCacheEvictionTime time.Duration) *Client {
