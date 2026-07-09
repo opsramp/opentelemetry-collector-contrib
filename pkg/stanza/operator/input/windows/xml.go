@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/entry"
@@ -22,15 +23,10 @@ type EventXML struct {
 	Channel             string               `xml:"System>Channel"`
 	RecordID            uint64               `xml:"System>EventRecordID"`
 	TimeCreated         TimeCreated          `xml:"System>TimeCreated"`
-	Message          string       `xml:"RenderingInfo>Message"`
-	RenderedLevel    string       `xml:"RenderingInfo>Level"`
-	RenderedTask     string       `xml:"RenderingInfo>Task"`
-	RenderedOpcode   string       `xml:"RenderingInfo>Opcode"`
-	RenderedKeywords []string     `xml:"RenderingInfo>Keywords>Keyword"`
 	Level               string               `xml:"System>Level"`
 	Task                string               `xml:"System>Task"`
 	Opcode              string               `xml:"System>Opcode"`
-	Keywords            []string             `xml:"System>Keywords"`
+	Keywords            string               `xml:"System>Keywords"`
 	Security            *Security            `xml:"System>Security"`
 	Execution           *Execution           `xml:"System>Execution"`
 	EventData           EventData            `xml:"EventData"`
@@ -53,22 +49,27 @@ func parseTimestamp(ts string) time.Time {
 	return time.Now()
 }
 
-// parseRenderedSeverity will parse the severity of the event.
+// parseSeverity will parse the severity of the event.
+// Prefers numeric level (more reliable across localized Windows installations)
+// over rendered text, falling back to text when numeric is unavailable.
 func parseSeverity(renderedLevel, level string) entry.Severity {
+	// Prefer numeric level first (more reliable than localized text)
+	switch level {
+	case "0":
+		return entry.Info // LogAlways - used by Security audit events
+	case "1":
+		return entry.Fatal
+	case "2":
+		return entry.Error
+	case "3":
+		return entry.Warn
+	case "4":
+		return entry.Info
+	case "5":
+		return entry.Debug // Verbose
+	}
+	// Fallback to rendered text when numeric level is empty/unknown
 	switch renderedLevel {
-	case "":
-		switch level {
-		case "1":
-			return entry.Fatal
-		case "2":
-			return entry.Error
-		case "3":
-			return entry.Warn
-		case "4":
-			return entry.Info
-		default:
-			return entry.Default
-		}
 	case "Critical":
 		return entry.Fatal
 	case "Error":
@@ -77,18 +78,38 @@ func parseSeverity(renderedLevel, level string) entry.Severity {
 		return entry.Warn
 	case "Information":
 		return entry.Info
-	default:
-		return entry.Default
 	}
+	return entry.Default
+}
+
+// levelName maps a Windows ETW numeric level string to its canonical English name.
+// Level 0 (LogAlways) returns "" because the Security channel and some other
+// providers use keywords (Audit Success/Failure) instead of a severity level.
+// Non-numeric values (e.g. already-rendered text) are returned unchanged.
+func levelName(level string) string {
+	switch level {
+	case "1":
+		return "Critical"
+	case "2":
+		return "Error"
+	case "3":
+		return "Warning"
+	case "0", "4":
+		return "Information"
+	case "5":
+		return "Verbose"
+	}
+	return level
 }
 
 // formattedBody will parse a body from the event.
 func formattedBody(e *EventXML, eventDataFormat EventDataFormat) map[string]any {
 	var rawMessage string
-	level := e.Level
+	level := levelName(e.Level)
 	task := e.Task
 	opcode := e.Opcode
-	keywords := e.Keywords
+	keywords := e.Keywords // System Keywords is a hex string
+	var renderedKeywords []string
 
 	if e.RenderingInfo != nil {
 		rawMessage = e.RenderingInfo.Message
@@ -102,11 +123,30 @@ func formattedBody(e *EventXML, eventDataFormat EventDataFormat) map[string]any 
 			opcode = e.RenderingInfo.Opcode
 		}
 		if e.RenderingInfo.Keywords != nil {
-			keywords = e.RenderingInfo.Keywords
+			renderedKeywords = e.RenderingInfo.Keywords
 		}
 	}
 
 	message, details := parseMessage(e.Channel, rawMessage)
+
+	// When the publisher DLL is unavailable (simple render path), RenderingInfo.Message
+	// is empty. Fall back to serializing named EventData fields (e.g. TargetUserName,
+	// LogonType) as "Key: Value" pairs so the body message is never completely empty.
+	if message == "" && len(e.EventData.Data) > 0 {
+		var parts []string
+		for _, d := range e.EventData.Data {
+			if d.Name != "" && d.Value != "" {
+				parts = append(parts, d.Name+": "+d.Value)
+			}
+		}
+		message = strings.Join(parts, ", ")
+	}
+
+	// Use rendered keywords if available, otherwise use hex string
+	var keywordsValue any = keywords
+	if len(renderedKeywords) > 0 {
+		keywordsValue = renderedKeywords
+	}
 
 	body := map[string]any{
 		"event_id": map[string]any{
@@ -126,7 +166,7 @@ func formattedBody(e *EventXML, eventDataFormat EventDataFormat) map[string]any 
 		"message":     message,
 		"task":        task,
 		"opcode":      opcode,
-		"keywords":    keywords,
+		"keywords":    keywordsValue,
 		"event_data":  parseEventData(e.EventData, eventDataFormat),
 		"version":     e.Version,
 	}
@@ -469,21 +509,115 @@ type parsedEvent interface {
 	getSystemTime() string
 	getLevel() string
 	getRenderedLevel() string
+	getProviderName() string
+	getProviderGUID() string
+	getEventSourceName() string
+	getEventID() uint32
+	getEventIDQualifiers() uint16
+	getChannel() string
+	getComputer() string
+	getRecordID() uint64
+	getUserID() string
+	getProcessID() uint
+	getThreadID() uint
+	getTask() string
+	getOpcode() string
+	getKeywords() string
+	getVersion() uint8
+	getActivityID() string
+	getRelatedActivityID() string
+	getRenderedMessage() string
+	getRenderedTask() string
+	getRenderedOpcode() string
+	getRenderedKeywords() []string
+	getUserData() *UserData
+	getBinaryEventData() string
+	getEventData() EventData
 	// formattedBody returns the structured body map for non-raw mode.
 	// Panics if called on rawParsedEvent — only valid when raw=false.
 	toEventXML() *EventXML
 }
 
-func (e *EventXML) getOriginal() string   { return e.Original }
-func (e *EventXML) getSystemTime() string { return e.TimeCreated.SystemTime }
-func (e *EventXML) getLevel() string      { return e.Level }
+func (e *EventXML) getOriginal() string          { return e.Original }
+func (e *EventXML) getSystemTime() string        { return e.TimeCreated.SystemTime }
+func (e *EventXML) getLevel() string             { return e.Level }
+func (e *EventXML) getProviderName() string      { return e.Provider.Name }
+func (e *EventXML) getProviderGUID() string      { return e.Provider.GUID }
+func (e *EventXML) getEventSourceName() string   { return e.Provider.EventSourceName }
+func (e *EventXML) getEventID() uint32           { return e.EventID.ID }
+func (e *EventXML) getEventIDQualifiers() uint16 { return e.EventID.Qualifiers }
+func (e *EventXML) getChannel() string           { return e.Channel }
+func (e *EventXML) getComputer() string          { return e.Computer }
+func (e *EventXML) getRecordID() uint64          { return e.RecordID }
+func (e *EventXML) getTask() string              { return e.Task }
+func (e *EventXML) getOpcode() string            { return e.Opcode }
+func (e *EventXML) getKeywords() string          { return e.Keywords }
+func (e *EventXML) getVersion() uint8            { return e.Version }
+func (e *EventXML) getBinaryEventData() string   { return e.BinaryEventData }
+func (e *EventXML) getEventData() EventData      { return e.EventData }
+func (e *EventXML) toEventXML() *EventXML        { return e }
+
 func (e *EventXML) getRenderedLevel() string {
 	if e.RenderingInfo != nil {
 		return e.RenderingInfo.Level
 	}
 	return ""
 }
-func (e *EventXML) toEventXML() *EventXML { return e }
+func (e *EventXML) getRenderedMessage() string {
+	if e.RenderingInfo != nil {
+		return e.RenderingInfo.Message
+	}
+	return ""
+}
+func (e *EventXML) getRenderedTask() string {
+	if e.RenderingInfo != nil {
+		return e.RenderingInfo.Task
+	}
+	return ""
+}
+func (e *EventXML) getRenderedOpcode() string {
+	if e.RenderingInfo != nil {
+		return e.RenderingInfo.Opcode
+	}
+	return ""
+}
+func (e *EventXML) getRenderedKeywords() []string {
+	if e.RenderingInfo != nil {
+		return e.RenderingInfo.Keywords
+	}
+	return nil
+}
+func (e *EventXML) getUserID() string {
+	if e.Security != nil {
+		return e.Security.UserID
+	}
+	return ""
+}
+func (e *EventXML) getProcessID() uint {
+	if e.Execution != nil {
+		return e.Execution.ProcessID
+	}
+	return 0
+}
+func (e *EventXML) getThreadID() uint {
+	if e.Execution != nil {
+		return e.Execution.ThreadID
+	}
+	return 0
+}
+func (e *EventXML) getActivityID() string {
+	if e.Correlation != nil && e.Correlation.ActivityID != nil {
+		return *e.Correlation.ActivityID
+	}
+	return ""
+}
+func (e *EventXML) getRelatedActivityID() string {
+	if e.Correlation != nil && e.Correlation.RelatedActivityID != nil {
+		return *e.Correlation.RelatedActivityID
+	}
+	return ""
+}
+func (e *EventXML) getUserData() *UserData { return e.UserData }
 
 // unmarshalEventXML will unmarshal EventXML from xml bytes.
 // Illegal XML 1.0 characters (e.g. U+0001 found in some Sysmon events) are
@@ -500,28 +634,115 @@ func UnmarshalEventXML(data []byte) (parsedEvent, error) {
 	return eventXML, nil
 }
 
-// rawEventXML holds only the fields needed when raw=true, avoiding the
-// allocation and parsing cost of the full EventXML struct. The RenderingInfo
-// field carries just the rendered level, which is used for severity even in
-// raw mode when the deep render path is active.
+// rawEventXML holds the fields needed when raw=true. Includes all System fields
+// plus EventData, UserData, and RenderingInfo for comprehensive attribute extraction.
 type rawEventXML struct {
-	Original      string               `xml:"-"`
-	TimeCreated   TimeCreated          `xml:"System>TimeCreated"`
-	Level         string               `xml:"System>Level"`
-	RenderingInfo *rawRenderingInfoXML `xml:"RenderingInfo"`
+	Original        string               `xml:"-"`
+	TimeCreated     TimeCreated          `xml:"System>TimeCreated"`
+	Level           string               `xml:"System>Level"`
+	Provider        Provider             `xml:"System>Provider"`
+	EventID         EventID              `xml:"System>EventID"`
+	Channel         string               `xml:"System>Channel"`
+	Computer        string               `xml:"System>Computer"`
+	RecordID        uint64               `xml:"System>EventRecordID"`
+	Task            string               `xml:"System>Task"`
+	Opcode          string               `xml:"System>Opcode"`
+	Keywords        string               `xml:"System>Keywords"`
+	Version         uint8                `xml:"System>Version"`
+	Security        *Security            `xml:"System>Security"`
+	Execution       *Execution           `xml:"System>Execution"`
+	Correlation     *Correlation         `xml:"System>Correlation"`
+	EventData       EventData            `xml:"EventData"`
+	UserData        *UserData            `xml:"UserData"`
+	BinaryEventData string               `xml:"BinaryEventData"`
+	RenderingInfo   *rawRenderingInfoXML `xml:"RenderingInfo"`
 }
 
-// rawRenderingInfoXML holds only the Level field from RenderingInfo.
+// rawRenderingInfoXML holds rendered fields from RenderingInfo for raw mode.
 type rawRenderingInfoXML struct {
-	Level string `xml:"Level"`
+	Level    string   `xml:"Level"`
+	Message  string   `xml:"Message"`
+	Task     string   `xml:"Task"`
+	Opcode   string   `xml:"Opcode"`
+	Keywords []string `xml:"Keywords>Keyword"`
 }
 
-func (r *rawEventXML) getOriginal() string   { return r.Original }
-func (r *rawEventXML) getSystemTime() string { return r.TimeCreated.SystemTime }
-func (r *rawEventXML) getLevel() string      { return r.Level }
+func (r *rawEventXML) getOriginal() string          { return r.Original }
+func (r *rawEventXML) getSystemTime() string        { return r.TimeCreated.SystemTime }
+func (r *rawEventXML) getLevel() string             { return r.Level }
+func (r *rawEventXML) getProviderName() string      { return r.Provider.Name }
+func (r *rawEventXML) getProviderGUID() string      { return r.Provider.GUID }
+func (r *rawEventXML) getEventSourceName() string   { return r.Provider.EventSourceName }
+func (r *rawEventXML) getEventID() uint32           { return r.EventID.ID }
+func (r *rawEventXML) getEventIDQualifiers() uint16 { return r.EventID.Qualifiers }
+func (r *rawEventXML) getChannel() string           { return r.Channel }
+func (r *rawEventXML) getComputer() string          { return r.Computer }
+func (r *rawEventXML) getRecordID() uint64          { return r.RecordID }
+func (r *rawEventXML) getTask() string              { return r.Task }
+func (r *rawEventXML) getOpcode() string            { return r.Opcode }
+func (r *rawEventXML) getKeywords() string          { return r.Keywords }
+func (r *rawEventXML) getVersion() uint8            { return r.Version }
+func (r *rawEventXML) getBinaryEventData() string   { return r.BinaryEventData }
+func (r *rawEventXML) getEventData() EventData      { return r.EventData }
+func (r *rawEventXML) getUserData() *UserData       { return r.UserData }
+
 func (r *rawEventXML) getRenderedLevel() string {
 	if r.RenderingInfo != nil {
 		return r.RenderingInfo.Level
+	}
+	return ""
+}
+func (r *rawEventXML) getRenderedMessage() string {
+	if r.RenderingInfo != nil {
+		return r.RenderingInfo.Message
+	}
+	return ""
+}
+func (r *rawEventXML) getRenderedTask() string {
+	if r.RenderingInfo != nil {
+		return r.RenderingInfo.Task
+	}
+	return ""
+}
+func (r *rawEventXML) getRenderedOpcode() string {
+	if r.RenderingInfo != nil {
+		return r.RenderingInfo.Opcode
+	}
+	return ""
+}
+func (r *rawEventXML) getRenderedKeywords() []string {
+	if r.RenderingInfo != nil {
+		return r.RenderingInfo.Keywords
+	}
+	return nil
+}
+func (r *rawEventXML) getUserID() string {
+	if r.Security != nil {
+		return r.Security.UserID
+	}
+	return ""
+}
+func (r *rawEventXML) getProcessID() uint {
+	if r.Execution != nil {
+		return r.Execution.ProcessID
+	}
+	return 0
+}
+func (r *rawEventXML) getThreadID() uint {
+	if r.Execution != nil {
+		return r.Execution.ThreadID
+	}
+	return 0
+}
+func (r *rawEventXML) getActivityID() string {
+	if r.Correlation != nil && r.Correlation.ActivityID != nil {
+		return *r.Correlation.ActivityID
+	}
+	return ""
+}
+func (r *rawEventXML) getRelatedActivityID() string {
+	if r.Correlation != nil && r.Correlation.RelatedActivityID != nil {
+		return *r.Correlation.RelatedActivityID
 	}
 	return ""
 }
@@ -544,14 +765,16 @@ func unmarshalRawEventXML(data []byte) (parsedEvent, error) {
 	return &raw, nil
 }
 
-// sanitizeXMLBytes removes characters that are illegal in XML 1.0 documents.
+// sanitizeXMLBytes removes characters that are illegal in XML 1.0 documents
+// and strips the default XML namespace to allow Go's xml package to parse
+// Windows Event Log XML correctly.
 // XML 1.0 permits: #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]
 // All other code points (e.g. U+0001–U+0008, U+000B, U+000C, U+000E–U+001F) are dropped.
-//
-// A zero-allocation pre-scan is performed first; if no illegal bytes are found
-// the original slice is returned unchanged, avoiding the bytes.Map allocation
-// on the common (clean) path.
 func sanitizeXMLBytes(data []byte) []byte {
+	// Strip default namespace to allow Go xml package to parse correctly
+	// Pattern: xmlns='...' or xmlns="..."
+	data = stripDefaultNamespace(data)
+
 	if !hasIllegalXMLBytes(data) {
 		return data
 	}
@@ -563,6 +786,43 @@ func sanitizeXMLBytes(data []byte) []byte {
 		}
 		return -1
 	}, data)
+}
+
+// stripDefaultNamespace removes xmlns='...' or xmlns="..." from the XML
+// to allow Go's xml package to parse without namespace qualification issues.
+func stripDefaultNamespace(data []byte) []byte {
+	// Look for xmlns= patterns and remove them
+	// Pattern 1: xmlns='...'
+	// Pattern 2: xmlns="..."
+	result := data
+
+	// Handle xmlns='...'
+	if idx := bytes.Index(result, []byte("xmlns='")); idx >= 0 {
+		endIdx := bytes.Index(result[idx+7:], []byte("'"))
+		if endIdx >= 0 {
+			// Remove xmlns='...' including trailing space if present
+			endPos := idx + 7 + endIdx + 1
+			if endPos < len(result) && result[endPos] == ' ' {
+				endPos++
+			}
+			result = append(result[:idx], result[endPos:]...)
+		}
+	}
+
+	// Handle xmlns="..."
+	if idx := bytes.Index(result, []byte("xmlns=\"")); idx >= 0 {
+		endIdx := bytes.Index(result[idx+7:], []byte("\""))
+		if endIdx >= 0 {
+			// Remove xmlns="..." including trailing space if present
+			endPos := idx + 7 + endIdx + 1
+			if endPos < len(result) && result[endPos] == ' ' {
+				endPos++
+			}
+			result = append(result[:idx], result[endPos:]...)
+		}
+	}
+
+	return result
 }
 
 // hasIllegalXMLBytes reports whether data contains any character that is

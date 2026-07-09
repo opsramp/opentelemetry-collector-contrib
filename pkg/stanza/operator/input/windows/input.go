@@ -7,6 +7,7 @@ package windows // import "github.com/open-telemetry/opentelemetry-collector-con
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -14,7 +15,6 @@ import (
 	"time"
 
 	"go.opentelemetry.io/collector/component"
-	conventions "go.opentelemetry.io/otel/semconv/v1.40.0"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
 	"golang.org/x/sys/windows"
@@ -308,6 +308,8 @@ func (i *Input) readBatch(ctx context.Context) bool {
 	pstartedAt := pstartedAtObj.Format("2006-01-02 15:04:05.000")
 
 	for eI, event := range events {
+		// Always use RenderSimple to get full EventXML (needed for processEventWithSimple)
+		// This ensures we have EventData, RecordID, etc. for both raw and non-raw modes
 		parsedSimpleEvent, err := event.RenderSimple(i.buffer)
 		if err != nil {
 			i.Logger().Error("Failed to render simple event", zap.Error(err))
@@ -317,36 +319,45 @@ func (i *Input) readBatch(ctx context.Context) bool {
 
 		simpleEvent := parsedSimpleEvent.toEventXML()
 		recordID := simpleEvent.RecordID
-		dedupKey := fmt.Sprintf("dedup_%d", recordID)
-		// Deduplication: check if this record was already processed
-		exists, dCheckErr := i.persister.Get(ctx, dedupKey)
-		if dCheckErr != nil {
-			i.Logger().Error("Failed to check deduplication key", zap.Error(dCheckErr))
-			event.Close()
-			continue
-		}
-		if exists != nil {
-			i.Logger().Debug("Duplicate event, skipping", zap.Uint64("record_id", recordID))
-			event.Close()
-			continue
+		providerName := simpleEvent.Provider.Name
+
+		if recordID > 0 {
+			dedupKey := fmt.Sprintf("dedup_%d", recordID)
+			// Deduplication: check if this record was already processed
+			exists, dCheckErr := i.persister.Get(ctx, dedupKey)
+			if dCheckErr != nil {
+				i.Logger().Error("Failed to check deduplication key", zap.Error(dCheckErr))
+				event.Close()
+				continue
+			}
+			if exists != nil {
+				i.Logger().Debug("Duplicate event, skipping", zap.Uint64("record_id", recordID))
+				event.Close()
+				continue
+			}
 		}
 
 		// Skip empty events
-		if recordID == 0 && simpleEvent.Provider.Name == "" {
+		if recordID == 0 && providerName == "" {
 			i.Logger().Debug("Skipping empty event")
 			event.Close()
 			continue
 		}
 
+		// Always go through processEventWithSimple - it handles both raw and non-raw modes
+		// and attempts to get the formatted event (with RenderingInfo.Message) from the publisher
 		err1 := i.processEventWithSimple(ctx, event, simpleEvent)
 		if err1 == nil {
 			i.updateBookmarkOffset(ctx, event)
-			// Persist processed RecordID for deduplication
-			if err := i.persister.Set(ctx, dedupKey, []byte("1")); err != nil {
-				i.Logger().Error("Failed to persist deduplication key", zap.Error(err))
+			// Persist processed RecordID for deduplication (only when we have a valid recordID)
+			if recordID > 0 {
+				dedupKey := fmt.Sprintf("dedup_%d", recordID)
+				if err := i.persister.Set(ctx, dedupKey, []byte("1")); err != nil {
+					i.Logger().Error("Failed to persist deduplication key", zap.Error(err))
+				}
 			}
 		} else {
-			i.Logger().Error("Failed to process event", zap.Any("pstartedAt", pstartedAt), zap.Int("current loop id:", eI), zap.Any("process started at ", time.Now().Local().Format("2006-01-02 15:04:05.000")), zap.Uint64("record_id", recordID), zap.Error(err))
+			i.Logger().Error("Failed to process event", zap.Any("pstartedAt", pstartedAt), zap.Int("current loop id:", eI), zap.Any("process started at ", time.Now().Local().Format("2006-01-02 15:04:05.000")), zap.Uint64("record_id", recordID), zap.Error(err1))
 		}
 		event.Close()
 	}
@@ -451,9 +462,9 @@ func (i *Input) processEventWithRenderingInfo(ctx context.Context, event Event) 
 
 // sendEvent will send a parsedEvent as an entry to the operator's output.
 //
-// raw=true path: only event.getOriginal(), event.getSystemTime(), event.getLevel(),
-// and event.getRenderedLevel() are called. If you add a field access here that
-// runs when raw=true, add a corresponding method to parsedEvent and rawParsedEvent.
+// raw=true path: All getXxx() methods in parsedEvent interface are called.
+// If you add a field access here, add a corresponding method to parsedEvent
+// and rawEventXML.
 func (i *Input) sendEvent(ctx context.Context, event parsedEvent) error {
 	var body any = event.getOriginal()
 	if !i.raw {
@@ -468,16 +479,101 @@ func (i *Input) sendEvent(ctx context.Context, event parsedEvent) error {
 	e.Timestamp = parseTimestamp(event.getSystemTime())
 	e.Severity = parseSeverity(event.getRenderedLevel(), event.getLevel())
 
-	if i.remote.Server != "" {
-		e.AddAttribute("server.address", i.remote.Server)
+	// === Provider attributes ===
+	if providerName := event.getProviderName(); providerName != "" {
+		e.AddAttribute("event_name", providerName)
+		e.AddAttribute("provider_name", providerName)
+	}
+	if eventSourceName := event.getEventSourceName(); eventSourceName != "" {
+		e.AddAttribute("event_source_name", eventSourceName)
 	}
 
-	if i.includeLogRecordOriginal {
-		e.AddAttribute(string(conventions.LogRecordOriginalKey), event.getOriginal())
+	// === EventID attributes ===
+	if eventID := event.getEventID(); eventID != 0 {
+		e.AddAttribute("event_identifier", fmt.Sprintf("%d", eventID))
+		e.AddAttribute("event_id", fmt.Sprintf("%d", eventID))
+	}
+	if qualifiers := event.getEventIDQualifiers(); qualifiers != 0 {
+		e.AddAttribute("event_id_qualifiers", fmt.Sprintf("%d", qualifiers))
 	}
 
-	eventData, _ := i.ExtractEventData(event.toEventXML().EventData)
+	// === Channel ===
+	if channel := event.getChannel(); channel != "" {
+		e.AddAttribute("event_channel", channel)
+	}
+
+	// === Record and Version ===
+	if recordID := event.getRecordID(); recordID != 0 {
+		e.AddAttribute("record_id", fmt.Sprintf("%d", recordID))
+	}
+	if version := event.getVersion(); version != 0 {
+		e.AddAttribute("version", fmt.Sprintf("%d", version))
+	}
+
+	// === Level: source_level is raw numeric, level is text ===
+	if level := event.getLevel(); level != "" {
+		e.AddAttribute("source_level", level)     // Raw numeric: "0", "1", "2", "3", "4", "5"
+		e.AddAttribute("level", levelName(level)) // Text: "Information", "Error", "Warning", "Critical", "Verbose"
+	}
+	if renderedLevel := event.getRenderedLevel(); renderedLevel != "" {
+		e.AddAttribute("rendered_level", renderedLevel)
+	}
+
+	// === Task and Opcode ===
+	if task := event.getTask(); task != "" {
+		e.AddAttribute("task", task)
+	}
+	if renderedTask := event.getRenderedTask(); renderedTask != "" {
+		e.AddAttribute("rendered_task", renderedTask)
+	}
+	if opcode := event.getOpcode(); opcode != "" {
+		e.AddAttribute("opcode", opcode)
+	}
+	if renderedOpcode := event.getRenderedOpcode(); renderedOpcode != "" {
+		e.AddAttribute("rendered_opcode", renderedOpcode)
+	}
+
+	// === Rendered Keywords (human-readable keywords from RenderingInfo) ===
+	if renderedKeywords := event.getRenderedKeywords(); len(renderedKeywords) > 0 {
+		e.AddAttribute("rendered_keywords", strings.Join(renderedKeywords, ","))
+	}
+
+	// === Security: User ID (SID) ===
+	if userID := event.getUserID(); userID != "" {
+		e.AddAttribute("user_id", userID)
+	}
+
+	// === Execution: Process ID only ===
+	if processID := event.getProcessID(); processID != 0 {
+		e.AddAttribute("process_id", fmt.Sprintf("%d", processID))
+	}
+
+	// === Correlation: Activity IDs ===
+	if activityID := event.getActivityID(); activityID != "" {
+		e.AddAttribute("activity_id", activityID)
+	}
+	if relatedActivityID := event.getRelatedActivityID(); relatedActivityID != "" {
+		e.AddAttribute("related_activity_id", relatedActivityID)
+	}
+
+	// === Rendered Message ===
+	if message := event.getRenderedMessage(); message != "" {
+		e.AddAttribute("rendered_message", message)
+	}
+
+	// === Binary Event Data ===
+	if binaryData := event.getBinaryEventData(); binaryData != "" {
+		e.AddAttribute("binary_event_data", binaryData)
+	}
+
+	// === EventData fields as individual attributes ===
+	eventData, _ := i.ExtractEventData(event.getEventData())
 	if len(eventData) > 0 {
+		// Add event_data as JSON-encoded structured attribute
+		if eventDataJSON, err := json.Marshal(eventData); err == nil {
+			e.AddAttribute("event_data", string(eventDataJSON))
+		}
+		// Also add individual fields as flat attributes
 		for eK, eD := range eventData {
 			eK = strings.ReplaceAll(strings.ToLower(eK), " ", "_")
 			if str, ok := eD.(string); ok {
@@ -487,6 +583,22 @@ func (i *Input) sendEvent(ctx context.Context, event parsedEvent) error {
 			}
 		}
 	}
+
+	// === UserData fields as individual attributes ===
+	if userData := event.getUserData(); userData != nil {
+		if userData.Name != "" {
+			e.AddAttribute("userdata_name", userData.Name)
+		}
+		for k, v := range userData.Data {
+			attrKey := "userdata_" + strings.ReplaceAll(strings.ToLower(k), " ", "_")
+			e.AddAttribute(attrKey, v)
+		}
+	}
+
+	if i.remote.Server != "" {
+		e.AddAttribute("server.address", i.remote.Server)
+	}
+
 	if i.isAdditionalAttrReq() {
 		e.AddAttribute("log_record_original", event.getOriginal())
 	}
@@ -544,7 +656,37 @@ func (i *Input) isAdditionalAttrReq() bool {
 
 func (i *Input) ExtractEventData(eventData EventData) (map[string]any, error) {
 	result := make(map[string]any)
+
+	// Include EventData name if present
+	if eventData.Name != "" {
+		result["name"] = eventData.Name
+	}
+
+	// Include binary data if present
+	if eventData.Binary != "" {
+		result["binary"] = eventData.Binary
+	}
+
+	// Collect anonymous data values into message
+	var messageValues []string
+
 	for _, data := range eventData.Data {
+		// Handle anonymous data (no Name attribute) - aggregate into message
+		if data.Name == "" {
+			if data.Value != "" {
+				messageValues = append(messageValues, data.Value)
+			}
+			continue
+		}
+
+		// Skip unwanted fields
+		switch data.Name {
+		case "CountOfCredentialsReturned", "ProcessCreationTime", "ReadOperation", "SubjectDomainName":
+			// Skip these fields
+			continue
+		}
+
+		// Extract known named fields with normalized keys
 		switch data.Name {
 		case "LogonType":
 			result["logon_type"] = data.Value
@@ -556,28 +698,28 @@ func (i *Input) ExtractEventData(eventData EventData) (map[string]any, error) {
 			result["security_id"] = data.Value
 		case "LogonID", "TargetLogonId", "SubjectLogonId":
 			result["logon_id"] = data.Value
-		case "TargetUserName":
+		case "TargetUserName", "SubjectUserName":
 			result["user_name"] = data.Value
 		case "TargetDomainName", "WorkstationName":
 			result["domain_name"] = data.Value
+		default:
+			// Include all other named fields with normalized key (lowercase, spaces to underscores)
+			key := strings.ReplaceAll(strings.ToLower(data.Name), " ", "_")
+			result[key] = data.Value
 		}
 	}
+
+	// Set message from anonymous data
+	if len(messageValues) > 0 {
+		result["message"] = strings.Join(messageValues, "\n")
+	}
+
 	return result, nil
 }
 
 func (i *Input) processEventWithSimple(ctx context.Context, event Event, simpleEvent *EventXML) error {
-	if i.raw {
-		rawEvent, err := event.RenderRaw(i.buffer)
-		if err != nil {
-			i.Logger().Error("Failed to render raw event", zap.Error(err))
-			return err
-		}
-		i.sendEventRaw(ctx, rawEvent)
-		return nil
-	}
-
 	isExcluded := func(providerName string) bool {
-		for excludeProvider, _ := range i.excludeProviders {
+		for excludeProvider := range i.excludeProviders {
 			if providerName == excludeProvider {
 				return true
 			}
@@ -590,29 +732,243 @@ func (i *Input) processEventWithSimple(ctx context.Context, event Event, simpleE
 		return nil
 	}
 
+	// For both raw and non-raw modes, try to get formatted event with RenderingInfo
+	// This ensures we get the localized message from Windows Event API
 	publisher, err := i.publisherCache.get(simpleEvent.Provider.Name)
 	if err != nil || !publisher.Valid() {
-		i.Logger().Warn("Fallback to simple event due to invalid publisher", zap.Error(err))
+		i.Logger().Debug("Publisher unavailable, using simple event",
+			zap.String("provider", simpleEvent.Provider.Name),
+			zap.String("channel", simpleEvent.Channel),
+			zap.Error(err))
+		if i.raw {
+			return i.sendEventXMLAsRaw(ctx, simpleEvent)
+		}
 		return i.sendEvent(ctx, simpleEvent)
 	}
 
 	formattedEvent, err := event.RenderFormatted(i.buffer, publisher)
 	if err != nil {
-		i.Logger().Error("Failed to render formatted event", zap.Error(err))
+		i.Logger().Debug("RenderFormatted failed, using simple event",
+			zap.String("provider", simpleEvent.Provider.Name),
+			zap.String("channel", simpleEvent.Channel),
+			zap.Error(err))
+		if i.raw {
+			return i.sendEventXMLAsRaw(ctx, simpleEvent)
+		}
 		return i.sendEvent(ctx, simpleEvent)
+	}
+
+	if i.raw {
+		return i.sendEventXMLAsRaw(ctx, formattedEvent)
 	}
 	return i.sendEvent(ctx, formattedEvent)
 }
 
+// sendEventXMLAsRaw sends EventXML in raw mode - body is the original XML,
+// but attributes are extracted from the parsed EventXML (including RenderingInfo.Message)
+func (i *Input) sendEventXMLAsRaw(ctx context.Context, eventXML *EventXML) error {
+	// Body is the original XML string
+	body := eventXML.Original
+	e, err := i.NewEntry(body)
+	if err != nil {
+		i.Logger().Error("Failed to create entry", zap.Error(err))
+		return err
+	}
+
+	// Get rendered values from RenderingInfo if available
+	var renderedLevel, renderedTask, renderedOpcode, renderedMessage string
+	var renderedKeywords []string
+	if eventXML.RenderingInfo != nil {
+		renderedLevel = eventXML.RenderingInfo.Level
+		renderedTask = eventXML.RenderingInfo.Task
+		renderedOpcode = eventXML.RenderingInfo.Opcode
+		renderedMessage = eventXML.RenderingInfo.Message
+		renderedKeywords = eventXML.RenderingInfo.Keywords
+	}
+
+	e.Timestamp = parseTimestamp(eventXML.TimeCreated.SystemTime)
+	e.Severity = parseSeverity(renderedLevel, eventXML.Level)
+
+	// === System Time ===
+	if systemTime := eventXML.TimeCreated.SystemTime; systemTime != "" {
+		e.AddAttribute("system_time", systemTime)
+	}
+
+	// === Provider attributes ===
+	if providerName := eventXML.Provider.Name; providerName != "" {
+		e.AddAttribute("provider_name", providerName)
+	}
+
+	// === EventID ===
+	if eventID := eventXML.EventID.ID; eventID != 0 {
+		e.AddAttribute("event_id", fmt.Sprintf("%d", eventID))
+	}
+
+	// === Channel ===
+	if channel := eventXML.Channel; channel != "" {
+		e.AddAttribute("channel", channel)
+	}
+
+	// === Computer ===
+	if computer := eventXML.Computer; computer != "" {
+		e.AddAttribute("computer", computer)
+	}
+
+	// === Record ID ===
+	if recordID := eventXML.RecordID; recordID != 0 {
+		e.AddAttribute("record_id", fmt.Sprintf("%d", recordID))
+	}
+
+	// === Level: prefer rendered (localized), fallback to numeric ===
+	if renderedLevel != "" {
+		e.AddAttribute("level", renderedLevel)
+	} else if level := eventXML.Level; level != "" {
+		e.AddAttribute("source_level", level)
+		e.AddAttribute("level", levelName(level))
+	}
+
+	// === Task: prefer rendered (localized), fallback to numeric ===
+	if renderedTask != "" {
+		e.AddAttribute("task", renderedTask)
+	} else if task := eventXML.Task; task != "" {
+		e.AddAttribute("task", task)
+	}
+
+	// === Opcode: prefer rendered (localized), fallback to numeric ===
+	if renderedOpcode != "" {
+		e.AddAttribute("opcode", renderedOpcode)
+	} else if opcode := eventXML.Opcode; opcode != "" {
+		e.AddAttribute("opcode", opcode)
+	}
+
+	// === Keywords ===
+	if len(renderedKeywords) > 0 {
+		e.AddAttribute("keywords", strings.Join(renderedKeywords, ","))
+	}
+
+	// === Security: User ID (SID) ===
+	if eventXML.Security != nil && eventXML.Security.UserID != "" {
+		e.AddAttribute("user_id", eventXML.Security.UserID)
+	}
+
+	// === Message (from RenderingInfo - localized by Windows via EvtFormatMessage) ===
+	if renderedMessage != "" {
+		e.AddAttribute("message", renderedMessage)
+	}
+
+	// === EventData fields as individual attributes ===
+	eventData, _ := i.ExtractEventData(eventXML.EventData)
+	for eK, eD := range eventData {
+		eK = strings.ReplaceAll(strings.ToLower(eK), " ", "_")
+		if str, ok := eD.(string); ok {
+			e.AddAttribute(eK, str)
+		} else {
+			e.AddAttribute(eK, fmt.Sprintf("%v", eD))
+		}
+	}
+
+	if i.remote.Server != "" {
+		e.AddAttribute("server.address", i.remote.Server)
+	}
+
+	if i.isAdditionalAttrReq() {
+		e.AddAttribute("log_record_original", eventXML.Original)
+	}
+
+	i.Write(ctx, e)
+	return nil
+}
+
 func (i *Input) sendEventRaw(ctx context.Context, eventRaw EventRaw) {
 	body := eventRaw.parseBody()
-	entry, err := i.NewEntry(body)
+	e, err := i.NewEntry(body)
 	if err != nil {
 		i.Logger().Error("Failed to create entry", zap.Error(err))
 		return
 	}
 
-	entry.Timestamp = eventRaw.ParseTimestamp()
-	entry.Severity = eventRaw.ParseRenderedSeverity()
-	i.Write(ctx, entry)
+	e.Timestamp = eventRaw.ParseTimestamp()
+	e.Severity = eventRaw.ParseRenderedSeverity()
+
+	// === System Time ===
+	if systemTime := eventRaw.TimeCreated.SystemTime; systemTime != "" {
+		e.AddAttribute("system_time", systemTime)
+	}
+
+	// === Provider attributes ===
+	if providerName := eventRaw.GetProviderName(); providerName != "" {
+		e.AddAttribute("provider_name", providerName)
+	}
+
+	// === EventID ===
+	if eventID := eventRaw.GetEventID(); eventID != 0 {
+		e.AddAttribute("event_id", fmt.Sprintf("%d", eventID))
+	}
+
+	// === Channel ===
+	if channel := eventRaw.GetChannel(); channel != "" {
+		e.AddAttribute("channel", channel)
+	}
+
+	// === Computer ===
+	if computer := eventRaw.GetComputer(); computer != "" {
+		e.AddAttribute("computer", computer)
+	}
+
+	// === Record ID ===
+	if recordID := eventRaw.GetRecordID(); recordID != 0 {
+		e.AddAttribute("record_id", fmt.Sprintf("%d", recordID))
+	}
+
+	// === Level: source_level is raw numeric, level is text ===
+	if level := eventRaw.Level; level != "" {
+		e.AddAttribute("source_level", level)     // Raw numeric: "0", "1", "2", "3", "4", "5"
+		e.AddAttribute("level", levelName(level)) // Text: "Information", "Error", "Warning", "Critical", "Verbose"
+	}
+
+	// === Task: prefer rendered text over numeric ===
+	if renderedTask := eventRaw.GetRenderedTask(); renderedTask != "" {
+		e.AddAttribute("task", renderedTask)
+	} else if task := eventRaw.GetTask(); task != "" {
+		e.AddAttribute("task", task)
+	}
+
+	// === Opcode: prefer rendered text over numeric ===
+	if renderedOpcode := eventRaw.GetRenderedOpcode(); renderedOpcode != "" {
+		e.AddAttribute("opcode", renderedOpcode)
+	} else if opcode := eventRaw.GetOpcode(); opcode != "" {
+		e.AddAttribute("opcode", opcode)
+	}
+
+	// === Keywords ===
+	if renderedKeywords := eventRaw.GetRenderedKeywords(); len(renderedKeywords) > 0 {
+		e.AddAttribute("keywords", strings.Join(renderedKeywords, ","))
+	}
+
+	// === Security: User ID (SID) ===
+	if userID := eventRaw.GetUserID(); userID != "" {
+		e.AddAttribute("user_id", userID)
+	}
+
+	// === Message ===
+	if message := eventRaw.GetRenderedMessage(); message != "" {
+		e.AddAttribute("message", message)
+	}
+
+	// === EventData fields as individual attributes ===
+	eventData, _ := i.ExtractEventData(eventRaw.GetEventData())
+	for eK, eD := range eventData {
+		eK = strings.ReplaceAll(strings.ToLower(eK), " ", "_")
+		if str, ok := eD.(string); ok {
+			e.AddAttribute(eK, str)
+		} else {
+			e.AddAttribute(eK, fmt.Sprintf("%v", eD))
+		}
+	}
+
+	if i.remote.Server != "" {
+		e.AddAttribute("server.address", i.remote.Server)
+	}
+
+	i.Write(ctx, e)
 }

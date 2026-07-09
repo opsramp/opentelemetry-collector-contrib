@@ -171,6 +171,35 @@ func (e *Event) RenderRaw(buffer *Buffer) (EventRaw, error) {
 	return UnmarshalEventRaw(bytes)
 }
 
+// RenderFormattedRaw will render the event as raw XML with RenderingInfo included.
+// This uses the publisher to format the event, which populates RenderingInfo>Message.
+// Use this instead of RenderRaw when you want the human-readable message in raw mode.
+func (e *Event) RenderFormattedRaw(buffer *Buffer, publisher Publisher) (EventRaw, error) {
+	if e.handle == 0 {
+		return EventRaw{}, fmt.Errorf("event handle does not exist")
+	}
+
+	bufferUsed, err := evtFormatMessage(publisher.handle, e.handle, 0, 0, 0, EvtFormatMessageXML, buffer.SizeWide(), buffer.FirstByte())
+	if errors.Is(err, ErrorInsufficientBuffer) {
+		if *bufferUsed == 0 {
+			return EventRaw{}, errUnknownNextFrame
+		}
+		buffer.UpdateSizeWide(*bufferUsed)
+		return e.RenderFormattedRaw(buffer, publisher)
+	}
+
+	if err != nil {
+		return EventRaw{}, fmt.Errorf("syscall to 'EvtFormatMessage' failed: %w", err)
+	}
+
+	bytes, err := buffer.ReadWideChars(*bufferUsed)
+	if err != nil {
+		return EventRaw{}, fmt.Errorf("failed to read bytes from buffer: %w", err)
+	}
+
+	return UnmarshalEventRaw(bytes)
+}
+
 // Close will close the event handle.
 func (e *Event) Close() error {
 	if e.handle == 0 {
