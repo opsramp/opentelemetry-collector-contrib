@@ -104,7 +104,9 @@ func (sp *scrubbingProcessor) applyMasking(ld plog.Logs) {
 					sp.maskAttributes(rule, log.Attributes(), RecordAttribute)
 
 					// body
-					sp.maskBody(rule, log)
+					if rule.AttributeType == EmptyAttribute {
+						sp.maskBody(rule, log)
+					}
 				}
 			}
 		}
@@ -153,28 +155,45 @@ func (sp *scrubbingProcessor) maskAttributes(rule *compiledRule, attrs pcommon.M
 }
 
 // maskBody masks body content according to the rule.
-// Body is always masked regardless of AttributeType — the attribute type only
-// controls which attribute scope (resource vs record) is targeted.
+// When attribute_key is set and the body is a map, only that specific key is
+// masked. When attribute_key is empty, all map values (or the entire string
+// body) are masked.
 func (sp *scrubbingProcessor) maskBody(rule *compiledRule, log plog.LogRecord) {
 
 	switch log.Body().Type() {
 	case pcommon.ValueTypeMap:
-		if rule.Mode == ModeRedactKey {
-			var toDelete []string
-			log.Body().Map().Range(func(k string, v pcommon.Value) bool {
-				if rule.re.MatchString(v.AsString()) {
-					toDelete = append(toDelete, k)
+		if rule.AttributeKey != "" {
+			// Target only the specific key in the map body
+			if rule.Mode == ModeRedactKey {
+				if val, ok := log.Body().Map().Get(rule.AttributeKey); ok {
+					if rule.re.MatchString(val.AsString()) {
+						log.Body().Map().Remove(rule.AttributeKey)
+					}
 				}
-				return true
-			})
-			for _, key := range toDelete {
-				log.Body().Map().Remove(key)
+			} else {
+				if val, ok := log.Body().Map().Get(rule.AttributeKey); ok {
+					val.SetStr(rule.maskValue(val.AsString()))
+				}
 			}
 		} else {
-			log.Body().Map().Range(func(k string, v pcommon.Value) bool {
-				v.SetStr(rule.maskValue(v.AsString()))
-				return true
-			})
+			// No specific key — apply to all map values
+			if rule.Mode == ModeRedactKey {
+				var toDelete []string
+				log.Body().Map().Range(func(k string, v pcommon.Value) bool {
+					if rule.re.MatchString(v.AsString()) {
+						toDelete = append(toDelete, k)
+					}
+					return true
+				})
+				for _, key := range toDelete {
+					log.Body().Map().Remove(key)
+				}
+			} else {
+				log.Body().Map().Range(func(k string, v pcommon.Value) bool {
+					v.SetStr(rule.maskValue(v.AsString()))
+					return true
+				})
+			}
 		}
 	case pcommon.ValueTypeStr:
 		log.Body().SetStr(rule.maskValue(log.Body().AsString()))
