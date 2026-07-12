@@ -624,7 +624,7 @@ func (e *opsrampOTLPExporter) pushMetrics(ctx context.Context, md pmetric.Metric
 	return processError(err)
 }
 
-func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
+func (e *opsrampOTLPExporter) pushLogs(ctx context.Context, ld plog.Logs) error {
 	if ld.LogRecordCount() <= 0 {
 		return nil
 	}
@@ -641,7 +641,7 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 
 	req := plogotlp.NewExportRequestFromLogs(ld)
 
-	_, err := e.logExporter.Export(e.enhanceContext(context.Background()), req, e.callOptions...)
+	_, err := e.logExporter.Export(e.enhanceContext(ctx), req, e.callOptions...)
 
 	// trying to get a new access token in case of expiration
 	if err != nil {
@@ -649,8 +649,8 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 
 		// TLS fallback: if originalInsecure=true and we get TLS mismatch errors, retry with TLS
 		if e.isTLSMismatchError(err) && e.originalInsecure && !e.tlsFallbackAttempted {
-			if reconnErr := e.reconnectWithTLS(context.Background()); reconnErr == nil {
-				_, err = e.logExporter.Export(e.enhanceContext(context.Background()), req, e.callOptions...)
+			if reconnErr := e.reconnectWithTLS(ctx); reconnErr == nil {
+				_, err = e.logExporter.Export(e.enhanceContext(ctx), req, e.callOptions...)
 				if err == nil {
 					return nil
 				}
@@ -662,7 +662,7 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 				return fmt.Errorf("couldn't retrieve new token instead of expired: %w", err)
 			}
 
-			_, err = e.logExporter.Export(e.enhanceContext(context.Background()), req, e.callOptions...)
+			_, err = e.logExporter.Export(e.enhanceContext(ctx), req, e.callOptions...)
 			if err != nil {
 				return err
 			}

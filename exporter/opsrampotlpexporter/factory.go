@@ -16,6 +16,7 @@ package opsrampotlpexporter // import "go.opentelemetry.io/collector/exporter/ot
 
 import (
 	"context"
+	"time"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/opsrampotlpexporter/internal/metadata"
 	"go.opentelemetry.io/collector/component"
@@ -32,6 +33,12 @@ import (
 const (
 	DefaultWriteBufferSize = 512 * 1024
 	DefaultReadBufferSize  = 512 * 1024
+
+	// DefaultKeepaliveTime is the default interval between gRPC keepalive pings.
+	DefaultKeepaliveTime = 20 * time.Second
+
+	// DefaultKeepaliveTimeout is the time gRPC waits for a keepalive ping ack before closing the connection.
+	DefaultKeepaliveTimeout = 30 * time.Second
 )
 
 // NewFactory creates a factory for OTLP exporter.
@@ -56,6 +63,10 @@ func createDefaultConfig() component.Config {
 			// We almost read 0 bytes, so no need to tune ReadBufferSize.
 			WriteBufferSize: DefaultWriteBufferSize,
 			ReadBufferSize:  DefaultReadBufferSize,
+			Keepalive: configoptional.Some(configgrpc.KeepaliveClientConfig{
+				Time:    DefaultKeepaliveTime,
+				Timeout: DefaultKeepaliveTimeout,
+			}),
 		},
 	}
 }
