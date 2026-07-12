@@ -275,15 +275,9 @@ func (e *opsrampOTLPExporter) start(ctx context.Context, host component.Host) (e
 					if originalInsecure {
 						return conn, nil
 					}
-					// Prefer the configured ServerName (hostname) over the resolved IP in dialAddr.
-					// gRPC resolves DNS before calling the dialer, so dialAddr is an IP address.
-					// Using an IP as SNI ServerName breaks certificate validation.
-					serverName := e.config.ClientConfig.TLS.ServerName
-					if serverName == "" {
-						serverName = dialAddr
-						if colonIdx := strings.LastIndex(dialAddr, ":"); colonIdx != -1 {
-							serverName = dialAddr[:colonIdx]
-						}
+					serverName := dialAddr
+					if colonIdx := strings.LastIndex(dialAddr, ":"); colonIdx != -1 {
+						serverName = dialAddr[:colonIdx]
 					}
 					tlsConn := tls.Client(conn, &tls.Config{
 						ServerName:         serverName,
