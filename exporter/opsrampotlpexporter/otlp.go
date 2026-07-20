@@ -476,10 +476,10 @@ func (e *opsrampOTLPExporter) isTLSMismatchError(err error) bool {
 // This is used as a fallback when originalInsecure=true but the server requires TLS.
 func (e *opsrampOTLPExporter) reconnectWithTLS(ctx context.Context) error {
 	e.mut.Lock()
-	defer e.mut.Unlock()
 
 	// Already attempted fallback or TLS was already enabled
 	if e.tlsFallbackAttempted || !e.originalInsecure {
+		e.mut.Unlock()
 		return nil
 	}
 
@@ -497,6 +497,11 @@ func (e *opsrampOTLPExporter) reconnectWithTLS(ctx context.Context) error {
 	e.config.ClientConfig.TLSSetting.InsecureSkipVerify = true
 	e.originalInsecure = false
 	e.originalSkipVerify = true
+
+	// Release lock before calling start() — start() writes e.traceExporter,
+	// e.metricExporter, e.logExporter, e.metadata, e.callOptions without
+	// holding the lock, which would race with push* goroutines if we held it here.
+	e.mut.Unlock()
 
 	if err := e.start(ctx, e.host); err != nil {
 		e.settings.Logger.Error("TLS fallback reconnection failed", zap.Error(err))
@@ -616,8 +621,8 @@ func (e *opsrampOTLPExporter) pushLogs(_ context.Context, ld plog.Logs) error {
 
 func (e *opsrampOTLPExporter) updateExpiredToken() error {
 	tlsOpts := TLSOptions{
-		Insecure:           e.config.ClientConfig.TLSSetting.Insecure,
-		InsecureSkipVerify: e.config.ClientConfig.TLSSetting.InsecureSkipVerify,
+		Insecure:           e.originalInsecure,
+		InsecureSkipVerify: e.originalSkipVerify,
 	}
 	accessToken, err := getAuthToken(e.config.Security, tlsOpts)
 	if err != nil {
