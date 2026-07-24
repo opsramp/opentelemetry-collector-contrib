@@ -90,6 +90,8 @@ type WatchClient struct {
 	// Key is replicaset uid
 	ReplicaSets map[string]*ReplicaSet
 
+	apiCallObserver *k8sAPICallObserver
+
 	telemetryBuilder *metadata.TelemetryBuilder
 }
 
@@ -140,6 +142,7 @@ func New(
 		cronJobRegex:           cronJobRegex,
 		stopCh:                 make(chan struct{}),
 		telemetryBuilder:       telemetryBuilder,
+		apiCallObserver:        newK8sAPICallObserver(set.Logger),
 		waitForMetadata:        waitForMetadata,
 		waitForMetadataTimeout: waitForMetadataTimeout,
 		watchSyncPeriod:        watchSyncPeriod,
@@ -175,7 +178,7 @@ func New(
 	)
 	if informersFactory.newInformer == nil {
 		informersFactory.newInformer = func(client kubernetes.Interface, ns string, ls labels.Selector, fs fields.Selector) cache.SharedInformer {
-			return newSharedInformer(client, ns, ls, fs, watchSyncPeriod)
+			return newSharedInformerWithObserver(client, ns, ls, fs, watchSyncPeriod, c.apiCallObserver)
 		}
 	}
 
@@ -185,13 +188,13 @@ func New(
 			// if rules to extract metadata from namespace is configured use namespace shared informer containing
 			// all namespaces including kube-system which contains cluster uid information (kube-system-uid)
 			informersFactory.newNamespaceInformer = func(client clientmeta.Interface) cache.SharedInformer {
-				return newNamespaceSharedInformer(client, watchSyncPeriod)
+				return newNamespaceSharedInformerWithObserver(client, watchSyncPeriod, c.apiCallObserver)
 			}
 		case rules.ClusterUID:
 			// use kube-system shared informer to only watch kube-system namespace
 			// reducing overhead of watching all the namespaces
 			informersFactory.newNamespaceInformer = func(client clientmeta.Interface) cache.SharedInformer {
-				return newKubeSystemSharedInformer(client, watchSyncPeriod)
+				return newKubeSystemSharedInformerWithObserver(client, watchSyncPeriod, c.apiCallObserver)
 			}
 		default:
 			informersFactory.newNamespaceInformer = NewNoOpInformer
@@ -227,7 +230,7 @@ func New(
 	if needReplicaSetInformer {
 		if informersFactory.newReplicaSetInformer == nil {
 			informersFactory.newReplicaSetInformer = func(client clientmeta.Interface, namespace string) cache.SharedInformer {
-				return newReplicaSetSharedInformer(client, namespace, watchSyncPeriod)
+				return newReplicaSetSharedInformerWithObserver(client, namespace, watchSyncPeriod, c.apiCallObserver)
 			}
 		}
 
@@ -238,23 +241,23 @@ func New(
 	}
 
 	if c.extractNodeLabelsAnnotations() || c.extractNodeUID() {
-		c.nodeInformer = newNodeSharedInformer(c.mc, c.Filters.Node, watchSyncPeriod)
+		c.nodeInformer = newNodeSharedInformerWithObserver(c.mc, c.Filters.Node, watchSyncPeriod, c.apiCallObserver)
 	}
 
 	if c.extractDeploymentLabelsAnnotations() {
-		c.deploymentInformer = newDeploymentSharedInformer(c.mc, c.Filters.Namespace, watchSyncPeriod)
+		c.deploymentInformer = newDeploymentSharedInformerWithObserver(c.mc, c.Filters.Namespace, watchSyncPeriod, c.apiCallObserver)
 	}
 
 	if c.extractStatefulSetLabelsAnnotations() {
-		c.statefulsetInformer = newStatefulSetSharedInformer(c.mc, c.Filters.Namespace, watchSyncPeriod)
+		c.statefulsetInformer = newStatefulSetSharedInformerWithObserver(c.mc, c.Filters.Namespace, watchSyncPeriod, c.apiCallObserver)
 	}
 
 	if c.extractDaemonSetLabelsAnnotations() {
-		c.daemonsetInformer = newDaemonSetSharedInformer(c.mc, c.Filters.Namespace, watchSyncPeriod)
+		c.daemonsetInformer = newDaemonSetSharedInformerWithObserver(c.mc, c.Filters.Namespace, watchSyncPeriod, c.apiCallObserver)
 	}
 
 	if c.extractJobLabelsAnnotations() || rules.CronJobUID {
-		c.jobInformer = newJobSharedInformer(c.mc, c.Filters.Namespace, watchSyncPeriod)
+		c.jobInformer = newJobSharedInformerWithObserver(c.mc, c.Filters.Namespace, watchSyncPeriod, c.apiCallObserver)
 	}
 	return c, err
 }
@@ -386,6 +389,8 @@ func (c *WatchClient) Start() error {
 
 // Stop signals the k8s watcher/informer to stop watching for new events.
 func (c *WatchClient) Stop() {
+	c.apiCallObserver.LogSummary()
+	c.apiCallObserver.Close()
 	close(c.stopCh)
 }
 

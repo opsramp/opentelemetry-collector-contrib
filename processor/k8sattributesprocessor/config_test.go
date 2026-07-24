@@ -34,7 +34,7 @@ func TestLoadConfig(t *testing.T) {
 					DeploymentNameFromReplicaSet: false,
 				},
 				WaitForMetadataTimeout: 10 * time.Second,
-				WatchSyncPeriod:        5 * time.Minute,
+				WatchSyncPeriod:        30 * time.Minute,
 			},
 		},
 		{
@@ -108,7 +108,7 @@ func TestLoadConfig(t *testing.T) {
 					},
 				},
 				WaitForMetadataTimeout: 10 * time.Second,
-				WatchSyncPeriod:        5 * time.Minute,
+				WatchSyncPeriod:        30 * time.Minute,
 			},
 		},
 		{
@@ -133,7 +133,7 @@ func TestLoadConfig(t *testing.T) {
 					},
 				},
 				WaitForMetadataTimeout: 10 * time.Second,
-				WatchSyncPeriod:        5 * time.Minute,
+				WatchSyncPeriod:        30 * time.Minute,
 			},
 		},
 		{
@@ -146,7 +146,7 @@ func TestLoadConfig(t *testing.T) {
 				},
 				Exclude:                defaultExcludes,
 				WaitForMetadataTimeout: 10 * time.Second,
-				WatchSyncPeriod:        5 * time.Minute,
+				WatchSyncPeriod:        30 * time.Minute,
 			},
 		},
 		{
@@ -187,7 +187,7 @@ func TestLoadConfig(t *testing.T) {
 				},
 				Exclude:                defaultExcludes,
 				WaitForMetadataTimeout: 10 * time.Second,
-				WatchSyncPeriod:        5 * time.Minute,
+				WatchSyncPeriod:        30 * time.Minute,
 			},
 		},
 		{
@@ -201,7 +201,7 @@ func TestLoadConfig(t *testing.T) {
 				Exclude:                defaultExcludes,
 				WaitForMetadata:        true,
 				WaitForMetadataTimeout: 30 * time.Second,
-				WatchSyncPeriod:        5 * time.Minute,
+				WatchSyncPeriod:        30 * time.Minute,
 			},
 		},
 		{
@@ -215,7 +215,7 @@ func TestLoadConfig(t *testing.T) {
 				},
 				Exclude:                defaultExcludes,
 				WaitForMetadataTimeout: 10 * time.Second,
-				WatchSyncPeriod:        5 * time.Minute,
+				WatchSyncPeriod:        30 * time.Minute,
 			},
 		},
 		{
@@ -233,7 +233,7 @@ func TestLoadConfig(t *testing.T) {
 				},
 				Exclude:                defaultExcludes,
 				WaitForMetadataTimeout: 10 * time.Second,
-				WatchSyncPeriod:        5 * time.Minute,
+				WatchSyncPeriod:        30 * time.Minute,
 			},
 		},
 		{
@@ -251,7 +251,7 @@ func TestLoadConfig(t *testing.T) {
 				},
 				Exclude:                defaultExcludes,
 				WaitForMetadataTimeout: 10 * time.Second,
-				WatchSyncPeriod:        5 * time.Minute,
+				WatchSyncPeriod:        30 * time.Minute,
 			},
 		},
 		{
@@ -270,7 +270,7 @@ func TestLoadConfig(t *testing.T) {
 				},
 				Exclude:                defaultExcludes,
 				WaitForMetadataTimeout: 10 * time.Second,
-				WatchSyncPeriod:        5 * time.Minute,
+				WatchSyncPeriod:        30 * time.Minute,
 			},
 		},
 		{
@@ -286,7 +286,7 @@ func TestLoadConfig(t *testing.T) {
 				},
 				Exclude:                defaultExcludes,
 				WaitForMetadataTimeout: 10 * time.Second,
-				WatchSyncPeriod:        5 * time.Minute,
+				WatchSyncPeriod:        30 * time.Minute,
 			},
 		},
 		{
@@ -302,7 +302,7 @@ func TestLoadConfig(t *testing.T) {
 				},
 				Exclude:                defaultExcludes,
 				WaitForMetadataTimeout: 10 * time.Second,
-				WatchSyncPeriod:        5 * time.Minute,
+				WatchSyncPeriod:        30 * time.Minute,
 			},
 		},
 		{
@@ -318,7 +318,7 @@ func TestLoadConfig(t *testing.T) {
 				},
 				Exclude:                defaultExcludes,
 				WaitForMetadataTimeout: 10 * time.Second,
-				WatchSyncPeriod:        5 * time.Minute,
+				WatchSyncPeriod:        30 * time.Minute,
 			},
 		},
 		{
@@ -334,7 +334,7 @@ func TestLoadConfig(t *testing.T) {
 				},
 				Exclude:                defaultExcludes,
 				WaitForMetadataTimeout: 10 * time.Second,
-				WatchSyncPeriod:        5 * time.Minute,
+				WatchSyncPeriod:        30 * time.Minute,
 			},
 		},
 		{
@@ -350,7 +350,7 @@ func TestLoadConfig(t *testing.T) {
 				},
 				Exclude:                defaultExcludes,
 				WaitForMetadataTimeout: 10 * time.Second,
-				WatchSyncPeriod:        5 * time.Minute,
+				WatchSyncPeriod:        30 * time.Minute,
 			},
 		},
 		{
@@ -372,7 +372,7 @@ func TestLoadConfig(t *testing.T) {
 				},
 				Exclude:                defaultExcludes,
 				WaitForMetadataTimeout: 10 * time.Second,
-				WatchSyncPeriod:        5 * time.Minute,
+				WatchSyncPeriod:        30 * time.Minute,
 			},
 		},
 		{
@@ -386,7 +386,7 @@ func TestLoadConfig(t *testing.T) {
 				},
 				Exclude:                defaultExcludes,
 				WaitForMetadataTimeout: 10 * time.Second,
-				WatchSyncPeriod:        5 * time.Minute,
+				WatchSyncPeriod:        30 * time.Minute,
 			},
 		},
 		{
