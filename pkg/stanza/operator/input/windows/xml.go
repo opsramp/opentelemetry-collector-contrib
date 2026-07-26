@@ -61,7 +61,7 @@ func parseSeverity(renderedLevel, level string) entry.Severity {
 		return entry.Error
 	case "3":
 		return entry.Warn
-	case "4":
+	case "0", "4":
 		return entry.Info
 	case "5":
 		return entry.Debug // Verbose
