@@ -32,6 +32,10 @@ import (
 
 const (
 	clientIPLabelName string = "ip"
+
+	// defaultPodDeleteGracePeriod preserves the grace period previously hardcoded in
+	// internal/kube before upstream made it a kube.New parameter.
+	defaultPodDeleteGracePeriod = 120 * time.Second
 )
 
 type kubernetesprocessor struct {
@@ -60,7 +64,7 @@ func (kp *kubernetesprocessor) initKubeClient(set component.TelemetrySettings, k
 		kubeClient = kube.New
 	}
 	if !kp.passthroughMode {
-		kc, err := kubeClient(set, kp.apiConfig, kp.rules, kp.filters, kp.podAssociations, kp.podIgnore, nil, kube.InformersFactoryList{}, kp.waitForMetadata, kp.waitForMetadataTimeout, kp.watchSyncPeriod)
+		kc, err := kubeClient(set, kp.apiConfig, kp.rules, kp.filters, kp.podAssociations, kp.podIgnore, nil, kube.InformersFactoryList{}, kp.waitForMetadata, kp.waitForMetadataTimeout, kp.watchSyncPeriod, defaultPodDeleteGracePeriod)
 		if err != nil {
 			return err
 		}

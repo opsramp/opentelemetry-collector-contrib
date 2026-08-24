@@ -424,9 +424,8 @@ func TestUnmarshal(t *testing.T) {
 				Name: "ordering_criteria_top_n",
 				Expect: func() *mockOperatorConfig {
 					cfg := NewConfig()
-					topN := 10
 					cfg.OrderingCriteria = matcher.OrderingCriteria{
-						TopN: &topN,
+						TopN: 10,
 					}
 					return newMockOperatorConfig(cfg)
 				}(),
@@ -578,9 +577,7 @@ func TestBuild(t *testing.T) {
 		{
 			"BadOrderingCriteriaRegex",
 			func(cfg *Config) {
-				topN := 1
 				cfg.OrderingCriteria = matcher.OrderingCriteria{
-					TopN: &topN,
 					SortBy: []matcher.Sort{
 						{
 							SortType: "numeric",
@@ -595,10 +592,8 @@ func TestBuild(t *testing.T) {
 		{
 			"OrderingCriteriaTimestampMissingLayout",
 			func(cfg *Config) {
-				topN := 1
 				cfg.OrderingCriteria = matcher.OrderingCriteria{
 					Regex: ".*",
-					TopN:  &topN,
 					SortBy: []matcher.Sort{
 						{
 							SortType: "timestamp",
@@ -613,10 +608,8 @@ func TestBuild(t *testing.T) {
 		{
 			"GoodOrderingCriteriaTimestamp",
 			func(cfg *Config) {
-				topN := 1
 				cfg.OrderingCriteria = matcher.OrderingCriteria{
 					Regex: ".*",
-					TopN:  &topN,
 					SortBy: []matcher.Sort{
 						{
 							SortType: "timestamp",
