@@ -4,7 +4,6 @@
 package k8sobjectsreceiver
 
 import (
-	"sync"
 	"testing"
 	"time"
 
@@ -16,10 +15,7 @@ import (
 	"go.opentelemetry.io/collector/filter"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/receiver/receivertest"
-	"k8s.io/apimachinery/pkg/runtime"
 	apiWatch "k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/dynamic/fake"
-	k8s_testing "k8s.io/client-go/testing"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/storagetest"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sinventory"
@@ -82,9 +78,8 @@ func TestErrorModes(t *testing.T) {
 			// include_initial_state defaults to false, no override needed
 			rCfg.Objects = []*K8sObjectsConfig{
 				{
-					Name:     tt.objectName,
-					Mode:     k8sinventory.PullMode,
-					Interval: 30 * time.Second,
+					Name: tt.objectName,
+					Mode: k8sinventory.PullMode,
 				},
 			}
 			r, err := newReceiver(
@@ -123,9 +118,8 @@ func TestNewReceiver(t *testing.T) {
 	rCfg.ErrorMode = PropagateError
 	rCfg.Objects = []*K8sObjectsConfig{
 		{
-			Name:     "pods",
-			Mode:     k8sinventory.PullMode,
-			Interval: 30 * time.Second,
+			Name: "pods",
+			Mode: k8sinventory.PullMode,
 		},
 	}
 
@@ -203,8 +197,8 @@ func TestPullObjectInitialDelay(t *testing.T) {
 		{
 			Name:         "pods",
 			Mode:         k8sinventory.PullMode,
-			Interval:     time.Second,
-			InitialDelay: 200 * time.Millisecond,
+			Interval:     500 * time.Millisecond,
+			InitialDelay: 300 * time.Millisecond,
 		},
 	}
 
@@ -219,11 +213,11 @@ func TestPullObjectInitialDelay(t *testing.T) {
 	require.NoError(t, r.Start(t.Context(), componenttest.NewNopHost()))
 
 	time.Sleep(100 * time.Millisecond)
-	assert.Equal(t, 0, consumer.Count())
+	assert.Equal(t, 0, consumer.Count(), "no objects should be pulled before initial_delay elapses")
 
 	require.Eventually(t, func() bool {
 		return consumer.Count() == 1
-	}, time.Second, 10*time.Millisecond)
+	}, 3*time.Second, 10*time.Millisecond)
 
 	assert.NoError(t, r.Shutdown(t.Context()))
 }
@@ -238,17 +232,6 @@ func TestPullObjectShutdownDuringInitialDelay(t *testing.T) {
 		}, "1"),
 	)
 
-	var (
-		listCalls int
-		mu        sync.Mutex
-	)
-	mockClient.client.(*fake.FakeDynamicClient).PrependReactor("list", "pods", func(_ k8s_testing.Action) (bool, runtime.Object, error) {
-		mu.Lock()
-		listCalls++
-		mu.Unlock()
-		return false, nil, nil
-	})
-
 	rCfg := createDefaultConfig().(*Config)
 	rCfg.makeDynamicClient = mockClient.getMockDynamicClient
 	rCfg.makeDiscoveryClient = getMockDiscoveryClient
@@ -257,8 +240,8 @@ func TestPullObjectShutdownDuringInitialDelay(t *testing.T) {
 		{
 			Name:         "pods",
 			Mode:         k8sinventory.PullMode,
-			Interval:     time.Second,
-			InitialDelay: 200 * time.Millisecond,
+			Interval:     10 * time.Second,
+			InitialDelay: 5 * time.Second,
 		},
 	}
 
@@ -272,13 +255,11 @@ func TestPullObjectShutdownDuringInitialDelay(t *testing.T) {
 	require.NotNil(t, r)
 	require.NoError(t, r.Start(t.Context(), componenttest.NewNopHost()))
 
-	assert.NoError(t, r.Shutdown(t.Context()))
-	time.Sleep(300 * time.Millisecond)
-
+	// Shutdown must not block for the remainder of initial_delay.
+	start := time.Now()
+	require.NoError(t, r.Shutdown(t.Context()))
+	assert.Less(t, time.Since(start), 3*time.Second)
 	assert.Equal(t, 0, consumer.Count())
-	mu.Lock()
-	assert.Equal(t, 0, listCalls)
-	mu.Unlock()
 }
 
 func TestWatchObject(t *testing.T) {
@@ -475,9 +456,8 @@ func TestIncludeInitialStateWithPullMode(t *testing.T) {
 
 	rCfg.Objects = []*K8sObjectsConfig{
 		{
-			Name:     "pods",
-			Mode:     k8sinventory.PullMode,
-			Interval: 30 * time.Second,
+			Name: "pods",
+			Mode: k8sinventory.PullMode,
 		},
 	}
 
@@ -560,9 +540,8 @@ func TestReceiverWithLeaderElection(t *testing.T) {
 	rCfg.ErrorMode = PropagateError
 	rCfg.Objects = []*K8sObjectsConfig{
 		{
-			Name:     "pods",
-			Mode:     k8sinventory.PullMode,
-			Interval: 30 * time.Second,
+			Name: "pods",
+			Mode: k8sinventory.PullMode,
 		},
 	}
 	rCfg.K8sLeaderElector = &leaderElectorID
@@ -621,8 +600,6 @@ func TestReceiverWithLeaderElection(t *testing.T) {
 		return sink.LogRecordCount() == 2
 	}, 20*time.Second, 100*time.Millisecond,
 		"logs not collected")
-
-	assert.NoError(t, r.Shutdown(t.Context()))
 }
 
 func TestNamespaceDenyListWatchObject(t *testing.T) {

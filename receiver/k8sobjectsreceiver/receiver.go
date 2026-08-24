@@ -373,6 +373,21 @@ func (kr *k8sobjectsreceiver) startPull(ctx context.Context, config *K8sObjectsC
 	kr.wg.Add(1)
 	kr.mu.Unlock()
 	defer kr.wg.Done()
+
+	// Stagger the first poll so multiple pull objects don't all hit the API server at once.
+	if config.InitialDelay > 0 {
+		timer := time.NewTimer(config.InitialDelay)
+		select {
+		case <-timer.C:
+		case <-stopperChan:
+			timer.Stop()
+			return
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		}
+	}
+
 	ticker := newTicker(ctx, config.Interval)
 	listOption := metav1.ListOptions{
 		FieldSelector: config.FieldSelector,

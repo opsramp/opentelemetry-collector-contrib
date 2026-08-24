@@ -25,12 +25,8 @@ func (c *Config) Build(set component.TelemetrySettings) (operator.Operator, erro
 		return nil, err
 	}
 
-	if c.Channel == "" && c.Query == nil && c.Path == nil {
-		return nil, errors.New("either `channel`, `query` or `path` must be set")
-	}
-
-	if c.Path != nil && (c.Channel != "" || c.Query != nil) {
-		return nil, errors.New("the `path` field cannot be used with `channel` or `query`")
+	if c.Channel == "" && c.Query == nil {
+		return nil, errors.New("either `channel` or `query` must be set")
 	}
 
 	if c.Channel != "" && c.Query != nil {
@@ -54,10 +50,8 @@ func (c *Config) Build(set component.TelemetrySettings) (operator.Operator, erro
 		return nil, errors.New("remote configuration must have non-empty `username` and `password`")
 	}
 
-	eventDrivenScraping := c.EventDrivenScraping || metadata.StanzaWindowsEventDrivenScrapingFeatureGate.IsEnabled()
-
 	maxEventsPerPoll := c.MaxEventsPerPoll
-	if eventDrivenScraping {
+	if metadata.StanzaWindowsEventDrivenScrapingFeatureGate.IsEnabled() {
 		maxEventsPerPoll = 0
 	}
 
@@ -72,7 +66,6 @@ func (c *Config) Build(set component.TelemetrySettings) (operator.Operator, erro
 		startAt:                  c.StartAt,
 		pollInterval:             c.PollInterval,
 		waitTimeout:              c.WaitTimeout,
-		eventDrivenScraping:      eventDrivenScraping,
 		raw:                      c.Raw,
 		eventDataFormat:          c.EventDataFormat,
 		includeLogRecordOriginal: c.IncludeLogRecordOriginal,
@@ -80,7 +73,6 @@ func (c *Config) Build(set component.TelemetrySettings) (operator.Operator, erro
 		excludeProviders:         excludeProvidersSet(c.ExcludeProviders),
 		remote:                   c.Remote,
 		query:                    c.Query,
-		path:                     c.Path,
 	}
 	input.startRemoteSession = input.defaultStartRemoteSession
 

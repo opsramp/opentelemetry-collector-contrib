@@ -34,16 +34,16 @@ type k8seventsReceiver struct {
 	excludedNSSet      map[string]struct{}            // built from config.ExcludeNamespaces at startup; nil when no exclusions
 	excludedReasonsSet map[string]map[string]struct{} // kind → excluded reason names; nil when no exclusions
 	settings           receiver.Settings
-	logsConsumer    consumer.Logs
-	stopperChanList []chan struct{}
-	startTime       time.Time
-	ctx             context.Context
-	cancel          context.CancelFunc
-	obsrecv         *receiverhelper.ObsReport
-	mu              sync.Mutex
-	client          dynamic.Interface
-	storageClient   storage.Client
-	wg              sync.WaitGroup
+	logsConsumer       consumer.Logs
+	stopperChanList    []chan struct{}
+	startTime          time.Time
+	ctx                context.Context
+	cancel             context.CancelFunc
+	obsrecv            *receiverhelper.ObsReport
+	mu                 sync.Mutex
+	client             dynamic.Interface
+	storageClient      storage.Client
+	wg                 sync.WaitGroup
 }
 
 // newReceiver creates the Kubernetes events receiver with the given configuration.

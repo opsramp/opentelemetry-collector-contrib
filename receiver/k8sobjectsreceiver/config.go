@@ -66,9 +66,8 @@ type K8sObjectsConfig struct {
 }
 
 type Config struct {
-	APIConfig k8sconfig.APIConfig `mapstructure:",squash"`
+	k8sconfig.APIConfig `mapstructure:",squash"`
 
-	Interval            time.Duration       `mapstructure:"interval"`
 	Objects             []*K8sObjectsConfig `mapstructure:"objects"`
 	Storage             *component.ID       `mapstructure:"storage"`
 	ErrorMode           ErrorMode           `mapstructure:"error_mode"`
@@ -92,10 +91,6 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid error_mode %q: must be one of 'propagate', 'ignore', or 'silent'", c.ErrorMode)
 	}
 
-	if c.Interval < 0 {
-		return errors.New("interval must not be negative")
-	}
-
 	for _, object := range c.Objects {
 		if object.Mode == "" {
 			object.Mode = defaultMode
@@ -103,28 +98,24 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("invalid mode: %v", object.Mode)
 		}
 
-		if object.Interval < 0 {
-			return errors.New("objects[*].interval must not be negative")
-		}
-
 		if object.Mode == k8sinventory.PullMode && object.Interval == 0 {
-			if c.Interval != 0 {
-				object.Interval = c.Interval
-			} else {
-				object.Interval = defaultPullInterval
-			}
+			object.Interval = defaultPullInterval
 		}
 
-		if object.Mode == k8sinventory.PullMode && len(object.ExcludeWatchType) != 0 {
-			return errors.New("the Exclude config can only be used with watch mode")
+		if object.InitialDelay < 0 {
+			return errors.New("objects[*].initial_delay must not be negative")
 		}
 
 		if object.Mode == k8sinventory.WatchMode && object.InitialDelay != 0 {
 			return errors.New("initial_delay can only be used with pull mode")
 		}
 
-		if object.Mode == k8sinventory.PullMode && object.InitialDelay > 0 && object.InitialDelay >= object.Interval {
+		if object.Mode == k8sinventory.PullMode && object.InitialDelay >= object.Interval && object.InitialDelay > 0 {
 			return errors.New("initial_delay must be less than interval")
+		}
+
+		if object.Mode == k8sinventory.PullMode && len(object.ExcludeWatchType) != 0 {
+			return errors.New("the Exclude config can only be used with watch mode")
 		}
 
 		if c.Storage != nil && object.ResourceVersion != "" {
