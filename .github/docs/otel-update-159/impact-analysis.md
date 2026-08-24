@@ -369,7 +369,105 @@ Files our kept sources depend on that silently took upstream changes, reviewed i
 
 ---
 
-## 12. Pre-existing Issues (NOT caused by this upgrade)
+## 12. OpsRamp Customisation Preservation Audit
+
+**Question answered:** did any OpsRamp custom change get removed or overridden by upstream?
+
+**Method (not opinion — measured):** the set of OpsRamp-customised files is
+`diff(upstream v0.152.0 tag → our release/v0.152.0)` = **228 files** (excluding `go.mod`/`go.sum`).
+Each was then checked at HEAD.
+
+### 12.1 Headline result
+
+| Outcome | Count |
+|---|---|
+| Preserved **byte-identical** to v0.152.0 | **203** |
+| Changed (all reviewed individually — see 12.3) | 25 |
+| **Deleted / lost** | **0** |
+
+For the 16 changed non-`go.mod` files, the *OpsRamp delta itself* was re-extracted at HEAD
+(`diff(upstream v0.159 → HEAD)`) and compared against the original delta
+(`diff(upstream v0.152 → our v0.152)`):
+
+| Delta comparison | Count |
+|---|---|
+| Delta **identical** — customisation untouched | 9 |
+| Delta differs — **only** because of a deliberate edit made during this upgrade | 7 |
+
+**No OpsRamp customisation was lost, reverted, or overwritten.**
+
+### 12.2 Preserved byte-identical, by area
+
+| Area | Custom files preserved | Changed |
+|---|---|---|
+| `exporter/opsrampdebugexporter` | 56 | 1 (`go.mod` only) |
+| `receiver/hostmetricsreceiver` | 30 | 3 |
+| `pkg/stanza` | 23 | 6 |
+| `exporter/opsrampotlpexporter` | 15 | 1 (`go.mod` only) |
+| `processor/opsrampk8sobjectsprocessor` | 13 | 1 (`go.mod` only) |
+| `processor/scrubbingprocessor` | 11 | 1 (`go.mod` only) |
+| `processor/opsrampmetricsfilterprocessor` | 11 | 1 (`go.mod` only) |
+| `processor/k8sattributesprocessor` | 11 | 3 |
+| `extension/opsramplogsdbstorage` | 10 | **0** |
+| `receiver/jmxreceiver` | 6 | 2 |
+| `receiver/k8seventsreceiver` | 5 | 2 |
+| `cmd/otelcontribcol` | 2 | 1 |
+| `receiver/k8sobjectsreceiver` | 1 | 2 |
+| `internal/k8sinventory` | 1 (`config.go`) | 0 |
+| `receiver/prometheusreceiver` | 1 | 0 |
+| `.github/*`, `deploy.yaml`, `go.mod` | 5 | 1 (`Makefile`) |
+
+> **All 5 OpsRamp-only components plus `opsramplogsdbstorage` have 100% of their source
+> byte-identical to v0.152.0.** Their only change is the `go.mod` version bump.
+
+### 12.3 The 25 changed files — every one accounted for
+
+**9 dependency manifests** (`go.mod`) — version bumps only, required by the upgrade:
+`opsrampdebugexporter`, `opsrampotlpexporter`, `opsrampk8sobjectsprocessor`,
+`opsrampmetricsfilterprocessor`, `scrubbingprocessor`, `k8sattributesprocessor`,
+`pkg/stanza`, `hostmetricsreceiver`, `jmxreceiver`.
+
+**9 files where the OpsRamp delta is byte-identical** (upstream changed surrounding code
+only; our customisation is intact):
+
+| File | OpsRamp customisation confirmed still present |
+|---|---|
+| `processor/k8sattributesprocessor/internal/kube/kube.go` | `AddOnMetadata` struct |
+| `receiver/hostmetricsreceiver/factory.go` | `groupprocessscraper.NewFactory()` registration |
+| `receiver/hostmetricsreceiver/README.md` | groupprocess docs |
+| `pkg/stanza/fileconsumer/config.go` | `InitialBufferSize` default fallback |
+| `pkg/stanza/fileconsumer/internal/archive/archive.go` | `writeArchive` without batched storage ops |
+| `pkg/stanza/fileconsumer/matcher/internal/filter/sort.go` | `SortMtime(ascending, duration)` + `maxTime`/`hasLimit` age cutoff |
+| `pkg/stanza/fileconsumer/matcher/internal/filter/sort_test.go` | matching tests |
+| `Makefile` | OpsRamp targets |
+| *(`cmd/otelcontribcol/builder-config.yaml` — see below)* | all OpsRamp components carried over |
+
+**7 files changed by a deliberate edit during this upgrade** — all additive, no OpsRamp
+logic removed:
+
+| File | Edit | OpsRamp logic touched? |
+|---|---|---|
+| `receiver/k8seventsreceiver/receiver.go` | `observer.Start` 2-value return + gofmt alignment | No — `excludedNSSet`, `excludedReasonsSet`, `computeNamespaceFilter`, `allowEvent` all intact |
+| `processor/k8sattributesprocessor/processor.go` | Added `defaultPodDeleteGracePeriod = 120s` const, passed to `kube.New` | No — preserves the exact previous hardcoded value |
+| `receiver/k8sobjectsreceiver/config.go` | Added `InitialDelay` field + validation + `DeepCopy` entry | No — purely additive |
+| `receiver/k8sobjectsreceiver/receiver.go` | Added interruptible delay at top of `startPull` | No — purely additive |
+| `pkg/stanza/operator/input/windows/input.go` | Added `readWithRetry`, switched `readBatch` to it (EVT_HANDLE leak fix port) | No — replaces the old 3-value `subscription.Read` call only |
+| `receiver/k8seventsreceiver/config_test.go` | `xconfmap.Validate` → `confmap.Validate` | No — API rename only |
+| `receiver/jmxreceiver/config_test.go` | `xconfmap.Validate` → `confmap.Validate` | No — API rename only |
+
+### 12.4 builder-config.yaml
+
+Version-normalised comparison of all OpsRamp/fork-specific entries between v0.152.0 and HEAD:
+**no difference** — every OpsRamp component, plus the fork-retained `jmxreceiver` and
+`signalfxreceiver`, carried over.
+
+Note: `opsramplogsdbstorage` is **not** referenced in `builder-config.yaml` at HEAD — but it
+was not referenced at v0.152.0 either, so this is a pre-existing state, not a regression.
+Flagged in case it is expected to be wired in.
+
+---
+
+## 13. Pre-existing Issues (NOT caused by this upgrade)
 
 Both confirmed present on `release/v0.152.0`:
 
