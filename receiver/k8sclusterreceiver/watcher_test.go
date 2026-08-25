@@ -343,6 +343,102 @@ func TestConditionalInformerSetup(t *testing.T) {
 	}
 }
 
+// TestNoMetricsGroupsWatchesDefaultKinds pins the informer set created when metrics_groups is not
+// configured, so that omitting it keeps the behavior the receiver had before the option existed.
+func TestNoMetricsGroupsWatchesDefaultKinds(t *testing.T) {
+	cfg := createDefaultConfig().(*Config)
+	require.NoError(t, cfg.Validate())
+
+	rw := &resourceWatcher{
+		client:        newFakeClientWithAllResources(),
+		logger:        zap.NewNop(),
+		metadataStore: metadata.NewStore(),
+		config:        cfg,
+	}
+
+	require.NoError(t, rw.prepareSharedInformerFactory())
+
+	for _, k := range []schema.GroupVersionKind{
+		gvk.Pod, gvk.Node, gvk.Namespace, gvk.ReplicationController, gvk.ResourceQuota, gvk.Service,
+		gvk.DaemonSet, gvk.Deployment, gvk.ReplicaSet, gvk.StatefulSet, gvk.Job, gvk.CronJob,
+		gvk.HorizontalPodAutoscaler,
+	} {
+		assert.NotEmpty(t, rw.metadataStore.Get(k), "informer for %s should be set up", k.Kind)
+	}
+	// Still gated by their metrics being disabled by default, as before.
+	for _, k := range []schema.GroupVersionKind{gvk.EndpointSlice, gvk.PersistentVolume, gvk.PersistentVolumeClaim} {
+		assert.Empty(t, rw.metadataStore.Get(k), "informer for %s should not be set up", k.Kind)
+	}
+}
+
+// TestMetricsGroupsDisableInformers verifies that a disabled metrics group stops the informer for
+// that resource, even when metadata destinations would otherwise force it to be watched.
+func TestMetricsGroupsDisableInformers(t *testing.T) {
+	disabled := false
+
+	cfg := &Config{
+		MetricsBuilderConfig: metadata.NewDefaultMetricsBuilderConfig(),
+		// Would normally force the PV/PVC informers on.
+		MetadataExporters: []string{"signalfx"},
+		MetricsGroups: MetricsGroupsConfig{
+			Pods:                   ResourceGroupConfig{Enabled: &disabled},
+			PersistentVolumeClaims: ResourceGroupConfig{Enabled: &disabled},
+			Services:               ResourceGroupConfig{Enabled: &disabled},
+		},
+	}
+	cfg.MetricsBuilderConfig.Metrics.K8sServiceEndpointCount.Enabled = true
+
+	rw := &resourceWatcher{
+		client:        newFakeClientWithAllResources(),
+		logger:        zap.NewNop(),
+		metadataStore: metadata.NewStore(),
+		config:        cfg,
+	}
+
+	require.NoError(t, rw.prepareSharedInformerFactory())
+
+	for _, k := range []schema.GroupVersionKind{gvk.Pod, gvk.PersistentVolumeClaim, gvk.Service, gvk.EndpointSlice} {
+		assert.Empty(t, rw.metadataStore.Get(k), "informer for %s should not be set up", k.Kind)
+	}
+	// Groups that were not disabled are unaffected.
+	for _, k := range []schema.GroupVersionKind{gvk.Node, gvk.Deployment, gvk.PersistentVolume} {
+		assert.NotEmpty(t, rw.metadataStore.Get(k), "informer for %s should be set up", k.Kind)
+	}
+}
+
+// TestMetricsGroupsEnabledByDefaultOptOut verifies that enabled_by_default: false leaves only the
+// explicitly enabled resources watched.
+func TestMetricsGroupsEnabledByDefaultOptOut(t *testing.T) {
+	enabled, disabled := true, false
+
+	rw := &resourceWatcher{
+		client:        newFakeClientWithAllResources(),
+		logger:        zap.NewNop(),
+		metadataStore: metadata.NewStore(),
+		config: &Config{
+			MetricsBuilderConfig: metadata.NewDefaultMetricsBuilderConfig(),
+			MetricsGroups: MetricsGroupsConfig{
+				EnabledByDefault: &disabled,
+				Nodes:            ResourceGroupConfig{Enabled: &enabled},
+				Deployments:      ResourceGroupConfig{Enabled: &enabled},
+			},
+		},
+	}
+
+	require.NoError(t, rw.prepareSharedInformerFactory())
+
+	for _, k := range []schema.GroupVersionKind{gvk.Node, gvk.Deployment} {
+		assert.NotEmpty(t, rw.metadataStore.Get(k), "informer for %s should be set up", k.Kind)
+	}
+	for _, k := range []schema.GroupVersionKind{
+		gvk.Pod, gvk.Namespace, gvk.ReplicaSet, gvk.ReplicationController, gvk.DaemonSet,
+		gvk.StatefulSet, gvk.Job, gvk.CronJob, gvk.HorizontalPodAutoscaler, gvk.ResourceQuota,
+		gvk.Service, gvk.EndpointSlice, gvk.PersistentVolume, gvk.PersistentVolumeClaim,
+	} {
+		assert.Empty(t, rw.metadataStore.Get(k), "informer for %s should not be set up", k.Kind)
+	}
+}
+
 func TestSyncMetadataAndEmitEntityEvents(t *testing.T) {
 	client := newFakeClientWithAllResources()
 

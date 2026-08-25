@@ -21,6 +21,12 @@ import (
 func TestLoadConfig(t *testing.T) {
 	t.Parallel()
 
+	disabled := false
+	expectedMetricsGroups := MetricsGroupsConfig{
+		Pods:                   ResourceGroupConfig{Enabled: &disabled},
+		PersistentVolumeClaims: ResourceGroupConfig{Enabled: &disabled},
+	}
+
 	cm, err := confmaptest.LoadConf(filepath.Join("testdata", "config.yaml"))
 	require.NoError(t, err)
 
@@ -61,6 +67,25 @@ func TestLoadConfig(t *testing.T) {
 				MetricsBuilderConfig:       metadata.NewDefaultMetricsBuilderConfig(),
 			},
 		},
+		{
+			id: component.NewIDWithName(metadata.Type, "metrics_groups"),
+			expected: &Config{
+				Distribution:               distributionKubernetes,
+				CollectionInterval:         defaultCollectionInterval,
+				NodeConditionTypesToReport: []string{"Ready"},
+				APIConfig: k8sconfig.APIConfig{
+					AuthType: k8sconfig.AuthTypeServiceAccount,
+				},
+				MetadataCollectionInterval: defaultMetadataCollectionInterval,
+				MetricsBuilderConfig:       metadata.NewDefaultMetricsBuilderConfig(),
+				MetricsGroups:              expectedMetricsGroups,
+			},
+		},
+		{
+			// An empty metrics_groups key must behave exactly like omitting it.
+			id:       component.NewIDWithName(metadata.Type, "empty_metrics_groups"),
+			expected: createDefaultConfig(),
+		},
 	}
 
 	for _, tt := range tests {
@@ -98,4 +123,53 @@ func TestInvalidConfig(t *testing.T) {
 	err = confmap.Validate(cfg)
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, expectedErr)
+
+	// Every metrics group turned off
+	disabled := false
+	cfg = &Config{
+		APIConfig:          k8sconfig.APIConfig{AuthType: k8sconfig.AuthTypeNone},
+		Distribution:       distributionKubernetes,
+		CollectionInterval: 30 * time.Second,
+		MetricsGroups:      MetricsGroupsConfig{EnabledByDefault: &disabled},
+	}
+	err = confmap.Validate(cfg)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "all metrics_groups are disabled")
+}
+
+func TestMetricsGroupsEnabledForKind(t *testing.T) {
+	allKinds := []string{
+		"Pod", "Node", "Namespace", "Deployment", "ReplicaSet", "ReplicationController", "DaemonSet",
+		"StatefulSet", "Job", "CronJob", "HorizontalPodAutoscaler", "ResourceQuota", "Service",
+		"EndpointSlice", "PersistentVolume", "PersistentVolumeClaim", "ClusterResourceQuota",
+		// Unknown kinds follow enabled_by_default so newly added resources are not silently dropped.
+		"SomeFutureKind",
+	}
+
+	var groups MetricsGroupsConfig
+	for _, kind := range allKinds {
+		assert.True(t, groups.enabledForKind(kind), "kind %s should be enabled by default", kind)
+	}
+
+	enabled, disabled := true, false
+	groups.Pods = ResourceGroupConfig{Enabled: &disabled}
+	groups.Services = ResourceGroupConfig{Enabled: &disabled}
+	assert.False(t, groups.enabledForKind("Pod"))
+	assert.False(t, groups.enabledForKind("Service"))
+	// EndpointSlice only exists to back k8s.service.endpoint.count.
+	assert.False(t, groups.enabledForKind("EndpointSlice"))
+	assert.True(t, groups.enabledForKind("Node"))
+
+	// enabled_by_default: false opts out of everything that is not set explicitly.
+	optOut := MetricsGroupsConfig{
+		EnabledByDefault: &disabled,
+		Nodes:            ResourceGroupConfig{Enabled: &enabled},
+	}
+	for _, kind := range allKinds {
+		if kind == "Node" {
+			continue
+		}
+		assert.False(t, optOut.enabledForKind(kind), "kind %s should be disabled", kind)
+	}
+	assert.True(t, optOut.enabledForKind("Node"))
 }

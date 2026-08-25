@@ -94,7 +94,8 @@ func (rw *resourceWatcher) initialize() error {
 	}
 	rw.client = client
 
-	if rw.config.Distribution == distributionOpenShift && rw.config.Namespace == "" && len(rw.config.Namespaces) == 0 {
+	if rw.config.Distribution == distributionOpenShift && rw.config.Namespace == "" && len(rw.config.Namespaces) == 0 &&
+		rw.config.MetricsGroups.enabledForKind("ClusterResourceQuota") {
 		rw.osQuotaClient, err = rw.makeOpenShiftQuotaClient(rw.config.APIConfig)
 		if err != nil {
 			return fmt.Errorf("Failed to create OpenShift quota API client: %w", err)
@@ -151,6 +152,15 @@ func (rw *resourceWatcher) prepareSharedInformerFactory() error {
 	}
 	if rw.shouldWatchPersistentVolumeClaim() {
 		supportedKinds["PersistentVolumeClaim"] = []schema.GroupVersionKind{gvk.PersistentVolumeClaim}
+	}
+
+	// A disabled metrics group drops the informer entirely, so metrics, metadata and entity events
+	// for that resource are all suppressed.
+	for kind := range supportedKinds {
+		if !rw.config.MetricsGroups.enabledForKind(kind) {
+			delete(supportedKinds, kind)
+			rw.logger.Info("Metrics group is disabled, resource will not be watched", zap.String("kind", kind))
+		}
 	}
 
 	for kind, gvks := range supportedKinds {

@@ -80,6 +80,7 @@ When enabled, this setting produces the following node-level metrics (one per se
 
 - `metrics`: Allows to enable/disable metrics.
 - `resource_attributes`: Allows to enable/disable resource attributes.
+- `metrics_groups`: Allows to enable/disable collection of a whole Kubernetes resource type. See [metrics_groups](#metrics_groups).
 - `namespace` (deprecated, use `namespaces` instead): Allows to observe resources for a particular namespace only. If this option is set to a non-empty string, `Nodes`, `Namespaces` and `ClusterResourceQuotas` will not be observed.
 - `namespaces`: Allows to observe resources for a list of given namespaces. If this option is set, `Nodes`, `Namespaces` and `ClusterResourceQuotas` will not be observed, as those are cluster-scoped resources.
 
@@ -101,6 +102,164 @@ Example:
 
 The full list of settings exposed for this receiver are documented in [config.go](./config.go)
 with detailed sample configurations in [testdata/config.yaml](./testdata/config.yaml).
+
+### metrics_groups
+
+`metrics` toggles individual metrics but the receiver still watches every resource type. Use
+`metrics_groups` to turn off a Kubernetes resource type entirely: the informer for that resource is
+not created, so the receiver issues no LIST/WATCH for it and keeps no cache of its objects. This is
+the recommended way to reduce API server load, collector memory usage and the RBAC permissions the
+receiver needs.
+
+All groups are enabled by default. Available groups and the metrics they control:
+
+| Group | Metrics |
+| ----- | ------- |
+| `pods` | `k8s.pod.*` and all `k8s.container.*` (container metrics are derived from pod objects) |
+| `nodes` | `k8s.node.*`, including `node_conditions_to_report` and `allocatable_types_to_report` |
+| `namespaces` | `k8s.namespace.phase` |
+| `deployments` | `k8s.deployment.*` |
+| `replicasets` | `k8s.replicaset.*` |
+| `replicationcontrollers` | `k8s.replication_controller.*` |
+| `daemonsets` | `k8s.daemonset.*` |
+| `statefulsets` | `k8s.statefulset.*` |
+| `jobs` | `k8s.job.*` |
+| `cronjobs` | `k8s.cronjob.*` |
+| `horizontalpodautoscalers` | `k8s.hpa.*` |
+| `resourcequotas` | `k8s.resource_quota.*` |
+| `services` | `k8s.service.*` (also controls the `EndpointSlice` informer backing `k8s.service.endpoint.count`) |
+| `persistentvolumes` | `k8s.persistentvolume.*` |
+| `persistentvolumeclaims` | `k8s.persistentvolumeclaim.*` |
+| `clusterresourcequotas` | `openshift.clusterquota.*` and `openshift.appliedclusterquota.*` (openshift only) |
+
+Example, collecting workload and node metrics only:
+
+```yaml
+  k8s_cluster:
+    metrics_groups:
+      pods:
+        enabled: false
+      persistentvolumes:
+        enabled: false
+      persistentvolumeclaims:
+        enabled: false
+      services:
+        enabled: false
+```
+
+#### enabled_by_default
+
+`enabled_by_default` (default = `true`) sets the value used for every group that is not configured
+explicitly. Set it to `false` to opt out of all resource types and then enable only the ones needed,
+which avoids having to list every group when only one or two are wanted:
+
+```yaml
+  k8s_cluster:
+    metrics_groups:
+      enabled_by_default: false
+      nodes:
+        enabled: true
+      deployments:
+        enabled: true
+```
+
+The example above watches only `Node` and `Deployment`. An explicit `enabled` on a group always wins
+over `enabled_by_default`.
+
+Notes:
+
+- `metrics_groups` takes precedence over `metrics`. If a group is disabled, its metrics are not
+  emitted even when explicitly enabled under `metrics`.
+- Disabling a group removes the need for the corresponding `list`/`watch` RBAC permission. See
+  [RBAC](#rbac).
+- Disabling every group is rejected as a misconfiguration: if no group is left enabled the receiver
+  fails to start, since it would collect nothing.
+
+#### Combining metrics_groups with metrics
+
+The two options work at different levels and can be used together. `metrics_groups` decides whether
+the informer for a resource runs at all, and `metrics` decides which individual metrics are emitted
+from the data that informer provides. Use `metrics_groups` for the coarse cut, which is what saves
+API watches, cache memory and RBAC permissions, then `metrics` to trim within the resources kept:
+
+```yaml
+  k8s_cluster:
+    metrics_groups:
+      pods:
+        enabled: true       # or just omit it, groups are enabled by default
+      persistentvolumeclaims:
+        enabled: false
+    metrics:
+      k8s.pod.phase:
+        enabled: true
+      k8s.container.cpu_limit:
+        enabled: false
+      k8s.container.memory_limit:
+        enabled: false
+      k8s.container.restarts:
+        enabled: true
+```
+
+The `Pod` informer runs, so `k8s.pod.phase` and `k8s.container.restarts` are collected while the
+container cpu/memory limit metrics are dropped. No `PersistentVolumeClaim` informer is created.
+
+Resolution for a given metric:
+
+| `metrics_groups` for the resource | `metrics` for the metric | Result |
+| --- | --- | --- |
+| enabled | enabled | emitted |
+| enabled | disabled | not emitted, informer still runs |
+| disabled | enabled | not emitted, the group wins |
+| disabled | disabled | not emitted |
+
+Enabling a group never forces metrics on, it only makes the `metrics` toggles meaningful. The
+reverse does not work: a metric cannot be re-enabled under `metrics` once its group is disabled,
+because no informer is feeding it.
+
+#### Impact on metadata and entity events
+
+Each resource type is backed by a single informer that serves two purposes: it caches the objects
+that metrics are built from, and its event handlers drive metadata updates and entity events.
+Disabling a group removes that informer, so **both** stop. There is no way to keep metadata while
+dropping metrics with `metrics_groups` — keeping the informer alive is exactly the cost the option
+is meant to avoid.
+
+The two destinations affected are:
+
+- `metadata_exporters`: exporters implementing the `MetadataExporter` interface. In this repository
+  only the [signalfx exporter](../../exporter/signalfxexporter/README.md) does, which converts
+  labels and annotations into dimension property updates. When a group is disabled those updates
+  stop and previously reported properties go stale rather than disappearing.
+- Entity events (`otel.entity.*` log records): emitted only when the receiver is part of a `logs`
+  pipeline. Note that `metadata_collection_interval` is the informer resync period, so removing the
+  informer also stops periodic re-emission of entity state.
+
+This overrides the default behavior for `persistentvolumes` and `persistentvolumeclaims`, which are
+otherwise watched whenever a metadata destination is configured, even with all their metrics
+disabled.
+
+Pod metadata is additionally enriched from the `Service`, `Job` and `ReplicaSet` caches to resolve
+service tags and the owning workload (a pod owned by a `ReplicaSet` is reported against its
+`Deployment`, a pod owned by a `Job` against its `CronJob`). Disabling `services`, `jobs` or
+`replicasets` while `pods` stays enabled drops those attributes from pod metadata and entity events;
+the lookups are skipped safely and only logged at debug level, and pod metrics are unaffected.
+
+Not affected: the [k8sattributes processor](../../processor/k8sattributesprocessor/README.md) and
+the [kubeletstats receiver](../kubeletstatsreceiver/README.md) run their own watchers and continue
+to work normally.
+
+If you need the metadata but not the metrics, use the per-metric `metrics` toggles instead. They
+keep the informer running and only suppress emission:
+
+```yaml
+  k8s_cluster:
+    metadata_exporters: [signalfx]
+    metrics:
+      k8s.pod.phase:
+        enabled: false
+      k8s.container.cpu_limit:
+        enabled: false
+```
 
 ### k8s_leader_elector
 Provide name of the k8s leader elector extension defined in config. This allows multiple instances of k8s cluster

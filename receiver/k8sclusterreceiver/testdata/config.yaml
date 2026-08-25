@@ -8,3 +8,11 @@ k8s_cluster/all_settings:
 k8s_cluster/partial_settings:
   collection_interval: 30s
   distribution: openshift
+k8s_cluster/metrics_groups:
+  metrics_groups:
+    pods:
+      enabled: false
+    persistentvolumeclaims:
+      enabled: false
+k8s_cluster/empty_metrics_groups:
+  metrics_groups:
