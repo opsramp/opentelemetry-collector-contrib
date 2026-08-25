@@ -17,7 +17,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/sharedcomponent"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/kube"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/metadata"
 )
@@ -26,7 +25,7 @@ var (
 	kubeClientProvider   = kube.ClientProvider(nil)
 	consumerCapabilities = consumer.Capabilities{MutatesData: true}
 	defaultExcludes      = ExcludeConfig{Pods: []ExcludePodConfig{{Name: "jaeger-agent"}, {Name: "jaeger-collector"}}}
-	processors           = sharedcomponent.NewSharedComponents()
+	processors           = newSharedProcessors()
 )
 
 // NewFactory returns a new factory for the k8s processor.

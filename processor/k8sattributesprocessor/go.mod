@@ -11,7 +11,6 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig v0.159.0
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/sharedcomponent v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/xk8stest v0.159.0
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/stretchr/testify v1.12.0
