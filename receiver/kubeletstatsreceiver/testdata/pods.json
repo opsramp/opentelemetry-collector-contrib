@@ -8,7 +8,7 @@
       "spec": {
         "containers": [
           {
-            "name":"kube-scheduler",
+            "name": "kube-scheduler",
             "resources": {
               "requests": {
                 "cpu": "2m",
@@ -49,6 +49,11 @@
             "name": "test-missing-metrics",
             "secret": {}
           }
+        ],
+        "containers": [
+          {
+            "name": "server"
+          }
         ]
       },
       "status": {
@@ -70,6 +75,13 @@
           {
             "name": "kube-apiserver",
             "containerID": "b798809239aad09b"
+          }
+        ]
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "kube-apiserver"
           }
         ]
       }
@@ -100,6 +112,11 @@
               "secretName": "coredns-token-hwxlx",
               "defaultMode": 420
             }
+          }
+        ],
+        "containers": [
+          {
+            "name": "coredns"
           }
         ]
       },
@@ -138,6 +155,11 @@
               "claimName": "volume_claim_3"
             }
           }
+        ],
+        "containers": [
+          {
+            "name": "coredns"
+          }
         ]
       },
       "status": {
@@ -161,6 +183,13 @@
             "containerID": "bddddc92226476d2"
           }
         ]
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "kube-controller-manager"
+          }
+        ]
       }
     },
     {
@@ -182,6 +211,11 @@
               "secretName": "kube-proxy-token-2z27z",
               "defaultMode": 420
             }
+          }
+        ],
+        "containers": [
+          {
+            "name": "kube-proxy"
           }
         ]
       },
@@ -214,6 +248,11 @@
               "claimName": "volume_claim_1"
             }
           }
+        ],
+        "containers": [
+          {
+            "name": "storage-provisioner"
+          }
         ]
       },
       "status": {
@@ -235,6 +274,13 @@
           {
             "name": "etcd",
             "containerID": "baa7aaedeab79d38"
+          }
+        ]
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "etcd"
           }
         ]
       }

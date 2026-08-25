@@ -240,6 +240,71 @@ would set the `k8s.volume.type` label to be `awsElasticBlockStore` rather than `
 `persistentvolumeclaims` and `persistentvolumes` resources. See [Role-based access control](#role-based-access-control)
 for the required RBAC configuration.
 
+### Pod and container state metrics
+
+In addition to usage metrics from `/stats/summary`, the receiver can emit pod and container state
+metrics derived from the kubelet's `/pods` endpoint. These are the same metrics the
+[k8sclusterreceiver](../k8sclusterreceiver/README.md) produces from the API server, which makes it
+possible to collect them from a DaemonSet agent instead of a cluster-wide collector:
+
+- `k8s.pod.phase`, `k8s.pod.status_reason`
+- `k8s.container.restarts`, `k8s.container.ready`, `k8s.container.status.reason`
+- `k8s.container.cpu_limit`, `k8s.container.cpu_request`, `k8s.container.memory_limit`, `k8s.container.memory_request`
+- `k8s.container.storage_limit`, `k8s.container.storage_request`
+
+The first two groups are **enabled by default**; the resource limit/request metrics are disabled by
+default. Because at least one of these metrics is enabled out of the box, the receiver calls `/pods`
+on every scrape, which requires `get` permissions on `nodes/pods` (see
+[Role-based access control](#role-based-access-control)).
+
+> [!IMPORTANT]
+> If your collector's service account does not have `get` on `nodes/pods`, every scrape will fail.
+> Either grant the permission or disable the state metrics explicitly:
+>
+> ```yaml
+> metrics:
+>   k8s.pod.phase: {enabled: false}
+>   k8s.pod.status_reason: {enabled: false}
+>   k8s.container.restarts: {enabled: false}
+>   k8s.container.ready: {enabled: false}
+>   k8s.container.status.reason: {enabled: false}
+> ```
+
+The resource limit/request metrics are opt-in:
+
+```yaml
+receivers:
+  kubelet_stats:
+    collection_interval: 10s
+    auth_type: "serviceAccount"
+    endpoint: "${env:K8S_NODE_NAME}:10250"
+    insecure_skip_verify: true
+    metrics:
+      k8s.container.cpu_limit:
+        enabled: true
+      k8s.container.cpu_request:
+        enabled: true
+      k8s.container.memory_limit:
+        enabled: true
+      k8s.container.memory_request:
+        enabled: true
+      k8s.container.storage_limit:
+        enabled: true
+      k8s.container.storage_request:
+        enabled: true
+```
+
+Unlike the usage metrics, these are driven by the pod list rather than the stats summary, so pods and
+containers that have no usage stats yet (pending, `ImagePullBackOff`, `CrashLoopBackOff`) are still
+reported. They carry the same resource attributes as the corresponding usage metrics
+(`k8s.pod.uid`, `k8s.pod.name`, `k8s.namespace.name` and, for container metrics, `k8s.container.name`).
+Pod state metrics are gated on the `pod` metric group and container state metrics on the `container`
+metric group.
+
+`k8s.container.status.reason` reports every known reason on each scrape, with a value of `1` for the
+current reason and `0` for the others. That is 9 data points per container per scrape, so disable it
+if you do not alert on container state reasons.
+
 ### Metric Groups
 
 A list of metric groups from which metrics should be collected. By default, metrics from containers,
@@ -326,7 +391,7 @@ with detailed sample configurations in [testdata/config.yaml](./testdata/config.
 
 ### Role-based access control
 
-The Kubelet Stats Receiver needs `get` permissions on the `nodes/stats` resources. Additionally, when using `extra_metadata_labels` or any of the `{request|limit}_utilization` metrics the receiver also needs `get` permissions for `nodes/pods` resources.
+The Kubelet Stats Receiver needs `get` permissions on the `nodes/stats` resources. It also needs `get` permissions on `nodes/pods`, because the [pod and container state metrics](#pod-and-container-state-metrics) are enabled by default. The same `nodes/pods` permission is required when using `extra_metadata_labels` or any of the `{request|limit}_utilization` metrics.
 
 When using `k8s_api_config` to collect detailed volume metadata from PersistentVolumeClaims (as described in [Collecting Additional Volume Metadata](#collecting-additional-volume-metadata)), the receiver also needs `get` permissions for `persistentvolumeclaims` and `persistentvolumes` resources.
 
@@ -340,8 +405,9 @@ rules:
     resources: ["nodes/stats"]
     verbs: ["get"]
 
-  # Only needed if you are using extra_metadata_labels or
-  # are collecting the request/limit utilization metrics
+  # Required by default, because the pod/container state metrics are enabled by
+  # default. Also needed for extra_metadata_labels and the
+  # request/limit utilization metrics.
   - apiGroups: [""]
     resources: ["nodes/pods"]
     verbs: ["get"]

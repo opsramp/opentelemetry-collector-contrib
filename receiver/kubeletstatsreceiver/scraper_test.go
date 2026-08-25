@@ -44,9 +44,12 @@ const (
 	numSystemContainers = 3
 
 	// Number of metrics by resource
-	nodeMetrics            = 15
-	podMetrics             = 15
-	containerMetrics       = 11
+	nodeMetrics = 15
+	// 15 usage metrics + k8s.pod.phase + k8s.pod.status_reason
+	podMetrics = 17
+	// 11 usage metrics + k8s.container.restarts + k8s.container.ready
+	// + 9 k8s.container.status.reason data points (one per known reason)
+	containerMetrics       = 22
 	volumeMetrics          = 5
 	systemContainerMetrics = 4
 
@@ -552,6 +555,48 @@ func TestScraperWithMetadata(t *testing.T) {
 				pmetrictest.IgnoreMetricsOrder()))
 		})
 	}
+}
+
+func TestScraperWithPodStatusMetrics(t *testing.T) {
+	metricsConfig := metadata.DefaultMetricsBuilderConfig()
+	metricsConfig.Metrics.K8sPodPhase.Enabled = true
+	metricsConfig.Metrics.K8sContainerRestarts.Enabled = true
+
+	options := &scraperOptions{
+		metricGroupsToCollect: allMetricGroups,
+	}
+	r, err := newKubeletScraper(
+		&fakeRestClient{},
+		receivertest.NewNopSettings(metadata.Type),
+		options,
+		metricsConfig,
+		"worker-42",
+	)
+	require.NoError(t, err)
+
+	md, err := r.ScrapeMetrics(t.Context())
+	require.NoError(t, err)
+
+	phaseDataPoints := 0
+	restartDataPoints := 0
+	for i := 0; i < md.ResourceMetrics().Len(); i++ {
+		sms := md.ResourceMetrics().At(i).ScopeMetrics()
+		for j := 0; j < sms.Len(); j++ {
+			ms := sms.At(j).Metrics()
+			for k := 0; k < ms.Len(); k++ {
+				switch ms.At(k).Name() {
+				case "k8s.pod.phase":
+					phaseDataPoints += ms.At(k).Gauge().DataPoints().Len()
+				case "k8s.container.restarts":
+					restartDataPoints += ms.At(k).Gauge().DataPoints().Len()
+				}
+			}
+		}
+	}
+	// testdata/pods.json holds more pods than testdata/stats-summary.json, so the state metrics are
+	// not limited to the pods that report usage stats.
+	require.Positive(t, phaseDataPoints)
+	require.Positive(t, restartDataPoints)
 }
 
 func TestScraperWithPercentMetrics(t *testing.T) {

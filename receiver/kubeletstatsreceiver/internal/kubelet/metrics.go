@@ -20,6 +20,7 @@ func MetricsData(
 	allNetworkInterfaces map[MetricGroup]bool,
 	mbs *metadata.MetricsBuilders,
 	cpuUsageCalculator *CPUUsageCalculator,
+	podStatusEnabled bool,
 ) []pmetric.Metrics {
 	cpuUsageCalculator.startScrape()
 	defer cpuUsageCalculator.endScrape()
@@ -49,5 +50,14 @@ func MetricsData(
 			acc.volumeStats(pod, volumeStats)
 		}
 	}
+
+	// Pod state metrics come from the /pods endpoint rather than the stats summary so that pods and
+	// containers without usage stats are still reported.
+	if podStatusEnabled && acc.metadata.PodsMetadata != nil {
+		for i := range acc.metadata.PodsMetadata.Items {
+			acc.podStatus(&acc.metadata.PodsMetadata.Items[i])
+		}
+	}
+
 	return acc.m
 }

@@ -44,6 +44,7 @@ type kubeletScraper struct {
 	cachedVolumeSource    map[string]v1.PersistentVolumeSource
 	mbs                   *metadata.MetricsBuilders
 	needsResources        bool
+	needsPodStatus        bool
 	nodeInformer          cache.SharedInformer
 	stopCh                chan struct{}
 	m                     sync.RWMutex
@@ -83,6 +84,17 @@ func newKubeletScraper(
 			metricsConfig.Metrics.K8sPodMemoryRequestUtilization.Enabled ||
 			metricsConfig.Metrics.K8sContainerMemoryLimitUtilization.Enabled ||
 			metricsConfig.Metrics.K8sContainerMemoryRequestUtilization.Enabled,
+		needsPodStatus: metricsConfig.Metrics.K8sPodPhase.Enabled ||
+			metricsConfig.Metrics.K8sPodStatusReason.Enabled ||
+			metricsConfig.Metrics.K8sContainerRestarts.Enabled ||
+			metricsConfig.Metrics.K8sContainerReady.Enabled ||
+			metricsConfig.Metrics.K8sContainerStatusReason.Enabled ||
+			metricsConfig.Metrics.K8sContainerCPULimit.Enabled ||
+			metricsConfig.Metrics.K8sContainerCPURequest.Enabled ||
+			metricsConfig.Metrics.K8sContainerMemoryLimit.Enabled ||
+			metricsConfig.Metrics.K8sContainerMemoryRequest.Enabled ||
+			metricsConfig.Metrics.K8sContainerStorageLimit.Enabled ||
+			metricsConfig.Metrics.K8sContainerStorageRequest.Enabled,
 		stopCh:             make(chan struct{}),
 		nodeInfo:           &kubelet.NodeInfo{},
 		cpuUsageCalculator: kubelet.NewCPUUsageCalculator(),
@@ -111,7 +123,7 @@ func (r *kubeletScraper) scrape(context.Context) (pmetric.Metrics, error) {
 
 	var podsMetadata *v1.PodList
 	// fetch metadata only when extra metadata labels are needed
-	if len(r.extraMetadataLabels) > 0 || r.needsResources {
+	if len(r.extraMetadataLabels) > 0 || r.needsResources || r.needsPodStatus {
 		podsMetadata, err = r.metadataProvider.Pods()
 		if err != nil {
 			r.logger.Error("call to /pods endpoint failed", zap.Error(err))
@@ -126,7 +138,7 @@ func (r *kubeletScraper) scrape(context.Context) (pmetric.Metrics, error) {
 
 	metaD := kubelet.NewMetadata(r.extraMetadataLabels, podsMetadata, nodeInfo, r.detailedPVCLabelsSetter())
 
-	mds := kubelet.MetricsData(r.logger, summary, metaD, r.metricGroupsToCollect, r.allNetworkInterfaces, r.mbs, r.cpuUsageCalculator)
+	mds := kubelet.MetricsData(r.logger, summary, metaD, r.metricGroupsToCollect, r.allNetworkInterfaces, r.mbs, r.cpuUsageCalculator, r.needsPodStatus)
 	md := pmetric.NewMetrics()
 	for i := range mds {
 		mds[i].ResourceMetrics().MoveAndAppendTo(md.ResourceMetrics())

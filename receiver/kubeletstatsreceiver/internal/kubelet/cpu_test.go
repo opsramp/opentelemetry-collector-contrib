@@ -47,7 +47,7 @@ func TestScrapeBasedCPUUsage(t *testing.T) {
 
 	// First scrape: no previous sample, so no usage should be recorded, but cpu.time
 	// (the cumulative counter) is always recorded regardless of the gate.
-	firstMetrics := indexedFakeMetrics(MetricsData(zap.NewNop(), nodeSummary(10_000_000_000, base), Metadata{}, nodeGroup, nil, mbs, calc))
+	firstMetrics := indexedFakeMetrics(MetricsData(zap.NewNop(), nodeSummary(10_000_000_000, base), Metadata{}, nodeGroup, nil, mbs, calc, false))
 	_, found := firstMetrics["k8s.node.cpu.usage"]
 	require.False(t, found)
 	requireContains(t, firstMetrics, "k8s.node.cpu.time")
@@ -55,7 +55,7 @@ func TestScrapeBasedCPUUsage(t *testing.T) {
 
 	// Second scrape, 2s later: cumulative CPU time advanced by 4 CPU-seconds ->
 	// (14-10)/2 = 2 cores of usage.
-	secondMetrics := indexedFakeMetrics(MetricsData(zap.NewNop(), nodeSummary(14_000_000_000, base.Add(2*time.Second)), Metadata{}, nodeGroup, nil, mbs, calc))
+	secondMetrics := indexedFakeMetrics(MetricsData(zap.NewNop(), nodeSummary(14_000_000_000, base.Add(2*time.Second)), Metadata{}, nodeGroup, nil, mbs, calc, false))
 	usageMetrics, found := secondMetrics["k8s.node.cpu.usage"]
 	require.True(t, found)
 	require.InDelta(t, 2.0, usageMetrics[0].Gauge().DataPoints().At(0).DoubleValue(), 1e-9)
@@ -86,7 +86,7 @@ func TestScrapeBasedCPUUsage_DisabledGateUsesUsageNanoCores(t *testing.T) {
 		},
 	}
 
-	metrics := indexedFakeMetrics(MetricsData(zap.NewNop(), summary, Metadata{}, nodeGroup, nil, mbs, calc))
+	metrics := indexedFakeMetrics(MetricsData(zap.NewNop(), summary, Metadata{}, nodeGroup, nil, mbs, calc, false))
 	usageMetrics, found := metrics["k8s.node.cpu.usage"]
 	require.True(t, found)
 	require.InDelta(t, 1.5, usageMetrics[0].Gauge().DataPoints().At(0).DoubleValue(), 1e-9)

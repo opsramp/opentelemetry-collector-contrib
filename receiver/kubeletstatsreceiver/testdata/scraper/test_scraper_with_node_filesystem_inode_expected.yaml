@@ -175,6 +175,276 @@ resourceMetrics:
       attributes:
         - key: k8s.namespace.name
           value:
+            stringValue: ""
+        - key: k8s.pod.name
+          value:
+            stringValue: coredns-66bff467f8-58qvv
+        - key: k8s.pod.uid
+          value:
+            stringValue: eb632b33-62c6-4a80-9575-a97ab363ad7f
+    scopeMetrics:
+      - metrics:
+          - description: Current phase of the pod (1 - Pending, 2 - Running, 3 - Succeeded, 4 - Failed, 5 - Unknown)
+            gauge:
+              dataPoints:
+                - asInt: "5"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.pod.phase
+          - description: Current status reason of the pod (1 - Evicted, 2 - NodeAffinity, 3 - NodeLost, 4 - Shutdown, 5 - UnexpectedAdmissionError, 6 - Unknown)
+            gauge:
+              dataPoints:
+                - asInt: "6"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.pod.status_reason
+        scope:
+          name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
+          version: latest
+  - resource:
+      attributes:
+        - key: k8s.namespace.name
+          value:
+            stringValue: ""
+        - key: k8s.pod.name
+          value:
+            stringValue: coredns-66bff467f8-szddj
+        - key: k8s.pod.uid
+          value:
+            stringValue: 0adffe8e-9849-4e05-b4cd-92d2d1e1f1c3
+    scopeMetrics:
+      - metrics:
+          - description: Current phase of the pod (1 - Pending, 2 - Running, 3 - Succeeded, 4 - Failed, 5 - Unknown)
+            gauge:
+              dataPoints:
+                - asInt: "5"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.pod.phase
+          - description: Current status reason of the pod (1 - Evicted, 2 - NodeAffinity, 3 - NodeLost, 4 - Shutdown, 5 - UnexpectedAdmissionError, 6 - Unknown)
+            gauge:
+              dataPoints:
+                - asInt: "6"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.pod.status_reason
+        scope:
+          name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
+          version: latest
+  - resource:
+      attributes:
+        - key: k8s.namespace.name
+          value:
+            stringValue: ""
+        - key: k8s.pod.name
+          value:
+            stringValue: etcd-minikube
+        - key: k8s.pod.uid
+          value:
+            stringValue: 5a5fbd34cfb43ee7bee976798370c910
+    scopeMetrics:
+      - metrics:
+          - description: Current phase of the pod (1 - Pending, 2 - Running, 3 - Succeeded, 4 - Failed, 5 - Unknown)
+            gauge:
+              dataPoints:
+                - asInt: "5"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.pod.phase
+          - description: Current status reason of the pod (1 - Evicted, 2 - NodeAffinity, 3 - NodeLost, 4 - Shutdown, 5 - UnexpectedAdmissionError, 6 - Unknown)
+            gauge:
+              dataPoints:
+                - asInt: "6"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.pod.status_reason
+        scope:
+          name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
+          version: latest
+  - resource:
+      attributes:
+        - key: k8s.namespace.name
+          value:
+            stringValue: ""
+        - key: k8s.pod.name
+          value:
+            stringValue: go-hello-world-5456b4b8cd-99vxc
+        - key: k8s.pod.uid
+          value:
+            stringValue: 42ad382b-ed0b-446d-9aab-3fdce8b4f9e2
+    scopeMetrics:
+      - metrics:
+          - description: Current phase of the pod (1 - Pending, 2 - Running, 3 - Succeeded, 4 - Failed, 5 - Unknown)
+            gauge:
+              dataPoints:
+                - asInt: "5"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.pod.phase
+          - description: Current status reason of the pod (1 - Evicted, 2 - NodeAffinity, 3 - NodeLost, 4 - Shutdown, 5 - UnexpectedAdmissionError, 6 - Unknown)
+            gauge:
+              dataPoints:
+                - asInt: "6"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.pod.status_reason
+        scope:
+          name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
+          version: latest
+  - resource:
+      attributes:
+        - key: k8s.namespace.name
+          value:
+            stringValue: ""
+        - key: k8s.pod.name
+          value:
+            stringValue: kube-apiserver-minikube
+        - key: k8s.pod.uid
+          value:
+            stringValue: 3bef16d65fa74d46458df57d8f6f59af
+    scopeMetrics:
+      - metrics:
+          - description: Current phase of the pod (1 - Pending, 2 - Running, 3 - Succeeded, 4 - Failed, 5 - Unknown)
+            gauge:
+              dataPoints:
+                - asInt: "5"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.pod.phase
+          - description: Current status reason of the pod (1 - Evicted, 2 - NodeAffinity, 3 - NodeLost, 4 - Shutdown, 5 - UnexpectedAdmissionError, 6 - Unknown)
+            gauge:
+              dataPoints:
+                - asInt: "6"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.pod.status_reason
+        scope:
+          name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
+          version: latest
+  - resource:
+      attributes:
+        - key: k8s.namespace.name
+          value:
+            stringValue: ""
+        - key: k8s.pod.name
+          value:
+            stringValue: kube-controller-manager-minikube
+        - key: k8s.pod.uid
+          value:
+            stringValue: 3016593d20758bbfe68aba26604a8e3d
+    scopeMetrics:
+      - metrics:
+          - description: Current phase of the pod (1 - Pending, 2 - Running, 3 - Succeeded, 4 - Failed, 5 - Unknown)
+            gauge:
+              dataPoints:
+                - asInt: "5"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.pod.phase
+          - description: Current status reason of the pod (1 - Evicted, 2 - NodeAffinity, 3 - NodeLost, 4 - Shutdown, 5 - UnexpectedAdmissionError, 6 - Unknown)
+            gauge:
+              dataPoints:
+                - asInt: "6"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.pod.status_reason
+        scope:
+          name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
+          version: latest
+  - resource:
+      attributes:
+        - key: k8s.namespace.name
+          value:
+            stringValue: ""
+        - key: k8s.pod.name
+          value:
+            stringValue: kube-proxy-v48tf
+        - key: k8s.pod.uid
+          value:
+            stringValue: 0a6d6b05-0e8d-4920-8a38-926a33164d45
+    scopeMetrics:
+      - metrics:
+          - description: Current phase of the pod (1 - Pending, 2 - Running, 3 - Succeeded, 4 - Failed, 5 - Unknown)
+            gauge:
+              dataPoints:
+                - asInt: "5"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.pod.phase
+          - description: Current status reason of the pod (1 - Evicted, 2 - NodeAffinity, 3 - NodeLost, 4 - Shutdown, 5 - UnexpectedAdmissionError, 6 - Unknown)
+            gauge:
+              dataPoints:
+                - asInt: "6"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.pod.status_reason
+        scope:
+          name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
+          version: latest
+  - resource:
+      attributes:
+        - key: k8s.namespace.name
+          value:
+            stringValue: ""
+        - key: k8s.pod.name
+          value:
+            stringValue: kube-scheduler-minikube
+        - key: k8s.pod.uid
+          value:
+            stringValue: 5795d0c442cb997ff93c49feeb9f6386
+    scopeMetrics:
+      - metrics:
+          - description: Current phase of the pod (1 - Pending, 2 - Running, 3 - Succeeded, 4 - Failed, 5 - Unknown)
+            gauge:
+              dataPoints:
+                - asInt: "5"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.pod.phase
+          - description: Current status reason of the pod (1 - Evicted, 2 - NodeAffinity, 3 - NodeLost, 4 - Shutdown, 5 - UnexpectedAdmissionError, 6 - Unknown)
+            gauge:
+              dataPoints:
+                - asInt: "6"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.pod.status_reason
+        scope:
+          name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
+          version: latest
+  - resource:
+      attributes:
+        - key: k8s.namespace.name
+          value:
+            stringValue: ""
+        - key: k8s.pod.name
+          value:
+            stringValue: storage-provisioner
+        - key: k8s.pod.uid
+          value:
+            stringValue: 14bf95e0-9451-4192-b111-807b03163670
+    scopeMetrics:
+      - metrics:
+          - description: Current phase of the pod (1 - Pending, 2 - Running, 3 - Succeeded, 4 - Failed, 5 - Unknown)
+            gauge:
+              dataPoints:
+                - asInt: "5"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.pod.phase
+          - description: Current status reason of the pod (1 - Evicted, 2 - NodeAffinity, 3 - NodeLost, 4 - Shutdown, 5 - UnexpectedAdmissionError, 6 - Unknown)
+            gauge:
+              dataPoints:
+                - asInt: "6"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.pod.status_reason
+        scope:
+          name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
+          version: latest
+  - resource:
+      attributes:
+        - key: k8s.namespace.name
+          value:
             stringValue: default
         - key: k8s.pod.name
           value:
@@ -1618,6 +1888,212 @@ resourceMetrics:
             stringValue: coredns
         - key: k8s.namespace.name
           value:
+            stringValue: ""
+        - key: k8s.pod.name
+          value:
+            stringValue: coredns-66bff467f8-58qvv
+        - key: k8s.pod.uid
+          value:
+            stringValue: eb632b33-62c6-4a80-9575-a97ab363ad7f
+    scopeMetrics:
+      - metrics:
+          - description: Whether a container has passed its readiness probe (0 for no, 1 for yes)
+            gauge:
+              dataPoints:
+                - asInt: "0"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.container.ready
+          - description: How many times the container has restarted in the recent past. This value is pulled directly from the kubelet and the value can go indefinitely high and be reset to 0 at any time depending on how your kubelet is configured to prune dead containers. It is best to not depend too much on the exact value but rather look at it as either == 0, in which case you can conclude there were no restarts in the recent past, or > 0, in which case you can conclude there were restarts in the recent past, and not try and analyze the value beyond that.
+            gauge:
+              dataPoints:
+                - asInt: "0"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.container.restarts
+            unit: '{restart}'
+          - description: Describes the number of K8s containers that are currently in a state for a given reason. All possible container state reasons will be reported at each time interval to avoid missing metrics. Only the value corresponding to the current state reason will be non-zero.
+            name: k8s.container.status.reason
+            sum:
+              aggregationTemporality: 2
+              dataPoints:
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: Completed
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ContainerCannotRun
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ContainerCreating
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: CrashLoopBackOff
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: CreateContainerConfigError
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ErrImagePull
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: Error
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ImagePullBackOff
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: OOMKilled
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            unit: '{container}'
+        scope:
+          name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
+          version: latest
+  - resource:
+      attributes:
+        - key: k8s.container.name
+          value:
+            stringValue: coredns
+        - key: k8s.namespace.name
+          value:
+            stringValue: ""
+        - key: k8s.pod.name
+          value:
+            stringValue: coredns-66bff467f8-szddj
+        - key: k8s.pod.uid
+          value:
+            stringValue: 0adffe8e-9849-4e05-b4cd-92d2d1e1f1c3
+    scopeMetrics:
+      - metrics:
+          - description: Whether a container has passed its readiness probe (0 for no, 1 for yes)
+            gauge:
+              dataPoints:
+                - asInt: "0"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.container.ready
+          - description: How many times the container has restarted in the recent past. This value is pulled directly from the kubelet and the value can go indefinitely high and be reset to 0 at any time depending on how your kubelet is configured to prune dead containers. It is best to not depend too much on the exact value but rather look at it as either == 0, in which case you can conclude there were no restarts in the recent past, or > 0, in which case you can conclude there were restarts in the recent past, and not try and analyze the value beyond that.
+            gauge:
+              dataPoints:
+                - asInt: "0"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.container.restarts
+            unit: '{restart}'
+          - description: Describes the number of K8s containers that are currently in a state for a given reason. All possible container state reasons will be reported at each time interval to avoid missing metrics. Only the value corresponding to the current state reason will be non-zero.
+            name: k8s.container.status.reason
+            sum:
+              aggregationTemporality: 2
+              dataPoints:
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: Completed
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ContainerCannotRun
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ContainerCreating
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: CrashLoopBackOff
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: CreateContainerConfigError
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ErrImagePull
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: Error
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ImagePullBackOff
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: OOMKilled
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            unit: '{container}'
+        scope:
+          name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
+          version: latest
+  - resource:
+      attributes:
+        - key: k8s.container.name
+          value:
+            stringValue: coredns
+        - key: k8s.namespace.name
+          value:
             stringValue: kube-system
         - key: k8s.pod.name
           value:
@@ -1836,6 +2312,109 @@ resourceMetrics:
             stringValue: etcd
         - key: k8s.namespace.name
           value:
+            stringValue: ""
+        - key: k8s.pod.name
+          value:
+            stringValue: etcd-minikube
+        - key: k8s.pod.uid
+          value:
+            stringValue: 5a5fbd34cfb43ee7bee976798370c910
+    scopeMetrics:
+      - metrics:
+          - description: Whether a container has passed its readiness probe (0 for no, 1 for yes)
+            gauge:
+              dataPoints:
+                - asInt: "0"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.container.ready
+          - description: How many times the container has restarted in the recent past. This value is pulled directly from the kubelet and the value can go indefinitely high and be reset to 0 at any time depending on how your kubelet is configured to prune dead containers. It is best to not depend too much on the exact value but rather look at it as either == 0, in which case you can conclude there were no restarts in the recent past, or > 0, in which case you can conclude there were restarts in the recent past, and not try and analyze the value beyond that.
+            gauge:
+              dataPoints:
+                - asInt: "0"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.container.restarts
+            unit: '{restart}'
+          - description: Describes the number of K8s containers that are currently in a state for a given reason. All possible container state reasons will be reported at each time interval to avoid missing metrics. Only the value corresponding to the current state reason will be non-zero.
+            name: k8s.container.status.reason
+            sum:
+              aggregationTemporality: 2
+              dataPoints:
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: Completed
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ContainerCannotRun
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ContainerCreating
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: CrashLoopBackOff
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: CreateContainerConfigError
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ErrImagePull
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: Error
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ImagePullBackOff
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: OOMKilled
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            unit: '{container}'
+        scope:
+          name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
+          version: latest
+  - resource:
+      attributes:
+        - key: k8s.container.name
+          value:
+            stringValue: etcd
+        - key: k8s.namespace.name
+          value:
             stringValue: kube-system
         - key: k8s.pod.name
           value:
@@ -1935,6 +2514,109 @@ resourceMetrics:
                   timeUnixNano: "2000000"
             name: container.memory.working_set
             unit: By
+        scope:
+          name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
+          version: latest
+  - resource:
+      attributes:
+        - key: k8s.container.name
+          value:
+            stringValue: kube-apiserver
+        - key: k8s.namespace.name
+          value:
+            stringValue: ""
+        - key: k8s.pod.name
+          value:
+            stringValue: kube-apiserver-minikube
+        - key: k8s.pod.uid
+          value:
+            stringValue: 3bef16d65fa74d46458df57d8f6f59af
+    scopeMetrics:
+      - metrics:
+          - description: Whether a container has passed its readiness probe (0 for no, 1 for yes)
+            gauge:
+              dataPoints:
+                - asInt: "0"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.container.ready
+          - description: How many times the container has restarted in the recent past. This value is pulled directly from the kubelet and the value can go indefinitely high and be reset to 0 at any time depending on how your kubelet is configured to prune dead containers. It is best to not depend too much on the exact value but rather look at it as either == 0, in which case you can conclude there were no restarts in the recent past, or > 0, in which case you can conclude there were restarts in the recent past, and not try and analyze the value beyond that.
+            gauge:
+              dataPoints:
+                - asInt: "0"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.container.restarts
+            unit: '{restart}'
+          - description: Describes the number of K8s containers that are currently in a state for a given reason. All possible container state reasons will be reported at each time interval to avoid missing metrics. Only the value corresponding to the current state reason will be non-zero.
+            name: k8s.container.status.reason
+            sum:
+              aggregationTemporality: 2
+              dataPoints:
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: Completed
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ContainerCannotRun
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ContainerCreating
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: CrashLoopBackOff
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: CreateContainerConfigError
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ErrImagePull
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: Error
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ImagePullBackOff
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: OOMKilled
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            unit: '{container}'
         scope:
           name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
           version: latest
@@ -2054,6 +2736,109 @@ resourceMetrics:
             stringValue: kube-controller-manager
         - key: k8s.namespace.name
           value:
+            stringValue: ""
+        - key: k8s.pod.name
+          value:
+            stringValue: kube-controller-manager-minikube
+        - key: k8s.pod.uid
+          value:
+            stringValue: 3016593d20758bbfe68aba26604a8e3d
+    scopeMetrics:
+      - metrics:
+          - description: Whether a container has passed its readiness probe (0 for no, 1 for yes)
+            gauge:
+              dataPoints:
+                - asInt: "0"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.container.ready
+          - description: How many times the container has restarted in the recent past. This value is pulled directly from the kubelet and the value can go indefinitely high and be reset to 0 at any time depending on how your kubelet is configured to prune dead containers. It is best to not depend too much on the exact value but rather look at it as either == 0, in which case you can conclude there were no restarts in the recent past, or > 0, in which case you can conclude there were restarts in the recent past, and not try and analyze the value beyond that.
+            gauge:
+              dataPoints:
+                - asInt: "0"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.container.restarts
+            unit: '{restart}'
+          - description: Describes the number of K8s containers that are currently in a state for a given reason. All possible container state reasons will be reported at each time interval to avoid missing metrics. Only the value corresponding to the current state reason will be non-zero.
+            name: k8s.container.status.reason
+            sum:
+              aggregationTemporality: 2
+              dataPoints:
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: Completed
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ContainerCannotRun
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ContainerCreating
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: CrashLoopBackOff
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: CreateContainerConfigError
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ErrImagePull
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: Error
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ImagePullBackOff
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: OOMKilled
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            unit: '{container}'
+        scope:
+          name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
+          version: latest
+  - resource:
+      attributes:
+        - key: k8s.container.name
+          value:
+            stringValue: kube-controller-manager
+        - key: k8s.namespace.name
+          value:
             stringValue: kube-system
         - key: k8s.pod.name
           value:
@@ -2153,6 +2938,109 @@ resourceMetrics:
                   timeUnixNano: "2000000"
             name: container.memory.working_set
             unit: By
+        scope:
+          name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
+          version: latest
+  - resource:
+      attributes:
+        - key: k8s.container.name
+          value:
+            stringValue: kube-proxy
+        - key: k8s.namespace.name
+          value:
+            stringValue: ""
+        - key: k8s.pod.name
+          value:
+            stringValue: kube-proxy-v48tf
+        - key: k8s.pod.uid
+          value:
+            stringValue: 0a6d6b05-0e8d-4920-8a38-926a33164d45
+    scopeMetrics:
+      - metrics:
+          - description: Whether a container has passed its readiness probe (0 for no, 1 for yes)
+            gauge:
+              dataPoints:
+                - asInt: "0"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.container.ready
+          - description: How many times the container has restarted in the recent past. This value is pulled directly from the kubelet and the value can go indefinitely high and be reset to 0 at any time depending on how your kubelet is configured to prune dead containers. It is best to not depend too much on the exact value but rather look at it as either == 0, in which case you can conclude there were no restarts in the recent past, or > 0, in which case you can conclude there were restarts in the recent past, and not try and analyze the value beyond that.
+            gauge:
+              dataPoints:
+                - asInt: "0"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.container.restarts
+            unit: '{restart}'
+          - description: Describes the number of K8s containers that are currently in a state for a given reason. All possible container state reasons will be reported at each time interval to avoid missing metrics. Only the value corresponding to the current state reason will be non-zero.
+            name: k8s.container.status.reason
+            sum:
+              aggregationTemporality: 2
+              dataPoints:
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: Completed
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ContainerCannotRun
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ContainerCreating
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: CrashLoopBackOff
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: CreateContainerConfigError
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ErrImagePull
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: Error
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ImagePullBackOff
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: OOMKilled
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            unit: '{container}'
         scope:
           name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
           version: latest
@@ -2272,6 +3160,109 @@ resourceMetrics:
             stringValue: kube-scheduler
         - key: k8s.namespace.name
           value:
+            stringValue: ""
+        - key: k8s.pod.name
+          value:
+            stringValue: kube-scheduler-minikube
+        - key: k8s.pod.uid
+          value:
+            stringValue: 5795d0c442cb997ff93c49feeb9f6386
+    scopeMetrics:
+      - metrics:
+          - description: Whether a container has passed its readiness probe (0 for no, 1 for yes)
+            gauge:
+              dataPoints:
+                - asInt: "0"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.container.ready
+          - description: How many times the container has restarted in the recent past. This value is pulled directly from the kubelet and the value can go indefinitely high and be reset to 0 at any time depending on how your kubelet is configured to prune dead containers. It is best to not depend too much on the exact value but rather look at it as either == 0, in which case you can conclude there were no restarts in the recent past, or > 0, in which case you can conclude there were restarts in the recent past, and not try and analyze the value beyond that.
+            gauge:
+              dataPoints:
+                - asInt: "0"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.container.restarts
+            unit: '{restart}'
+          - description: Describes the number of K8s containers that are currently in a state for a given reason. All possible container state reasons will be reported at each time interval to avoid missing metrics. Only the value corresponding to the current state reason will be non-zero.
+            name: k8s.container.status.reason
+            sum:
+              aggregationTemporality: 2
+              dataPoints:
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: Completed
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ContainerCannotRun
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ContainerCreating
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: CrashLoopBackOff
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: CreateContainerConfigError
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ErrImagePull
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: Error
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ImagePullBackOff
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: OOMKilled
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            unit: '{container}'
+        scope:
+          name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
+          version: latest
+  - resource:
+      attributes:
+        - key: k8s.container.name
+          value:
+            stringValue: kube-scheduler
+        - key: k8s.namespace.name
+          value:
             stringValue: kube-system
         - key: k8s.pod.name
           value:
@@ -2381,6 +3372,109 @@ resourceMetrics:
             stringValue: server
         - key: k8s.namespace.name
           value:
+            stringValue: ""
+        - key: k8s.pod.name
+          value:
+            stringValue: go-hello-world-5456b4b8cd-99vxc
+        - key: k8s.pod.uid
+          value:
+            stringValue: 42ad382b-ed0b-446d-9aab-3fdce8b4f9e2
+    scopeMetrics:
+      - metrics:
+          - description: Whether a container has passed its readiness probe (0 for no, 1 for yes)
+            gauge:
+              dataPoints:
+                - asInt: "0"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.container.ready
+          - description: How many times the container has restarted in the recent past. This value is pulled directly from the kubelet and the value can go indefinitely high and be reset to 0 at any time depending on how your kubelet is configured to prune dead containers. It is best to not depend too much on the exact value but rather look at it as either == 0, in which case you can conclude there were no restarts in the recent past, or > 0, in which case you can conclude there were restarts in the recent past, and not try and analyze the value beyond that.
+            gauge:
+              dataPoints:
+                - asInt: "0"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.container.restarts
+            unit: '{restart}'
+          - description: Describes the number of K8s containers that are currently in a state for a given reason. All possible container state reasons will be reported at each time interval to avoid missing metrics. Only the value corresponding to the current state reason will be non-zero.
+            name: k8s.container.status.reason
+            sum:
+              aggregationTemporality: 2
+              dataPoints:
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: Completed
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ContainerCannotRun
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ContainerCreating
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: CrashLoopBackOff
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: CreateContainerConfigError
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ErrImagePull
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: Error
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ImagePullBackOff
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: OOMKilled
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            unit: '{container}'
+        scope:
+          name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
+          version: latest
+  - resource:
+      attributes:
+        - key: k8s.container.name
+          value:
+            stringValue: server
+        - key: k8s.namespace.name
+          value:
             stringValue: default
         - key: k8s.pod.name
           value:
@@ -2480,6 +3574,109 @@ resourceMetrics:
                   timeUnixNano: "2000000"
             name: container.memory.working_set
             unit: By
+        scope:
+          name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
+          version: latest
+  - resource:
+      attributes:
+        - key: k8s.container.name
+          value:
+            stringValue: storage-provisioner
+        - key: k8s.namespace.name
+          value:
+            stringValue: ""
+        - key: k8s.pod.name
+          value:
+            stringValue: storage-provisioner
+        - key: k8s.pod.uid
+          value:
+            stringValue: 14bf95e0-9451-4192-b111-807b03163670
+    scopeMetrics:
+      - metrics:
+          - description: Whether a container has passed its readiness probe (0 for no, 1 for yes)
+            gauge:
+              dataPoints:
+                - asInt: "0"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.container.ready
+          - description: How many times the container has restarted in the recent past. This value is pulled directly from the kubelet and the value can go indefinitely high and be reset to 0 at any time depending on how your kubelet is configured to prune dead containers. It is best to not depend too much on the exact value but rather look at it as either == 0, in which case you can conclude there were no restarts in the recent past, or > 0, in which case you can conclude there were restarts in the recent past, and not try and analyze the value beyond that.
+            gauge:
+              dataPoints:
+                - asInt: "0"
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            name: k8s.container.restarts
+            unit: '{restart}'
+          - description: Describes the number of K8s containers that are currently in a state for a given reason. All possible container state reasons will be reported at each time interval to avoid missing metrics. Only the value corresponding to the current state reason will be non-zero.
+            name: k8s.container.status.reason
+            sum:
+              aggregationTemporality: 2
+              dataPoints:
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: Completed
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ContainerCannotRun
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ContainerCreating
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: CrashLoopBackOff
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: CreateContainerConfigError
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ErrImagePull
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: Error
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: ImagePullBackOff
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+                - asInt: "0"
+                  attributes:
+                    - key: k8s.container.status.reason
+                      value:
+                        stringValue: OOMKilled
+                  startTimeUnixNano: "1000000"
+                  timeUnixNano: "2000000"
+            unit: '{container}'
         scope:
           name: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
           version: latest

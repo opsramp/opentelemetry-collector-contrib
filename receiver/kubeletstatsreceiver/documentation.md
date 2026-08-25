@@ -100,6 +100,36 @@ Container memory working_set
 | ---- | ----------- | ---------- | --------- |
 | By | Gauge | Int | Development |
 
+### k8s.container.ready
+
+Whether a container has passed its readiness probe (0 for no, 1 for yes)
+
+| Unit | Metric Type | Value Type | Stability |
+| ---- | ----------- | ---------- | --------- |
+|  | Gauge | Int | Development |
+
+### k8s.container.restarts
+
+How many times the container has restarted in the recent past. This value is pulled directly from the kubelet and the value can go indefinitely high and be reset to 0 at any time depending on how your kubelet is configured to prune dead containers. It is best to not depend too much on the exact value but rather look at it as either == 0, in which case you can conclude there were no restarts in the recent past, or > 0, in which case you can conclude there were restarts in the recent past, and not try and analyze the value beyond that.
+
+| Unit | Metric Type | Value Type | Stability |
+| ---- | ----------- | ---------- | --------- |
+| {restart} | Gauge | Int | Development |
+
+### k8s.container.status.reason
+
+Describes the number of K8s containers that are currently in a state for a given reason. All possible container state reasons will be reported at each time interval to avoid missing metrics. Only the value corresponding to the current state reason will be non-zero.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic | Stability |
+| ---- | ----------- | ---------- | ----------------------- | --------- | --------- |
+| {container} | Sum | Int | Cumulative | false | Development |
+
+#### Attributes
+
+| Name | Description | Values | Requirement Level | Semantic Convention |
+| ---- | ----------- | ------ | ----------------- | ------------------- |
+| k8s.container.status.reason | The reason of the current container status. | Str: ``ContainerCreating``, ``CrashLoopBackOff``, ``CreateContainerConfigError``, ``ErrImagePull``, ``ImagePullBackOff``, ``OOMKilled``, ``Completed``, ``Error``, ``ContainerCannotRun`` | Required | - |
+
 ### k8s.node.cpu.time
 
 Total cumulative CPU time (sum of all cores) spent by the container/pod/node since its creation
@@ -336,6 +366,22 @@ Pod network IO
 | interface | Name of the network interface. | Any Str | Recommended | - |
 | direction | Direction of flow of bytes/operations (receive or transmit). | Str: ``receive``, ``transmit`` | Recommended | - |
 
+### k8s.pod.phase
+
+Current phase of the pod (1 - Pending, 2 - Running, 3 - Succeeded, 4 - Failed, 5 - Unknown)
+
+| Unit | Metric Type | Value Type | Stability |
+| ---- | ----------- | ---------- | --------- |
+|  | Gauge | Int | Development |
+
+### k8s.pod.status_reason
+
+Current status reason of the pod (1 - Evicted, 2 - NodeAffinity, 3 - NodeLost, 4 - Shutdown, 5 - UnexpectedAdmissionError, 6 - Unknown)
+
+| Unit | Metric Type | Value Type | Stability |
+| ---- | ----------- | ---------- | --------- |
+|  | Gauge | Int | Development |
+
 ### k8s.volume.available
 
 The number of available bytes in the volume.
@@ -402,6 +448,14 @@ Container cpu utilization as a ratio of the node's capacity
 | ---- | ----------- | ---------- | --------- |
 | 1 | Gauge | Double | Development |
 
+### k8s.container.cpu_limit
+
+Maximum CPU resource limit set for the container. See https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.23/#resourcerequirements-v1-core for details
+
+| Unit | Metric Type | Value Type | Stability |
+| ---- | ----------- | ---------- | --------- |
+| {cpu} | Gauge | Double | Development |
+
 ### k8s.container.cpu_limit_utilization
 
 Container cpu utilization as a ratio of the container's limits
@@ -409,6 +463,14 @@ Container cpu utilization as a ratio of the container's limits
 | Unit | Metric Type | Value Type | Stability |
 | ---- | ----------- | ---------- | --------- |
 | 1 | Gauge | Double | Development |
+
+### k8s.container.cpu_request
+
+CPU resource requested for the container. See https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.23/#resourcerequirements-v1-core for details
+
+| Unit | Metric Type | Value Type | Stability |
+| ---- | ----------- | ---------- | --------- |
+| {cpu} | Gauge | Double | Development |
 
 ### k8s.container.cpu_request_utilization
 
@@ -440,6 +502,14 @@ Container memory utilization as a ratio of the node's capacity
 | ---- | ----------- | ---------- | --------- |
 | 1 | Gauge | Double | Development |
 
+### k8s.container.memory_limit
+
+Maximum memory resource limit set for the container. See https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.23/#resourcerequirements-v1-core for details
+
+| Unit | Metric Type | Value Type | Stability |
+| ---- | ----------- | ---------- | --------- |
+| By | Gauge | Int | Development |
+
 ### k8s.container.memory_limit_utilization
 
 Container memory utilization as a ratio of the container's limits
@@ -448,6 +518,14 @@ Container memory utilization as a ratio of the container's limits
 | ---- | ----------- | ---------- | --------- |
 | 1 | Gauge | Double | Development |
 
+### k8s.container.memory_request
+
+Memory resource requested for the container. See https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.23/#resourcerequirements-v1-core for details
+
+| Unit | Metric Type | Value Type | Stability |
+| ---- | ----------- | ---------- | --------- |
+| By | Gauge | Int | Development |
+
 ### k8s.container.memory_request_utilization
 
 Container memory utilization as a ratio of the container's requests
@@ -455,6 +533,22 @@ Container memory utilization as a ratio of the container's requests
 | Unit | Metric Type | Value Type | Stability |
 | ---- | ----------- | ---------- | --------- |
 | 1 | Gauge | Double | Development |
+
+### k8s.container.storage_limit
+
+Maximum storage resource limit set for the container. See https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.23/#resourcerequirements-v1-core for details
+
+| Unit | Metric Type | Value Type | Stability |
+| ---- | ----------- | ---------- | --------- |
+| By | Gauge | Int | Development |
+
+### k8s.container.storage_request
+
+Storage resource requested for the container. See https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.23/#resourcerequirements-v1-core for details
+
+| Unit | Metric Type | Value Type | Stability |
+| ---- | ----------- | ---------- | --------- |
+| By | Gauge | Int | Development |
 
 ### k8s.node.filesystem.inode.count
 

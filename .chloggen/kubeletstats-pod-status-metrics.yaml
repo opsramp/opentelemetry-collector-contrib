@@ -1,0 +1,21 @@
+change_type: enhancement
+
+component: receiver/kubeletstats
+
+note: Add pod and container state metrics sourced from the kubelet `/pods` endpoint
+
+issues: [43672]
+
+subtext: |
+  `k8s.pod.phase`, `k8s.pod.status_reason`, `k8s.container.restarts`, `k8s.container.ready` and
+  `k8s.container.status.reason` are enabled by default. `k8s.container.cpu_limit`,
+  `k8s.container.cpu_request`, `k8s.container.memory_limit`, `k8s.container.memory_request`,
+  `k8s.container.storage_limit` and `k8s.container.storage_request` are available but disabled by
+  default. They mirror the metrics emitted by the k8sclusterreceiver, so they can be collected per
+  node from a DaemonSet agent instead of a cluster-wide collector.
+
+  Because state metrics are enabled by default, the receiver now calls the kubelet `/pods` endpoint
+  on every scrape and therefore requires `get` permissions on the `nodes/pods` resource. Collectors
+  without that permission must either be granted it or explicitly disable the new metrics.
+
+change_logs: [user]
