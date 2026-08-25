@@ -66,40 +66,10 @@ func SaveKey(ctx context.Context, persister operator.Persister, rmds []*reader.M
 	return errors.Join(errs...)
 }
 
-// Load loads the most recent set of files to the database
-func Load(ctx context.Context, persister operator.Persister) ([]*reader.Metadata, error) {
-	encoded, err := persister.Get(ctx, knownFilesKey)
-	if err != nil {
-		return nil, err
-	}
-
-	if encoded == nil {
-		return []*reader.Metadata{}, nil
-	}
-
-	dec := json.NewDecoder(bytes.NewReader(encoded))
-
-	// Decode the number of entries
-	var knownFileCount int
-	if err = dec.Decode(&knownFileCount); err != nil {
-		return nil, fmt.Errorf("decoding file count: %w", err)
-	}
-
-	// Decode each of the known files
-	var errs []error
-	rmds := make([]*reader.Metadata, 0, knownFileCount)
-	for i := 0; i < knownFileCount; i++ {
-		rmd := new(reader.Metadata)
-		if err = dec.Decode(rmd); err != nil {
-			return nil, err
-		}
-		if rmd.FileAttributes == nil {
-			rmd.FileAttributes = map[string]any{}
-		}
-		// This reader won't be used for anything other than metadata reference, so just wrap the metadata
-		rmds = append(rmds, rmd)
-	}
-	return rmds, errors.Join(errs...)
+// Load loads the most recent set of files from the database
+// Tries protobuf first for backward compatibility, falls back to JSON if protobuf fails
+func Load(ctx context.Context, persister operator.Persister, logger *zap.Logger) ([]*reader.Metadata, error) {
+	return LoadKey(ctx, persister, knownFilesKey, logger)
 }
 
 func LoadKey(ctx context.Context, persister operator.Persister, key string, logger *zap.Logger) ([]*reader.Metadata, error) {
