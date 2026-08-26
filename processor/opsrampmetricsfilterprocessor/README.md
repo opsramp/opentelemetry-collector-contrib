@@ -38,6 +38,9 @@ processors:
     # Optional: Key in the ConfigMap containing the alert definitions YAML
     alert_definitions_key: "alert-definitions.yaml"
     
+    # Optional: restrict the allow-list to one or more categories
+    metric_categories: ["podMetric"]
+    
     # Note: namespace is automatically read from NAMESPACE environment variable
 ```
 
@@ -48,6 +51,54 @@ processors:
 | `alert_definitions_configmap_name` | string | `opsramp-alert-user-config` | No | Name of the ConfigMap containing alert definitions |
 | `alert_definitions_key` | string | `alert-definitions.yaml` | No | Key in the ConfigMap containing alert definitions YAML |
 | `namespace` | string | From `NAMESPACE` env var, fallback to `opsramp-agent` | No | Kubernetes namespace where the ConfigMap is located (auto-populated) |
+| `metric_categories` | []string | empty (all categories) | No | Restricts the allow-list to the given categories. Valid values: `podMetric`, `clusterMetric` |
+
+### Metric Categories
+
+Each alert definition group is categorized by its `resourceType`:
+
+| `resourceType` | Category |
+|----------------|----------|
+| `k8s_pod` (also `Pod`, `k8s-pod`) | `podMetric` |
+| Anything else, or absent | `clusterMetric` |
+
+Categorization is applied to **every** metric extracted from that group's alert
+expressions. A metric referenced by both a `k8s_pod` expression and a non-pod
+expression belongs to **both** categories, so it is emitted by a `podMetric`
+instance and a `clusterMetric` instance alike.
+
+This lets a single source of alert definitions drive two independent pipelines:
+
+```yaml
+connectors:
+  forward/metricsfilter: {}
+
+processors:
+  opsrampmetricsfilter/pod:
+    metric_categories: ["podMetric"]
+  opsrampmetricsfilter/cluster:
+    metric_categories: ["clusterMetric"]
+
+service:
+  pipelines:
+    metrics/in:
+      receivers: [kubelet_stats]
+      processors: [k8s_attributes, opsrampmetricsfilter]
+      exporters: [forward/metricsfilter]
+    metrics/pod:
+      receivers: [forward/metricsfilter]
+      processors: [opsrampmetricsfilter/pod, batch]
+      exporters: [exporter1]
+    metrics/cluster:
+      receivers: [forward/metricsfilter]
+      processors: [opsrampmetricsfilter/cluster, batch]
+      exporters: [exporter2]
+```
+
+All processor instances resolving to the same alert definitions source (same file
+path, or same namespace/ConfigMap/key) share one loader. The ConfigMap watch,
+the YAML parse, and the PromQL parse happen once regardless of how many
+instances exist, and every instance sees each reload at the same moment.
 
 ### Environment Variables
 
@@ -73,8 +124,10 @@ The processor automatically reads the namespace from the `NAMESPACE` environment
    - Handles both `VectorSelector` (instant metrics) and `MatrixSelector` (range metrics)
 
 3. **Global Map Building**
-   - Creates a distinct set of all extracted metric names
-   - Thread-safely updates the global filtering map
+   - Creates a distinct set of all extracted metric names, each tagged with the
+     categories of the alert definitions that referenced it
+   - Thread-safely updates the global filtering map, narrowed to this instance's
+     `metric_categories`
    - Logs the total number of distinct metrics found
 
 4. **Metric Filtering**

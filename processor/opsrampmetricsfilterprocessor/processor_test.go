@@ -113,9 +113,7 @@ func TestValidateConfig(t *testing.T) {
 
 func TestExtractMetricsFromExpression(t *testing.T) {
 	// This is a unit test that doesn't require Kubernetes
-	processor := &filterProcessor{
-		logger: processortest.NewNopSettings(component.MustNewType(typeStr)).Logger,
-	}
+	logger := zap.NewNop()
 
 	tests := []struct {
 		name     string
@@ -156,7 +154,7 @@ func TestExtractMetricsFromExpression(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := processor.extractMetricsFromExpression(tt.expr)
+			result := extractMetricsFromExpression(logger, tt.expr)
 			assert.ElementsMatch(t, tt.expected, result)
 		})
 	}
