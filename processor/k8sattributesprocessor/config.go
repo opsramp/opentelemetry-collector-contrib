@@ -165,6 +165,12 @@ func (cfg *Config) Validate() error {
 		}
 	}
 
+	// Without informers the resource uuid can only come from Redis, and metrics
+	// without one are dropped by filterOnlyOpsrampMetrics.
+	if cfg.Passthrough && cfg.RedisConfig.RedisHost == "" {
+		return errors.New("redis_config.redisHost is required when passthrough is enabled")
+	}
+
 	return nil
 }
 

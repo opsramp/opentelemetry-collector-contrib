@@ -402,7 +402,9 @@ func (strAddr) Network() string {
 	return "tcp"
 }
 
-func TestPassthroughIPDetectionFromContext(t *testing.T) {
+// Passthrough no longer derives k8s.pod.ip from the connection: OpsRamp resolves
+// pod metadata from Redis, so there is no downstream consumer for it.
+func TestPassthroughDoesNotDeriveIPFromContext(t *testing.T) {
 	addresses := []net.Addr{
 		&net.IPAddr{
 			IP: net.IPv4(1, 1, 1, 1),
@@ -436,8 +438,8 @@ func TestPassthroughIPDetectionFromContext(t *testing.T) {
 		m.assertBatchesLen(1)
 		m.assertResourceObjectLen(0)
 		m.assertResource(0, func(r pcommon.Resource) {
-			require.Positive(t, r.Attributes().Len())
-			assertResourceHasStringAttribute(t, r, "k8s.pod.ip", "1.1.1.1")
+			_, found := r.Attributes().Get("k8s.pod.ip")
+			assert.False(t, found)
 		})
 	}
 }

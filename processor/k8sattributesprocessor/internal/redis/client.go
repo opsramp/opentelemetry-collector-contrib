@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor/internal/cache"
@@ -34,6 +35,10 @@ type OpsrampRedisConfig struct {
 	PrimaryCacheEvictionTime   time.Duration `mapstructure:"primaryCacheEvictionTime"`
 	SecondaryCacheEvictionTime time.Duration `mapstructure:"secondaryCacheEvictionTime"`
 	EnableGpuNicRouting        bool          `mapstructure:"enableGpuNicRouting"`
+
+	// EnrichAttributesFromRedis backfills the k8s.* labels stored alongside the
+	// resource uuid. Intended for passthrough mode, where no informers run.
+	EnrichAttributesFromRedis bool `mapstructure:"enrichAttributesFromRedis"`
 }
 
 func NewClient(logger *zap.Logger, cache *cache.Cache, rHost, rPort, rPass string, primaryCacheEvictionTime, secondaryCacheEvictionTime time.Duration) *Client {
@@ -103,55 +108,107 @@ func (c *Client) TestConnection(ctx context.Context) error {
 	return err
 }
 
-func (c *Client) GetUuidValueInString(ctx context.Context, key string) string {
+// RedisData mirrors the payload the OpsRamp agent writes under each MoID key.
+// Field names and json tags must stay in sync with the agent's cache.RedisData.
+type RedisData struct {
+	ResourceUuid    string `json:"resourceUuid,omitempty"`
+	ResourceHash    uint64 `json:"resourceHash,omitempty"`
+	NodeName        string `json:"k8s.node.name,omitempty"`
+	NamespaceName   string `json:"k8s.namespace.name,omitempty"`
+	DeploymentName  string `json:"k8s.deployment.name,omitempty"`
+	DaemonSetName   string `json:"k8s.daemonset.name,omitempty"`
+	StatefulSetName string `json:"k8s.statefulset.name,omitempty"`
+	ReplicaSetName  string `json:"k8s.replicaset.name,omitempty"`
+	PodName         string `json:"k8s.pod.name,omitempty"`
+	PodUid          string `json:"k8s.pod.uid,omitempty"`
+	PodIp           string `json:"k8s.pod.ip,omitempty"`
+}
+
+// GetResourceUuid is nil-safe so callers can test a lookup result inline.
+func (d *RedisData) GetResourceUuid() string {
+	if d == nil {
+		return ""
+	}
+	return d.ResourceUuid
+}
+
+// GetRedisData is the single lookup path for a MoID key: at most one cache read
+// and one Redis GET per call. Both cache tiers hold the raw JSON so a cache hit
+// can serve the resource uuid and the labels without a second round trip.
+func (c *Client) GetRedisData(ctx context.Context, key string) *RedisData {
 	logger := c.logger
-	// Check primary cache
+
 	if c.CacheObject != nil {
 		if val, err := c.CacheObject.GetFromPrimary(key); err == nil {
 			logger.Debug("Got value from PrimaryCache", zap.Any("key", key), zap.Any("value", val))
-			return val
+			return c.decode(key, val)
 		}
 		if val, err := c.CacheObject.GetFromSecondary(key); err == nil {
 			logger.Debug("Got value from SecondaryCache", zap.Any("key", key), zap.Any("value", val))
-			return val
+			return c.decode(key, val)
 		}
 	}
-	// Query Redis if enabled
-	if c.Enabled {
-		val, err := c.GoClient.Get(ctx, key).Result()
+
+	if !c.Enabled {
+		return nil
+	}
+
+	val, err := c.GoClient.Get(ctx, key).Result()
+	if err != nil {
 		if err == goredis.Nil {
 			logger.Debug("Key does not exist in Redis", zap.Any("key", key))
-			c.CacheObject.AddToSecondaryWithTTL(key, "", c.SecondaryCacheEvictionTime)
-			return ""
-		} else if err != nil {
+		} else {
 			logger.Error("Failed to fetch the key from Redis", zap.Error(err))
-			c.CacheObject.AddToSecondaryWithTTL(key, "", c.SecondaryCacheEvictionTime)
-			return ""
 		}
+		c.negativeCache(key)
+		return nil
+	}
 
-		logger.Debug("Got value from Redis", zap.Any("key", key), zap.Any("value", val))
+	logger.Debug("Got value from Redis", zap.Any("key", key), zap.Any("value", val))
 
-		// Parse Redis data
-		type RedisData struct {
-			ResourceUuid string `json:"resourceUuid,omitempty"`
-			ResourceHash uint64 `json:"resourceHash,omitempty"`
-		}
-		var redisData RedisData
-		err = json.Unmarshal([]byte(val), &redisData)
-		if err != nil {
-			logger.Error("Could not unmarshal data", zap.Error(err))
-			return ""
-		}
+	redisData := c.decode(key, val)
+	if redisData == nil {
+		c.negativeCache(key)
+		return nil
+	}
 
-		value := redisData.ResourceUuid
-		if c.CacheObject != nil {
-			if value == "" {
-				c.CacheObject.AddToSecondaryWithTTL(key, "", c.SecondaryCacheEvictionTime)
-			} else {
-				c.CacheObject.AddToPrimaryWithTTL(key, value, c.PrimaryCacheEvictionTime)
-			}
+	if c.CacheObject != nil {
+		if redisData.ResourceUuid == "" {
+			c.CacheObject.AddToSecondaryWithTTL(key, val, c.SecondaryCacheEvictionTime)
+		} else {
+			c.CacheObject.AddToPrimaryWithTTL(key, val, c.PrimaryCacheEvictionTime)
 		}
-		return value
+	}
+	return redisData
+}
+
+// decode turns a cached/Redis payload into RedisData. An empty payload is the
+// negative-cache marker and is reported as a miss. A non-JSON payload is a
+// legacy cache entry holding the bare resource uuid.
+func (c *Client) decode(key, val string) *RedisData {
+	if val == "" {
+		return nil
+	}
+	if !strings.HasPrefix(strings.TrimSpace(val), "{") {
+		return &RedisData{ResourceUuid: val}
+	}
+	var redisData RedisData
+	if err := json.Unmarshal([]byte(val), &redisData); err != nil {
+		c.logger.Error("Could not unmarshal data", zap.Any("key", key), zap.Error(err))
+		return nil
+	}
+	return &redisData
+}
+
+func (c *Client) negativeCache(key string) {
+	if c.CacheObject != nil {
+		c.CacheObject.AddToSecondaryWithTTL(key, "", c.SecondaryCacheEvictionTime)
+	}
+}
+
+func (c *Client) GetUuidValueInString(ctx context.Context, key string) string {
+	if redisData := c.GetRedisData(ctx, key); redisData != nil {
+		return redisData.ResourceUuid
 	}
 	return ""
 }
@@ -163,39 +220,13 @@ type RedisDataWithDeployment struct {
 }
 
 func (c *Client) GetRedisDataWithDeployment(ctx context.Context, key string) *RedisDataWithDeployment {
-	logger := c.logger
-	// Query Redis if enabled
-	if c.Enabled {
-		val, err := c.GoClient.Get(ctx, key).Result()
-		if err == goredis.Nil {
-			logger.Debug("Key does not exist in Redis", zap.Any("key", key))
-			c.CacheObject.AddToSecondaryWithTTL(key, "", c.SecondaryCacheEvictionTime)
-			return nil
-		} else if err != nil {
-			logger.Error("Failed to fetch the key from Redis", zap.Error(err))
-			c.CacheObject.AddToSecondaryWithTTL(key, "", c.SecondaryCacheEvictionTime)
-			return nil
-		}
-
-		logger.Debug("Got value from Redis", zap.Any("key", key), zap.Any("value", val))
-
-		var redisData RedisDataWithDeployment
-		err = json.Unmarshal([]byte(val), &redisData)
-		if err != nil {
-			logger.Error("Could not unmarshal data", zap.Error(err))
-			return nil
-		}
-
-		value := redisData.ResourceUuid
-
-		if c.CacheObject != nil {
-			if value == "" {
-				c.CacheObject.AddToSecondaryWithTTL(key, "", c.SecondaryCacheEvictionTime)
-			} else {
-				c.CacheObject.AddToPrimaryWithTTL(key, value, c.PrimaryCacheEvictionTime)
-			}
-		}
-		return &redisData
+	redisData := c.GetRedisData(ctx, key)
+	if redisData == nil {
+		return nil
 	}
-	return nil
+	return &RedisDataWithDeployment{
+		ResourceUuid:   redisData.ResourceUuid,
+		ResourceHash:   redisData.ResourceHash,
+		DeploymentName: redisData.DeploymentName,
+	}
 }
