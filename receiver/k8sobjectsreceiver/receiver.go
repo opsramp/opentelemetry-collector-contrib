@@ -22,7 +22,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/wait"
 	apiWatch "k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
@@ -31,6 +30,14 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sinventory"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sobjectsreceiver/internal/metadata"
+)
+
+// Bounds for the list+watch restart loop, so a persistently failing watch cannot spin
+// into a tight loop of LIST calls and exhaust the client's API server rate budget.
+const (
+	minWatchRestartDelay  = time.Second
+	maxWatchRestartDelay  = 30 * time.Second
+	watchHealthyThreshold = time.Minute
 )
 
 type k8sobjectsreceiver struct {
@@ -67,7 +74,7 @@ func newReceiver(params receiver.Settings, config *Config, consumer consumer.Log
 			objects[i].exclude[item] = true
 		}
 		// Set default interval if in PullMode and interval is 0
-		if objects[i].Mode == k8sinventory.PullMode && objects[i].Interval == 0 {
+		if (objects[i].Mode == k8sinventory.PullMode || objects[i].Mode == k8sinventory.ListWatchMode) && objects[i].Interval == 0 {
 			objects[i].Interval = defaultPullInterval
 		}
 	}
@@ -171,15 +178,15 @@ func (kr *k8sobjectsreceiver) Start(ctx context.Context, host component.Host) er
 }
 
 func (kr *k8sobjectsreceiver) startWithListWatchModeSupport(cctx context.Context, validConfigs []*K8sObjectsConfig) {
-	var listWatchObjects int
 	var listWatchInterval time.Duration
 	var listWatchConfigs []*K8sObjectsConfig
 
 	for _, object := range validConfigs {
 		if object.Mode == k8sinventory.ListWatchMode {
-			listWatchObjects++
 			listWatchConfigs = append(listWatchConfigs, object)
-			if strings.ToLower(object.Name) == "pods" {
+			// A single ticker drives the whole group, so take the shortest interval:
+			// no object may then resync slower than it was configured for.
+			if object.Interval > 0 && (listWatchInterval == 0 || object.Interval < listWatchInterval) {
 				listWatchInterval = object.Interval
 			}
 		} else {
@@ -187,13 +194,17 @@ func (kr *k8sobjectsreceiver) startWithListWatchModeSupport(cctx context.Context
 		}
 	}
 
-	if listWatchObjects > 0 {
-		//if there is no list watch interval set for pods, use the first object interval
-		if listWatchInterval == 0 {
-			listWatchInterval = listWatchConfigs[0].Interval
-		}
-		go kr.startListWatchObjects(cctx, listWatchConfigs, listWatchInterval)
+	if len(listWatchConfigs) == 0 {
+		return
 	}
+
+	if listWatchInterval <= 0 {
+		listWatchInterval = defaultPullInterval
+	}
+	kr.setting.Logger.Info("starting list-watch cycle",
+		zap.Duration("interval", listWatchInterval),
+		zap.Int("objects", len(listWatchConfigs)))
+	go kr.startListWatchObjects(cctx, listWatchConfigs, listWatchInterval)
 }
 
 func (kr *k8sobjectsreceiver) startListWatchObjects(ctx context.Context, objects []*K8sObjectsConfig, interval time.Duration) {
@@ -462,9 +473,15 @@ func (kr *k8sobjectsreceiver) startWatch(ctx context.Context, config *K8sObjects
 }
 
 func (kr *k8sobjectsreceiver) pullAndDoWatch(cancelCtx context.Context, cfgCopy K8sObjectsConfig, resource dynamic.ResourceInterface, cancel context.CancelFunc, watchFunc cache.WatchFuncWithContext, stopperChan chan struct{}, pullWQ *sync.WaitGroup, pullBarrier chan struct{}) {
-	wait.UntilWithContext(cancelCtx, func(newCtx context.Context) {
-		resourceVersion, err := kr.doPullOnceAndGetResourceVersion(newCtx, &cfgCopy, resource)
-		if pullWQ != nil {
+	// The initial pull is what the caller's barrier waits on; later re-lists must not
+	// decrement the group again.
+	pullReported := false
+	restartDelay := minWatchRestartDelay
+
+	for cancelCtx.Err() == nil {
+		resourceVersion, err := kr.doPullOnceAndGetResourceVersion(cancelCtx, &cfgCopy, resource)
+		if pullWQ != nil && !pullReported {
+			pullReported = true
 			pullWQ.Done()
 		}
 		if err != nil {
@@ -475,19 +492,45 @@ func (kr *k8sobjectsreceiver) pullAndDoWatch(cancelCtx context.Context, cfgCopy 
 		if pullBarrier != nil {
 			// Wait for all threads to finish the pull operation
 			kr.setting.Logger.Debug("Waiting for all pull operations to finish before starting watch", zap.String("resource", cfgCopy.gvr.String()))
-			<-pullBarrier
+			select {
+			case <-pullBarrier:
+			case <-cancelCtx.Done():
+				return
+			case <-stopperChan:
+				return
+			}
 			kr.setting.Logger.Debug("Waiting over for all pull operations and starting watch", zap.String("resource", cfgCopy.gvr.String()))
 		}
 
-		done := kr.doWatch(newCtx, &cfgCopy, resourceVersion, watchFunc, stopperChan)
+		watchStart := time.Now()
+		done := kr.doWatch(cancelCtx, &cfgCopy, resourceVersion, watchFunc, stopperChan)
 		if done {
 			cancel()
 			return
 		}
 
+		if time.Since(watchStart) >= watchHealthyThreshold {
+			restartDelay = minWatchRestartDelay
+		}
+		kr.setting.Logger.Warn("watch ended early, re-listing after backoff",
+			zap.String("resource", cfgCopy.gvr.String()),
+			zap.Duration("backoff", restartDelay))
+
+		timer := time.NewTimer(restartDelay)
+		select {
+		case <-timer.C:
+		case <-cancelCtx.Done():
+			timer.Stop()
+			return
+		case <-stopperChan:
+			timer.Stop()
+			return
+		}
+		restartDelay = min(restartDelay*2, maxWatchRestartDelay)
+
 		// need to restart with a fresh resource version
 		cfgCopy.ResourceVersion = ""
-	}, 0)
+	}
 }
 
 // sendInitialState sends the current state of objects as synthetic Added events
@@ -672,14 +715,18 @@ func (kr *k8sobjectsreceiver) resourcePullWithPagination(ctx context.Context, co
 		if err != nil {
 			kr.setting.Logger.Error("error in pulling object", zap.String("resource", config.gvr.String()), zap.Error(err))
 			break
-		} else if len(objects.Items) > 0 {
-			if pageCount == 0 {
-				resourceVersion = objects.GetResourceVersion()
-				if resourceVersion == "" || resourceVersion == "0" {
-					resourceVersion = defaultResourceVersion
-				}
+		}
+		// The list resourceVersion must be taken even when the page is empty, otherwise the
+		// follow-up watch starts from defaultResourceVersion and the API server answers 410,
+		// which sends the watcher back to a full list on every attempt.
+		if pageCount == 0 {
+			resourceVersion = objects.GetResourceVersion()
+			if resourceVersion == "" || resourceVersion == "0" {
+				resourceVersion = defaultResourceVersion
 			}
-			pageCount++
+		}
+		pageCount++
+		if len(objects.Items) > 0 {
 			logs := pullObjectsToLogData(objects, time.Now(), config, kr.setting.BuildInfo.Version)
 			obsCtx := kr.obsrecv.StartLogsOp(ctx)
 			logRecordCount := logs.LogRecordCount()

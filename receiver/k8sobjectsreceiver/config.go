@@ -98,7 +98,7 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("invalid mode: %v", object.Mode)
 		}
 
-		if object.Mode == k8sinventory.PullMode && object.Interval == 0 {
+		if (object.Mode == k8sinventory.PullMode || object.Mode == k8sinventory.ListWatchMode) && object.Interval == 0 {
 			object.Interval = defaultPullInterval
 		}
 

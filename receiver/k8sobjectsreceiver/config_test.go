@@ -188,6 +188,19 @@ func TestValidate(t *testing.T) {
 				},
 			},
 		},
+		{
+			desc: "default interval for list-watch mode",
+			cfg: &Config{
+				APIConfig: k8sconfig.APIConfig{AuthType: k8sconfig.AuthTypeServiceAccount},
+				ErrorMode: PropagateError,
+				Objects: []*K8sObjectsConfig{
+					{
+						Name: "nodes",
+						Mode: k8sinventory.ListWatchMode,
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -198,6 +211,10 @@ func TestValidate(t *testing.T) {
 				return
 			}
 			assert.NoError(t, err)
+			for _, object := range tt.cfg.Objects {
+				// A zero interval reaches time.NewTicker and panics.
+				assert.NotZero(t, object.Interval, "object %q has no interval", object.Name)
+			}
 		})
 	}
 }

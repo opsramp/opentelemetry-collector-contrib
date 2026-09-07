@@ -15,7 +15,13 @@ import (
 	"go.opentelemetry.io/collector/filter"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/receiver/receivertest"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	apiWatch "k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/dynamic/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/storagetest"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sinventory"
@@ -809,4 +815,43 @@ func TestReceiverStorageClientInitializedWhenConfigured(t *testing.T) {
 // ptr is a helper to create a pointer to a value
 func ptr[T any](v T) *T {
 	return &v
+}
+
+func TestResourcePullReturnsResourceVersionOfEmptyList(t *testing.T) {
+	t.Parallel()
+
+	mockClient := newMockDynamicClient()
+	mockClient.client.(*fake.FakeDynamicClient).PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		list := &unstructured.UnstructuredList{Object: map[string]any{
+			"apiVersion": "v1",
+			"kind":       "PodList",
+		}}
+		list.SetResourceVersion("12345")
+		return true, list, nil
+	})
+
+	rCfg := createDefaultConfig().(*Config)
+	rCfg.makeDynamicClient = mockClient.getMockDynamicClient
+	rCfg.makeDiscoveryClient = getMockDiscoveryClient
+	rCfg.Objects = []*K8sObjectsConfig{
+		{
+			Name:     "pods",
+			Mode:     k8sinventory.ListWatchMode,
+			Interval: time.Hour,
+		},
+	}
+
+	r, err := newReceiver(receivertest.NewNopSettings(metadata.Type), rCfg, consumertest.NewNop())
+	require.NoError(t, err)
+
+	kr := r.(*k8sobjectsreceiver)
+	kr.client = mockClient.client
+	object := kr.objects[0]
+	object.gvr = &schema.GroupVersionResource{Version: "v1", Resource: "pods"}
+
+	resourceVersion := kr.resourcePullWithPagination(t.Context(), object, kr.client.Resource(*object.gvr), metav1.ListOptions{})
+
+	// An empty list must still yield the list's resourceVersion, otherwise the follow-up
+	// watch starts from defaultResourceVersion and the API server answers 410.
+	assert.Equal(t, "12345", resourceVersion)
 }
