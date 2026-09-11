@@ -697,6 +697,12 @@ func (kp *kubernetesprocessor) processopsrampResources(ctx context.Context, reso
 			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("daemonset", dsname.Str()))
 		}
 		resourceType = "daemonset"
+	} else if nsname, nsNameFound := resource.Attributes().Get("k8s.namespace.name"); nsNameFound && stringAttributeFromMap(resource.Attributes(), "k8s.namespace.uid") != "" {
+		// Only a namespace-scoped signal carries the namespace uid without any workload identity.
+		if redisData = kp.GetRedisDataUsingNamespaceMoid(ctx, resource); redisData.GetResourceUuid() == "" {
+			kp.logger.Debug("opsramp resourceuuid not found in redis", zap.Any("namespace", nsname.Str()))
+		}
+		resourceType = "namespace"
 	} else {
 		if resourceUuid = kp.redisConfig.ClusterUid; resourceUuid == "" {
 			kp.logger.Debug("opsramp resourceuuid not found", zap.Any("clustername", kp.redisConfig.ClusterName))
