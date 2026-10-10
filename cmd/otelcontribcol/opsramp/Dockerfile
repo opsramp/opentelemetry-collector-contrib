@@ -4,7 +4,7 @@
 FROM golang:1.25 AS build
 WORKDIR /src
 COPY . .
-RUN make genotelcontribcol
+RUN make SRC_ROOT=/src genotelcontribcol
 WORKDIR /src/cmd/otelcontribcol
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/otelcontribcol .
 
