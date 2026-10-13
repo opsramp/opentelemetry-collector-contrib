@@ -33,6 +33,8 @@ if "validate" in sys.argv:
 event("start")
 if text == "crash":
     sys.exit(2)
+if text == "flaky" and not (root / "ready").exists():
+    sys.exit(2)
 def stop(*args):
     event("stop")
     sys.exit(0)
@@ -64,6 +66,7 @@ class ReloadTest(unittest.TestCase):
             "OTELCOL_WATCH_INTERVAL": "1",
             "OTELCOL_STARTUP_TIMEOUT": "1",
             "OTELCOL_STOP_TIMEOUT": "2",
+            "OTELCOL_STARTUP_RETRY_INTERVAL": "60",
             "OTEL_LOGS_HEALTH_PORT": "",
         }
         self.log = (self.root / "supervisor.log").open("w+")
@@ -181,11 +184,47 @@ class ReloadTest(unittest.TestCase):
         self.replace(self.dynamic, "corrected")
         self.wait_event("start", "corrected")
 
-    def test_invalid_interval_is_rejected(self):
-        self.env["OTELCOL_WATCH_INTERVAL"] = "0"
+    def test_transient_initial_startup_failure_is_retried(self):
+        self.env["OTELCOL_STARTUP_RETRY_INTERVAL"] = "2"
+        self.dynamic.write_text("flaky")
         self.start()
-        self.assertNotEqual(0, self.process.wait(timeout=5))
-        self.assertEqual([], self.events("start"))
+        self.wait_event("start", "flaky")
+        time.sleep(0.5)
+        self.assertEqual([], [e for e in self.events("stop") if e[1] == "flaky"])
+        (self.root / "ready").write_text("")
+        self.wait_event("start", "flaky", count=2)
+        time.sleep(1.5)
+        self.assertIsNone(self.process.poll())
+        starts = [e for e in self.events("start") if e[1] == "flaky"]
+        self.assertGreaterEqual(len(starts), 2)
+        self.assertNotIn(starts[-1][2], [e[2] for e in self.events("stop")])
+
+    def test_transient_startup_failure_is_not_retried_before_interval(self):
+        self.dynamic.write_text("flaky")
+        self.start()
+        self.wait_event("start", "flaky")
+        (self.root / "ready").write_text("")
+        time.sleep(2.2)
+        self.assertEqual(1, len([e for e in self.events("start") if e[1] == "flaky"]))
+
+    def test_collector_exit_keeps_container_alive_and_restarts(self):
+        self.env["OTELCOL_STARTUP_RETRY_INTERVAL"] = "1"
+        self.dynamic.write_text("dynamic")
+        self.start()
+        first = self.wait_event("start", "dynamic")
+        os.kill(first[2], 9)
+        second = self.wait_event("start", "dynamic", count=2)
+        self.assertNotEqual(first[2], second[2])
+        self.assertIsNone(self.process.poll())
+
+    def test_invalid_interval_is_rejected(self):
+        for name in ("OTELCOL_WATCH_INTERVAL", "OTELCOL_STARTUP_RETRY_INTERVAL"):
+            with self.subTest(name=name):
+                self.env[name] = "0"
+                self.start()
+                self.assertNotEqual(0, self.process.wait(timeout=5))
+                self.assertEqual([], self.events("start"))
+                self.env[name] = "1"
 
     @unittest.skipUnless(os.environ.get("OTELCOL_TEST_BINARY"), "requires a real collector binary")
     def test_real_collector_runtime_failure_restores_healthy_previous_config(self):

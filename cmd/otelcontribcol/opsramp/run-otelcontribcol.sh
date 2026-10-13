@@ -10,13 +10,16 @@ OUTPUT_DIR="${OTELCOL_OUTPUT_DIR:-/var/log/otelcol}"
 INTERVAL="${OTELCOL_WATCH_INTERVAL:-5}"
 STOP_TIMEOUT="${OTELCOL_STOP_TIMEOUT:-8}"
 STARTUP_TIMEOUT="${OTELCOL_STARTUP_TIMEOUT:-15}"
+# A configuration that is valid but failed to start is retried after this many seconds, since the cause
+# (for example a port still in use) is often transient. Invalid configurations are never retried.
+STARTUP_RETRY_INTERVAL="${OTELCOL_STARTUP_RETRY_INTERVAL:-60}"
 
 if [ "$#" -gt 0 ]; then
   exec "${BIN}" "$@"
 fi
 
 mkdir -p "${OUTPUT_DIR}"
-for seconds in "${INTERVAL}" "${STOP_TIMEOUT}" "${STARTUP_TIMEOUT}"; do
+for seconds in "${INTERVAL}" "${STOP_TIMEOUT}" "${STARTUP_TIMEOUT}" "${STARTUP_RETRY_INTERVAL}"; do
   case "${seconds}" in
     ''|*[!0-9]*|0) echo "watch, startup and stop timeouts must be positive integer seconds" >&2; exit 1 ;;
   esac
@@ -36,6 +39,8 @@ PID=""
 VALIDATOR_PID=""
 SLEEP_PID=""
 WAITING=false
+RETRY_AT=""
+RESTART_AT=""
 
 reap_child() {
   # A process terminated by a signal is expected to return a non-zero status.
@@ -129,10 +134,16 @@ apply_source() {
     return 0
   fi
   if [ -f "${REJECTED}" ] && cmp -s "${CANDIDATE}" "${REJECTED}"; then
-    return 1
+    if [ -z "${RETRY_AT}" ] || [ "$(date +%s)" -lt "${RETRY_AT}" ]; then
+      return 1
+    fi
+    echo "retrying configuration that previously failed to start"
+    rm -f "${REJECTED}"
+    RETRY_AT=""
   fi
   if ! validate_candidate; then
     echo "rejecting invalid config ${SOURCE}; retaining current configuration" >&2
+    RETRY_AT=""
     if ! mv "${CANDIDATE}" "${REJECTED}"; then
       echo "cannot retain rejected snapshot" >&2
     fi
@@ -159,7 +170,8 @@ apply_source() {
     fi
     return 0
   fi
-  echo "collector failed startup for ${SOURCE}; rolling back" >&2
+  echo "collector failed startup for ${SOURCE}; rolling back, will retry in ${STARTUP_RETRY_INTERVAL}s" >&2
+  RETRY_AT=$(( $(date +%s) + STARTUP_RETRY_INTERVAL ))
   stop_child "${PID}"
   PID=""
   if ! mv "${ACTIVE}" "${REJECTED}"; then
@@ -186,8 +198,10 @@ while true; do
     rc=0
     wait "${PID}" || rc=$?
     PID=""
-    echo "otelcontribcol exited rc=${rc}" >&2
-    exit "${rc}"
+    echo "otelcontribcol exited rc=${rc}; restarting in ${STARTUP_RETRY_INTERVAL}s" >&2
+    # Keep the container alive; dropping the snapshots makes the next pass validate and start it again.
+    rm -f "${ACTIVE}" "${REJECTED}" "${PREVIOUS}"
+    RESTART_AT=$(( $(date +%s) + STARTUP_RETRY_INTERVAL ))
   fi
 
   if [ ! -e "${DYNAMIC}" ] || { [ -f "${DYNAMIC}" ] && [ ! -s "${DYNAMIC}" ]; }; then
@@ -198,7 +212,10 @@ while true; do
     stop_child "${PID}"
     PID=""
     rm -f "${ACTIVE}" "${CANDIDATE}" "${REJECTED}" "${PREVIOUS}"
+  elif [ -n "${RESTART_AT}" ] && [ "$(date +%s)" -lt "${RESTART_AT}" ]; then
+    :
   else
+    RESTART_AT=""
     WAITING=false
     if ! apply_source "${DYNAMIC}"; then
       # Invalid replacements keep a running collector; invalid initial configs wait for correction.

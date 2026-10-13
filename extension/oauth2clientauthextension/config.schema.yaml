@@ -37,6 +37,10 @@ properties:
     description: ExpiryBuffer specifies the time buffer before token expiry to refresh it.
     type: string
     format: duration
+  max_token_age:
+    description: MaxTokenAge caps how long a token is cached regardless of its reported expiry. Zero disables the cap.
+    type: string
+    format: duration
   grant_type:
     description: GrantType is the OAuth2 grant type to use. It can be one of "client_credentials" or "urn:ietf:params:oauth:grant-type:jwt-bearer" (RFC 7523). Default value is "client_credentials"
     type: string

@@ -49,11 +49,14 @@ type clientAuthenticator struct {
 	logger       *zap.Logger
 	client       *http.Client
 	expiryBuffer time.Duration
+	maxTokenAge  time.Duration
 
 	// sem is a buffered channel of size 1 used as a context-aware mutex
 	// to protect token access/refresh.
 	sem   chan struct{}
 	token *oauth2.Token
+	// fetchedAt is when token was obtained, used to enforce maxTokenAge.
+	fetchedAt time.Time
 }
 
 func newClientAuthenticator(cfg *Config, logger *zap.Logger) (*clientAuthenticator, error) {
@@ -83,6 +86,7 @@ func newClientAuthenticator(cfg *Config, logger *zap.Logger) (*clientAuthenticat
 		credentials:  credentials,
 		logger:       logger,
 		expiryBuffer: cfg.ExpiryBuffer,
+		maxTokenAge:  cfg.MaxTokenAge,
 		sem:          make(chan struct{}, 1),
 		client: &http.Client{
 			Transport: transport,
@@ -130,7 +134,8 @@ func (o *clientAuthenticator) Token(ctx context.Context) (*oauth2.Token, error) 
 	}
 	defer func() { <-o.sem }()
 
-	if o.token.Valid() && (o.token.Expiry.IsZero() || time.Until(o.token.Expiry) > o.expiryBuffer) {
+	if o.token.Valid() && (o.token.Expiry.IsZero() || time.Until(o.token.Expiry) > o.expiryBuffer) &&
+		(o.maxTokenAge <= 0 || time.Since(o.fetchedAt) < o.maxTokenAge) {
 		return o.token, nil
 	}
 
@@ -144,6 +149,7 @@ func (o *clientAuthenticator) Token(ctx context.Context) (*oauth2.Token, error) 
 		)
 	}
 	o.token = tok
+	o.fetchedAt = time.Now()
 	return tok, nil
 }
 

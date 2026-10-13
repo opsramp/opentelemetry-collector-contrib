@@ -95,6 +95,11 @@ type Config struct {
 
 	// ExpiryBuffer specifies the time buffer before token expiry to refresh it.
 	ExpiryBuffer time.Duration `mapstructure:"expiry_buffer,omitempty"`
+
+	// MaxTokenAge caps how long a token is cached, regardless of its reported expiry. A token
+	// older than this is fetched again. This covers servers that omit or overstate expires_in.
+	// Zero (the default) disables the cap.
+	MaxTokenAge time.Duration `mapstructure:"max_token_age,omitempty"`
 }
 
 var _ component.Config = (*Config)(nil)

@@ -1,0 +1,165 @@
+{
+    "extensions": {
+        "health_check": {
+            "endpoint": "127.0.0.1:${env:OTEL_LOGS_HEALTH_PORT}"
+        }
+    },
+    "receivers": {
+        "otlp": {
+            "protocols": {
+                "grpc": {
+                    "endpoint": "127.0.0.1:${env:OTEL_LOGS_OTLP_GRPC_PORT}"
+                },
+                "http": {
+                    "endpoint": "127.0.0.1:${env:OTEL_LOGS_OTLP_HTTP_PORT}"
+                }
+            }
+        },
+        "filelog/podlogs": {
+            "include": [
+                "/var/log/pods/default_*/*/*.log"
+            ],
+            "exclude": [
+                "/var/log/pods/kube-system_*/*/*.log",
+                "/var/log/pods/opsramp-autoi_*/*/*.log"
+            ],
+            "start_at": "end",
+            "include_file_path": true,
+            "include_file_name": false,
+            "operators": [
+                {
+                    "type": "container",
+                    "id": "container-parser",
+                    "on_error": "send"
+                },
+                {
+                    "type": "add",
+                    "field": "attributes[\"level\"]",
+                    "value": "EXPR(body != nil ? (lower(body) matches \"^f[0-9]\" ? \"Fatal\" : lower(body) matches \"^e[0-9]\" ? \"Error\" : lower(body) matches \"^w[0-9]\" ? \"Warn\" : lower(body) matches \"^i[0-9]\" ? \"Info\" : lower(body) matches \"^d[0-9]\" ? \"Debug\" : lower(body) matches \"(^|[^a-z0-9])emerg(ency|encies)?([^a-z0-9]|$)\" ? \"Emergency\" : lower(body) matches \"(^|[^a-z0-9])alert(s)?([^a-z0-9]|$)\" ? \"Alert\" : lower(body) matches \"(^|[^a-z0-9])crit(ical(s)?)?([^a-z0-9]|$)\" ? \"Critical\" : lower(body) matches \"(^|[^a-z0-9])fatal(s)?([^a-z0-9]|$)\" ? \"Fatal\" : lower(body) matches \"(^|[^a-z0-9])error(s)?([^a-z0-9]|$)\" ? \"Error\" : lower(body) matches \"(^|[^a-z0-9])exception([^a-z0-9]|$)\" ? \"Error\" : lower(body) matches \"(^|[^a-z0-9])warn(ing(s)?)?([^a-z0-9]|$)\" ? \"Warn\" : lower(body) matches \"(^|[^a-z0-9])notice([^a-z0-9]|$)\" ? \"Notice\" : lower(body) matches \"(^|[^a-z0-9])info(s|rmation(al)?)?([^a-z0-9]|$)\" ? \"Info\" : lower(body) matches \"(^|[^a-z0-9])verbose([^a-z0-9]|$)\" ? \"Verbose\" : lower(body) matches \"(^|[^a-z0-9])debug([^a-z0-9]|$)\" ? \"Debug\" : lower(body) matches \"(^|[^a-z0-9])trace(s)?([^a-z0-9]|$)\" ? \"Trace\" : attributes[\"log.iostream\"] == \"stderr\" ? \"Error\" : attributes[\"log.iostream\"] == \"stdout\" ? \"Info\" : \"Unknown\") : attributes[\"log.iostream\"] == \"stderr\" ? \"Error\" : attributes[\"log.iostream\"] == \"stdout\" ? \"Info\" : \"Unknown\")"
+                },
+                {
+                    "type": "severity_parser",
+                    "parse_from": "attributes[\"level\"]",
+                    "mapping": {
+                        "fatal": [
+                            "emergency",
+                            "alert",
+                            "critical"
+                        ],
+                        "info": "notice",
+                        "debug": "verbose"
+                    }
+                }
+            ]
+        }
+    },
+    "processors": {
+        "memory_limiter": {
+            "check_interval": "1s",
+            "limit_percentage": 80,
+            "spike_limit_percentage": 20
+        },
+        "resource": {
+            "attributes": [
+                {
+                    "key": "k8s.cluster.name",
+                    "value": "${env:CLUSTER_NAME}",
+                    "action": "upsert"
+                },
+                {
+                    "key": "k8s.node.name",
+                    "value": "${env:NODE_NAME}",
+                    "action": "upsert"
+                }
+            ]
+        },
+        "resourceuuid": {
+            "endpoint": "http://127.0.0.1:2301/api/v1/provider/graph?kind=Pod&edges=false",
+            "refresh_interval": "2m",
+            "retry_interval": "2m",
+            "cache_ttl": "10m"
+        },
+        "attributes/podlogs-labels": {
+            "actions": [
+                {
+                    "key": "environment",
+                    "value": "development",
+                    "action": "upsert"
+                }
+            ]
+        },
+        "filter/loglevel": {
+            "error_mode": "ignore",
+            "logs": {
+                "log_record": [
+                    "severity_number < SEVERITY_NUMBER_INFO"
+                ]
+            }
+        },
+        "filter/stale": {
+            "error_mode": "ignore",
+            "logs": {
+                "log_record": [
+                    "time_unix_nano > 0 and Now() - time > Duration(\"2h\")"
+                ]
+            }
+        },
+        "batch/collected": {
+            "send_batch_size": 1024,
+            "send_batch_max_size": 2048,
+            "timeout": "2s"
+        },
+        "batch": {
+            "send_batch_size": 1024,
+            "timeout": "5s"
+        }
+    },
+    "exporters": {
+        "file": {
+            "path": "/var/log/otelcol/logs.json"
+        },
+        "debug": {
+            "verbosity": "basic"
+        }
+    },
+    "service": {
+        "extensions": [
+            "health_check"
+        ],
+        "pipelines": {
+            "logs": {
+                "receivers": [
+                    "otlp"
+                ],
+                "processors": [
+                    "memory_limiter",
+                    "resource",
+                    "resourceuuid",
+                    "batch"
+                ],
+                "exporters": [
+                    "file",
+                    "debug"
+                ]
+            },
+            "logs/podlogs": {
+                "receivers": [
+                    "filelog/podlogs"
+                ],
+                "processors": [
+                    "memory_limiter",
+                    "resource",
+                    "resourceuuid",
+                    "filter/stale",
+                    "attributes/podlogs-labels",
+                    "filter/loglevel",
+                    "batch/collected"
+                ],
+                "exporters": [
+                    "file",
+                    "debug"
+                ]
+            }
+        }
+    }
+}
