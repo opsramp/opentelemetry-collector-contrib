@@ -116,5 +116,6 @@ Following are the configuration fields
 - [**timeout**](https://golang.org/src/net/http/client.go#L90) -  **Optional** specifies the timeout on the underlying client to authorization server for fetching the tokens (initial and while refreshing).
   This is optional and not setting this configuration implies there is no timeout on the client.
 - **expiry_buffer** -  **Optional** Specifies the time buffer to refresh the access token before it expires, preventing authentication failures due to token expiration. The default value is 5m.
+- **max_token_age** - **Optional** Maximum time a token is cached, regardless of the expiry reported by the server. Once exceeded, a new token is fetched. Use it when the server omits `expires_in` (the token would otherwise be cached forever) or revokes tokens earlier than it reports. The default is 0 (disabled).
 
 For more information on client side TLS settings, see [configtls README](https://github.com/open-telemetry/opentelemetry-collector/tree/main/config/configtls).

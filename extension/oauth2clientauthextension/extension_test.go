@@ -662,6 +662,63 @@ func TestTokenExpiryBuffer(t *testing.T) {
 	})
 }
 
+func TestMaxTokenAge(t *testing.T) {
+	var tokenRequests int
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		tokenRequests++
+		w.Header().Set("Content-Type", "application/json")
+		// No expires_in: without a cap the token would be cached forever.
+		fmt.Fprintf(w, `{"access_token":"tok-%d","token_type":"Bearer"}`, tokenRequests)
+	}))
+	defer tokenServer.Close()
+
+	newAuth := func(maxAge time.Duration) *clientAuthenticator {
+		a, err := newClientAuthenticator(&Config{
+			ClientID:     "testclient",
+			ClientSecret: "testsecret",
+			GrantType:    "client_credentials",
+			TokenURL:     tokenServer.URL,
+			MaxTokenAge:  maxAge,
+		}, zap.NewNop())
+		require.NoError(t, err)
+		return a
+	}
+
+	t.Run("disabled_caches_token_without_expiry", func(t *testing.T) {
+		tokenRequests = 0
+		a := newAuth(0)
+		for range 3 {
+			_, err := a.Token(t.Context())
+			require.NoError(t, err)
+		}
+		assert.Equal(t, 1, tokenRequests)
+	})
+
+	t.Run("token_reused_within_max_age", func(t *testing.T) {
+		tokenRequests = 0
+		a := newAuth(time.Hour)
+		for range 3 {
+			_, err := a.Token(t.Context())
+			require.NoError(t, err)
+		}
+		assert.Equal(t, 1, tokenRequests)
+	})
+
+	t.Run("token_refetched_after_max_age", func(t *testing.T) {
+		tokenRequests = 0
+		a := newAuth(time.Hour)
+		tok, err := a.Token(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, "tok-1", tok.AccessToken)
+
+		a.fetchedAt = time.Now().Add(-2 * time.Hour)
+		tok, err = a.Token(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, "tok-2", tok.AccessToken)
+		assert.Equal(t, 2, tokenRequests)
+	})
+}
+
 func TestClientCredentials(t *testing.T) {
 	resourceServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
