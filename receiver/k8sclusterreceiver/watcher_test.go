@@ -201,7 +201,8 @@ func TestPrepareSharedInformerFactory(t *testing.T) {
 			config: &Config{
 				Namespaces: []string{"namespace1", "namespace2"},
 			},
-			wantInformerFactories: 2,
+			// 2 per-namespace factories + 1 cluster-wide factory for Node/Namespace/PV.
+			wantInformerFactories: 3,
 		},
 	}
 	for _, tt := range tests {

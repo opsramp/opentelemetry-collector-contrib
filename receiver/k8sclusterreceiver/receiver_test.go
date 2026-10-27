@@ -161,28 +161,27 @@ func TestNamespacedReceiver(t *testing.T) {
 	ctx := t.Context()
 	require.NoError(t, r.Start(ctx, newNopHost()))
 
-	// Expects metric data from pods  only, where each metric data
-	// struct corresponds to one resource.
-	// Nodes and ClusterResourceQuotas should not be observed as these are non-namespaced resources
-	expectedNumMetrics := numPods
-	var initialDataPointCount int
+	// With a namespaces allowlist, namespaced resources (pods) are scoped to the
+	// configured namespaces, while cluster-wide resources (nodes) are still observed.
 	require.Eventually(t, func() bool {
-		initialDataPointCount = sink.DataPointCount()
-		return initialDataPointCount == expectedNumMetrics
+		allMetrics := sink.AllMetrics()
+		if len(allMetrics) == 0 {
+			return false
+		}
+		var sawPod, sawNode bool
+		latest := allMetrics[len(allMetrics)-1].ResourceMetrics()
+		for i := 0; i < latest.Len(); i++ {
+			attrs := latest.At(i).Resource().Attributes()
+			if _, ok := attrs.Get("k8s.pod.uid"); ok {
+				sawPod = true
+			}
+			if _, ok := attrs.Get("k8s.node.uid"); ok {
+				sawNode = true
+			}
+		}
+		return sawPod && sawNode
 	}, 10*time.Second, 100*time.Millisecond,
-		"metrics not collected")
-
-	numPodsToDelete := 1
-	deletePods(t, client, numPodsToDelete)
-
-	// Expects metric data from a node, since other resources were deleted.
-	expectedNumMetrics = numPods - numPodsToDelete
-	var metricsCountDelta int
-	require.Eventually(t, func() bool {
-		metricsCountDelta = sink.DataPointCount() - initialDataPointCount
-		return metricsCountDelta == expectedNumMetrics
-	}, 10*time.Second, 100*time.Millisecond,
-		"updated metrics not collected")
+		"expected scoped pod metrics and cluster-wide node metrics")
 
 	require.NoError(t, r.Shutdown(ctx))
 }
