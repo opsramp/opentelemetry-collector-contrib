@@ -54,9 +54,13 @@ type sharedInformer interface {
 }
 
 type resourceWatcher struct {
-	client              kubernetes.Interface
-	osQuotaClient       quotaclientset.Interface
-	informerFactories   []sharedInformer
+	client            kubernetes.Interface
+	osQuotaClient     quotaclientset.Interface
+	informerFactories []sharedInformer
+	// clusterWideFactory is a cluster-scoped informer factory used only for
+	// Node/Namespace/PersistentVolume when a namespaces allowlist is set, so those
+	// cluster-wide resources stay observable while namespaced kinds remain scoped.
+	clusterWideFactory  informers.SharedInformerFactory
 	metadataStore       *metadata.Store
 	logger              *zap.Logger
 	metadataConsumers   []metadataConsumer
@@ -189,6 +193,9 @@ func (rw *resourceWatcher) prepareSharedInformerFactory() error {
 	for _, factory := range factories {
 		rw.informerFactories = append(rw.informerFactories, factory)
 	}
+	if rw.clusterWideFactory != nil {
+		rw.informerFactories = append(rw.informerFactories, rw.clusterWideFactory)
+	}
 
 	return nil
 }
@@ -222,7 +229,7 @@ func (rw *resourceWatcher) getInformerFactories() map[string]informers.SharedInf
 
 	switch {
 	case len(rw.config.Namespaces) > 0:
-		rw.logger.Info("Namespaces filter has been enabled. Nodes and namespaces will not be observed.", zap.String("namespaces", strings.Join(rw.config.Namespaces, ",")))
+		rw.logger.Info("Namespaces filter enabled: namespaced resources scoped to the configured namespaces; nodes, namespaces and persistentvolumes still observed cluster-wide.", zap.String("namespaces", strings.Join(rw.config.Namespaces, ",")))
 		for _, ns := range rw.config.Namespaces {
 			factories[ns] = informers.NewSharedInformerFactoryWithOptions(
 				rw.client,
@@ -230,6 +237,12 @@ func (rw *resourceWatcher) getInformerFactories() map[string]informers.SharedInf
 				informers.WithNamespace(ns),
 			)
 		}
+		// Kept out of the per-namespace map so namespaced kinds stay scoped while
+		// cluster-scoped kinds (Node/Namespace/PersistentVolume) stay cluster-wide.
+		rw.clusterWideFactory = informers.NewSharedInformerFactoryWithOptions(
+			rw.client,
+			rw.config.MetadataCollectionInterval,
+		)
 	case rw.config.Namespace != "":
 		rw.logger.Info("Namespace filter has been enabled. Nodes and namespaces will not be observed.", zap.String("namespace", rw.config.Namespace))
 		factories[rw.config.Namespace] = informers.NewSharedInformerFactoryWithOptions(
@@ -268,6 +281,18 @@ func (rw *resourceWatcher) isKindSupported(gvk schema.GroupVersionKind) (bool, e
 	return false, nil
 }
 
+// clusterScopedInformerFactory returns the factory to use for cluster-scoped kinds
+// (Node/Namespace/PersistentVolume): the dedicated cluster-wide factory when a
+// namespaces allowlist is set, otherwise the default cluster-wide factory in the
+// map. Returns nil when neither exists (e.g. the deprecated single-namespace mode),
+// preserving the prior skip behavior.
+func (rw *resourceWatcher) clusterScopedInformerFactory(factories map[string]informers.SharedInformerFactory) informers.SharedInformerFactory {
+	if rw.clusterWideFactory != nil {
+		return rw.clusterWideFactory
+	}
+	return factories[metadata.ClusterWideInformerKey]
+}
+
 // setupInformerForKind creates the informers for the given GVKs, based on the provided informer factories.
 // The factories are provided as a map[string]informers.SharedInformerFactory where the map keys represent the namespace
 // of the informer factory. For cluster wide informers, an empty string is used as a key
@@ -278,18 +303,12 @@ func (rw *resourceWatcher) setupInformerForKind(kind schema.GroupVersionKind, fa
 			rw.setupInformer(kind, ns, factory.Core().V1().Pods().Informer())
 		}
 	case gvk.Node:
-		if len(rw.config.Namespaces) == 0 && rw.config.Namespace == "" && len(factories) >= 1 {
-			// if no namespace is provided, the cluster wide informer factory, which is stored under the key "" is used to create the informer
-			if factory, ok := factories[metadata.ClusterWideInformerKey]; ok {
-				rw.setupInformer(kind, metadata.ClusterWideInformerKey, factory.Core().V1().Nodes().Informer())
-			}
+		if factory := rw.clusterScopedInformerFactory(factories); factory != nil {
+			rw.setupInformer(kind, metadata.ClusterWideInformerKey, factory.Core().V1().Nodes().Informer())
 		}
 	case gvk.Namespace:
-		if len(rw.config.Namespaces) == 0 && rw.config.Namespace == "" && len(factories) >= 1 {
-			// if no namespace is provided, the cluster wide informer factory, which is stored under the key "" is used to create the informer
-			if factory, ok := factories[metadata.ClusterWideInformerKey]; ok {
-				rw.setupInformer(kind, metadata.ClusterWideInformerKey, factory.Core().V1().Namespaces().Informer())
-			}
+		if factory := rw.clusterScopedInformerFactory(factories); factory != nil {
+			rw.setupInformer(kind, metadata.ClusterWideInformerKey, factory.Core().V1().Namespaces().Informer())
 		}
 	case gvk.ReplicationController:
 		for ns, factory := range factories {
@@ -308,11 +327,9 @@ func (rw *resourceWatcher) setupInformerForKind(kind schema.GroupVersionKind, fa
 			rw.setupInformer(kind, ns, factory.Discovery().V1().EndpointSlices().Informer())
 		}
 	case gvk.PersistentVolume:
-		// PersistentVolumes are cluster-scoped, so only use cluster-wide informer
-		if len(rw.config.Namespaces) == 0 && rw.config.Namespace == "" && len(factories) >= 1 {
-			if factory, ok := factories[metadata.ClusterWideInformerKey]; ok {
-				rw.setupInformer(kind, metadata.ClusterWideInformerKey, factory.Core().V1().PersistentVolumes().Informer())
-			}
+		// PersistentVolumes are cluster-scoped, so only use the cluster-wide informer
+		if factory := rw.clusterScopedInformerFactory(factories); factory != nil {
+			rw.setupInformer(kind, metadata.ClusterWideInformerKey, factory.Core().V1().PersistentVolumes().Informer())
 		}
 	case gvk.PersistentVolumeClaim:
 		for ns, factory := range factories {
